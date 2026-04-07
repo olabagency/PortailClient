@@ -8,149 +8,149 @@
 ## Phase 1 — Setup + Auth + Layout
 
 ### 1.1 Initialisation du projet
-- [ ] Créer le projet Next.js 14+ avec App Router et TypeScript
-- [ ] Installer et configurer Tailwind CSS
-- [ ] Installer et configurer shadcn/ui (init + composants de base : Button, Input, Card, Dialog, Toast, Dropdown, Avatar, Badge, Skeleton, Tabs, Table)
-- [ ] Créer `src/config/app.config.ts` avec toute la configuration centralisée
-- [ ] Créer `.env.example` avec toutes les variables d'environnement
-- [ ] Créer `.env.local` avec les vrais credentials (non committé)
-- [ ] Configurer Drizzle ORM + connexion Supabase
-- [ ] Créer la structure de dossiers complète
-- [ ] Configurer le `layout.tsx` racine (fonts, metadata depuis APP_CONFIG)
-- [ ] Vérifier que `npm run dev` fonctionne sans erreur
+- [x] Créer le projet Next.js 14+ avec App Router et TypeScript
+- [x] Installer et configurer Tailwind CSS
+- [x] Installer et configurer shadcn/ui (init + composants de base : Button, Input, Card, Dialog, Toast, Dropdown, Avatar, Badge, Skeleton, Tabs, Table)
+- [x] Créer `src/config/app.config.ts` avec toute la configuration centralisée
+- [x] Créer `.env.example` avec toutes les variables d'environnement
+- [x] Créer `.env.local` avec les vrais credentials (non committé)
+- [x] Configurer Drizzle ORM + connexion Supabase
+- [x] Créer la structure de dossiers complète
+- [x] Configurer le `layout.tsx` racine (fonts, metadata depuis APP_CONFIG)
+- [x] Vérifier que `npm run dev` fonctionne sans erreur
 
 ### 1.2 Base de données
-- [ ] Créer le projet Supabase (région EU)
-- [ ] Exécuter toutes les migrations MVP (001 à 012)
-- [ ] Vérifier que toutes les tables existent dans Supabase Dashboard
+- [x] Créer le projet Supabase (région EU)
+- [x] Exécuter toutes les migrations MVP (001 à 012)
+- [x] Vérifier que toutes les tables existent dans Supabase Dashboard
 
 ### 1.3 Authentification
 - [ ] Configurer Supabase Auth (email + Google OAuth provider)
-- [ ] Créer les clients Supabase (browser + server + middleware)
-- [ ] Page `/login` — connexion email + Google OAuth
-- [ ] Page `/signup` — inscription avec nom, email, mot de passe
-- [ ] Page `/forgot-password` — envoi du lien de reset
-- [ ] Middleware Next.js pour rediriger les non-authentifiés
-- [ ] Hook `useAuth` — utilisateur courant, logout, session
+- [x] Créer les clients Supabase (browser + server + middleware)
+- [x] Page `/login` — connexion email + Google OAuth
+- [x] Page `/signup` — inscription avec nom, email, mot de passe
+- [x] Page `/forgot-password` — envoi du lien de reset
+- [x] Middleware Next.js pour rediriger les non-authentifiés
+- [x] Hook `useAuth` — utilisateur courant, logout, session
 - [ ] Vérifier : inscription → profil créé automatiquement
 - [ ] Vérifier : connexion → redirection `/dashboard`
 - [ ] Vérifier : déconnexion → redirection `/login`
 
 ### 1.4 Layout Dashboard
-- [ ] Layout `(dashboard)/layout.tsx` avec sidebar + header
-- [ ] Composant `Sidebar.tsx` — navigation principale
-- [ ] Composant `Header.tsx` — nom app (APP_CONFIG), avatar, menu dropdown
-- [ ] Sidebar responsive (collapse sur mobile)
-- [ ] Page `/dashboard` — placeholder bienvenue
-- [ ] Page `/dashboard/settings` — formulaire profil complet
+- [x] Layout `(dashboard)/layout.tsx` avec sidebar + header
+- [x] Composant `Sidebar.tsx` — navigation principale
+- [x] Composant `Header.tsx` — nom app (APP_CONFIG), avatar, menu dropdown
+- [x] Sidebar responsive (collapse sur mobile)
+- [x] Page `/dashboard` — placeholder bienvenue
+- [x] Page `/dashboard/settings` — formulaire profil complet
 - [ ] Upload du logo vers S3 + sauvegarde URL
-- [ ] Navigation entre toutes les pages fonctionne
+- [x] Navigation entre toutes les pages fonctionne
 
 ---
 
 ## Phase 2 — Clients + Projets + Formulaire d'onboarding
 
 ### 2.1 Gestion des clients
-- [ ] API CRUD clients (POST, GET, GET/:id, PUT, DELETE) avec validation Zod
-- [ ] Page `/dashboard/clients` — liste avec recherche, filtre, tri
-- [ ] Page `/dashboard/clients/[id]` — fiche client + liste projets
-- [ ] Modal de création de client
-- [ ] EmptyState quand aucun client
+- [x] API CRUD clients (POST, GET, GET/:id, PUT, DELETE) avec validation Zod
+- [x] Page `/dashboard/clients` — liste avec recherche, filtre, tri
+- [x] Page `/dashboard/clients/[id]` — fiche client + liste projets
+- [x] Modal de création de client
+- [x] EmptyState quand aucun client
 
 ### 2.2 Gestion des projets
-- [ ] API CRUD projets avec génération public_id (nanoid 12)
-- [ ] API duplication de projet
-- [ ] Vérification limites du plan avant création
-- [ ] Page `/dashboard/projects` — liste avec statuts, recherche, filtres
-- [ ] Page `/dashboard/projects/new` — formulaire création
-- [ ] Création client possible depuis la création projet
-- [ ] Création auto des 4 colonnes kanban par défaut
-- [ ] EmptyState quand aucun projet
+- [x] API CRUD projets avec génération public_id (nanoid 12)
+- [x] API duplication de projet
+- [x] Vérification limites du plan avant création
+- [x] Page `/dashboard/projects` — liste avec statuts, recherche, filtres
+- [x] Page `/dashboard/projects/new` — formulaire création
+- [x] Création client possible depuis la création projet
+- [x] Création auto des 4 colonnes kanban par défaut
+- [x] EmptyState quand aucun projet
 
 ### 2.3 Éditeur de formulaire d'onboarding
-- [ ] API CRUD champs (GET, POST, PUT, DELETE, reorder)
-- [ ] Page `/dashboard/projects/[id]/onboarding` — éditeur
-- [ ] Composant `FormEditor.tsx` — ajout/édition de champs
-- [ ] 9 types de champs supportés
-- [ ] Sections (ajouter, renommer, réordonner)
-- [ ] Drag & drop champs et sections (@dnd-kit)
-- [ ] Obligatoire/optionnel + description par champ
-- [ ] Vérification limites plan (max champs)
-- [ ] Aperçu du formulaire
+- [x] API CRUD champs (GET, POST, PUT, DELETE, reorder)
+- [x] Page `/dashboard/projects/[id]/onboarding` — éditeur
+- [x] Composant `FormEditor.tsx` — ajout/édition de champs
+- [x] 9 types de champs supportés
+- [x] Sections (ajouter, renommer, réordonner)
+- [x] Drag & drop champs et sections (@dnd-kit)
+- [x] Obligatoire/optionnel + description par champ
+- [x] Vérification limites plan (max champs)
+- [x] Aperçu du formulaire
 
 ---
 
 ## Phase 3 — Portail client + Upload fichiers
 
 ### 3.1 Portail d'onboarding public (sans compte)
-- [ ] API `GET /api/portal/[publicId]` — données formulaire (public)
-- [ ] API `POST /api/portal/[publicId]/submit` — soumettre réponse
-- [ ] Page `/p/[publicId]` — formulaire avec branding freelance
-- [ ] Composant `FieldRenderer.tsx` — rendu par type de champ
-- [ ] Sauvegarde auto de la progression (debounce 2s)
-- [ ] Barre de progression globale
+- [x] API `GET /api/portal/[publicId]` — données formulaire (public)
+- [x] API `POST /api/portal/[publicId]/submit` — soumettre réponse
+- [x] Page `/p/[publicId]` — formulaire avec branding freelance
+- [x] Composant `FieldRenderer.tsx` — rendu par type de champ
+- [x] Sauvegarde auto de la progression (debounce 2s)
+- [x] Barre de progression globale
 - [ ] Protection PIN (optionnel)
-- [ ] Page `/p/[publicId]/success` — confirmation + invitation compte
+- [x] Page `/p/[publicId]/success` — confirmation + invitation compte
 - [ ] Email au freelance quand onboarding complété
 
 ### 3.2 Upload de fichiers (Scaleway S3)
 - [ ] Configurer Scaleway S3 (bucket, CORS)
-- [ ] Client S3 + génération presigned URLs
-- [ ] API presign + confirm + download + delete + zip
-- [ ] Composant `FileUploader.tsx` — drag & drop + progression
-- [ ] Upload direct vers S3 (pas de transit serveur)
+- [x] Client S3 + génération presigned URLs
+- [x] API presign + confirm + download + delete + zip
+- [x] Composant `FileUploader.tsx` — drag & drop + progression
+- [x] Upload direct vers S3 (pas de transit serveur)
 - [ ] Affichage fichiers dans la vue projet
 
 ### 3.3 Portail client authentifié
-- [ ] Page `/client/login` + `/client/signup/[token]`
+- [x] Page `/client/login` + `/client/signup/[token]`
 - [ ] API invitation client par email
-- [ ] Layout client avec sidebar simplifiée
-- [ ] Page `/client` — dashboard (liste projets + progression)
-- [ ] Page `/client/projects/[id]` — vue projet (avancement, étapes, deadlines)
+- [x] Layout client avec sidebar simplifiée
+- [x] Page `/client` — dashboard (liste projets + progression)
+- [x] Page `/client/projects/[id]` — vue projet (avancement, étapes, deadlines)
 - [ ] Page `/client/projects/[id]/files` — fichiers (download only)
 - [ ] Page `/client/settings` — paramètres compte
-- [ ] Client ne voit QUE ses projets et tâches visibles
+- [x] Client ne voit QUE ses projets et tâches visibles
 - [ ] Notifications email au client
 
 ### 3.4 Page partage de projet
-- [ ] Page `/dashboard/projects/[id]/share` — lien unique
-- [ ] Bouton copier le lien
+- [x] Page `/dashboard/projects/[id]/share` — lien unique
+- [x] Bouton copier le lien
 - [ ] Configuration PIN
-- [ ] Aperçu du portail
-- [ ] Envoi du lien par email
+- [x] Aperçu du portail
+- [x] Envoi du lien par email
 
 ---
 
 ## Phase 4 — Kanban + Templates + Activité
 
 ### 4.1 Kanban
-- [ ] API CRUD colonnes + tâches + reorder
-- [ ] Page `/dashboard/projects/[id]` — vue kanban complète
-- [ ] Composants : KanbanBoard, KanbanColumn, TaskCard, TaskModal
-- [ ] Drag & drop tâches entre colonnes (@dnd-kit)
-- [ ] Colonnes personnalisables (ajouter, renommer, supprimer, couleur)
-- [ ] Toggle visibilité client par tâche
+- [x] API CRUD colonnes + tâches + reorder
+- [x] Page `/dashboard/projects/[id]` — vue kanban complète
+- [x] Composants : KanbanBoard, KanbanColumn, TaskCard, TaskModal
+- [x] Drag & drop tâches entre colonnes (@dnd-kit)
+- [x] Colonnes personnalisables (ajouter, renommer, supprimer, couleur)
+- [x] Toggle visibilité client par tâche
 - [ ] Vue liste alternative
 - [ ] Filtres par statut, priorité, assignation
 
 ### 4.2 Templates
-- [ ] API CRUD templates
-- [ ] Page `/dashboard/templates` — liste
-- [ ] Sauvegarder formulaire + kanban comme template
-- [ ] Créer projet depuis template
-- [ ] 4 templates pré-configurés injectés au premier lancement
-- [ ] Vérification limites plan
+- [x] API CRUD templates
+- [x] Page `/dashboard/templates` — liste
+- [x] Sauvegarder formulaire + kanban comme template
+- [x] Créer projet depuis template
+- [x] 4 templates pré-configurés injectés au premier lancement
+- [x] Vérification limites plan
 
 ### 4.3 Journal d'activité
-- [ ] Enregistrement des actions clés dans activity_log
-- [ ] Affichage dans la vue projet
-- [ ] Affichage dans le dashboard principal
+- [x] Enregistrement des actions clés dans activity_log
+- [x] Affichage dans la vue projet
+- [x] Affichage dans le dashboard principal
 
 ### 4.4 Dashboard principal
-- [ ] Métriques (projets actifs, clients, complétion)
-- [ ] Projets récents avec progression
-- [ ] Activité récente
-- [ ] Raccourcis (créer projet, voir projets, voir clients)
+- [x] Métriques (projets actifs, clients, tâches en cours)
+- [x] Projets récents avec progression
+- [x] Activité récente
+- [x] Raccourcis (créer projet, voir projets, voir clients)
 
 ---
 
