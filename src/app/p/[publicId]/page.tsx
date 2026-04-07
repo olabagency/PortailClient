@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
 import FormPage from './FormPage'
+import { createClient } from '@/lib/supabase/server'
 import { APP_CONFIG } from '@/config/app.config'
 import type { Metadata } from 'next'
 
@@ -25,27 +26,38 @@ interface OnboardingSection {
   order_index: number
 }
 
-interface PortalData {
-  project: {
-    name: string
-    description: string | null
-    settings: Record<string, unknown> | null
-  }
-  sections: OnboardingSection[]
-  fields: FormField[]
-}
+async function getPortalData(publicId: string) {
+  const supabase = await createClient()
 
-async function getPortalData(publicId: string): Promise<PortalData | null> {
-  try {
-    const res = await fetch(
-      `${APP_CONFIG.url}/api/portal/${publicId}`,
-      { cache: 'no-store' }
-    )
-    if (!res.ok) return null
-    const json = await res.json()
-    return json.data ?? null
-  } catch {
-    return null
+  const { data: project, error } = await supabase
+    .from('projects')
+    .select('id, name, description, settings, status')
+    .eq('public_id', publicId)
+    .single()
+
+  if (error || !project || project.status === 'archived') return null
+
+  const [{ data: sections }, { data: fields }] = await Promise.all([
+    supabase
+      .from('onboarding_sections')
+      .select('id, title, order_index')
+      .eq('project_id', project.id)
+      .order('order_index'),
+    supabase
+      .from('form_fields')
+      .select('id, type, label, description, placeholder, required, options, order_index, section_id')
+      .eq('project_id', project.id)
+      .order('order_index'),
+  ])
+
+  return {
+    project: {
+      name: project.name,
+      description: project.description,
+      settings: project.settings as Record<string, unknown> | null,
+    },
+    sections: (sections ?? []) as OnboardingSection[],
+    fields: (fields ?? []) as FormField[],
   }
 }
 
@@ -63,9 +75,7 @@ export default async function PortalPage({ params }: PageProps) {
   const { publicId } = await params
   const data = await getPortalData(publicId)
 
-  if (!data) {
-    notFound()
-  }
+  if (!data) notFound()
 
   return (
     <FormPage

@@ -61,7 +61,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const ipAddress = request.headers.get('x-forwarded-for')?.split(',')[0] ?? request.headers.get('x-real-ip') ?? null
 
     const { data, error } = await supabase
-      .from('onboarding_responses')
+      .from('form_responses')
       .insert({
         project_id: project.id,
         respondent_name: parsed.data.respondent_name || null,

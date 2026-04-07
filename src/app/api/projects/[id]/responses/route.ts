@@ -20,7 +20,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
     const [{ data: responses }, { data: fields }] = await Promise.all([
       supabase
-        .from('onboarding_responses')
+        .from('form_responses')
         .select('id, respondent_name, respondent_email, responses, completed_at')
         .eq('project_id', id)
         .order('completed_at', { ascending: false }),
@@ -55,7 +55,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
     if (!project) return NextResponse.json({ error: 'Projet introuvable' }, { status: 404 })
 
     const { error } = await supabase
-      .from('onboarding_responses')
+      .from('form_responses')
       .delete()
       .eq('project_id', id)
 

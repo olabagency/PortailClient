@@ -50,7 +50,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
 
   // Comptage des réponses onboarding
   const { count: responseCount } = await supabase
-    .from('onboarding_responses')
+    .from('form_responses')
     .select('id', { count: 'exact', head: true })
     .eq('project_id', id)
 
