@@ -10,7 +10,6 @@ export async function GET(request: NextRequest) {
     const supabase = await createClient()
     const { error } = await supabase.auth.exchangeCodeForSession(code)
     if (!error) {
-      // Marquer accepted_at dans client_portals si un projet est fourni
       if (project) {
         const { data: { user } } = await supabase.auth.getUser()
         if (user?.email) {
@@ -18,7 +17,7 @@ export async function GET(request: NextRequest) {
             .from('client_portals')
             .update({ accepted_at: new Date().toISOString() })
             .eq('project_id', project)
-            .eq('email', user.email)
+            .ilike('email', user.email)
             .is('accepted_at', null)
         }
       }
