@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { z } from 'zod'
 
 const submitSchema = z.object({
+  session_id: z.string().optional(),
   respondent_name: z.string().max(200).optional(),
   respondent_email: z.string().email().optional().or(z.literal('')),
   responses: z.record(z.string(), z.unknown()),
@@ -60,22 +61,47 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // Récupérer l'IP du client
     const ipAddress = request.headers.get('x-forwarded-for')?.split(',')[0] ?? request.headers.get('x-real-ip') ?? null
 
-    const { data, error } = await supabase
-      .from('form_responses')
-      .insert({
-        project_id: project.id,
-        respondent_name: parsed.data.respondent_name || null,
-        respondent_email: parsed.data.respondent_email || null,
-        responses: parsed.data.responses,
-        completed_at: new Date().toISOString(),
-        ip_address: ipAddress,
-      })
-      .select('id')
-      .single()
+    const now = new Date().toISOString()
+    const { session_id } = parsed.data
+
+    const payload = {
+      project_id: project.id,
+      session_id: session_id ?? null,
+      respondent_name: parsed.data.respondent_name || null,
+      respondent_email: parsed.data.respondent_email || null,
+      responses: parsed.data.responses,
+      completed: true,
+      submitted_at: now,
+      updated_at: now,
+      ip_address: ipAddress,
+    }
+
+    let data: { id: string } | null = null
+    let error: { message: string } | null = null
+
+    if (session_id) {
+      // Upsert on existing draft row created by auto-save
+      const result = await supabase
+        .from('form_responses')
+        .upsert(payload, { onConflict: 'project_id,session_id', ignoreDuplicates: false })
+        .select('id')
+        .single()
+      data = result.data
+      error = result.error
+    } else {
+      // No session: plain insert
+      const result = await supabase
+        .from('form_responses')
+        .insert(payload)
+        .select('id')
+        .single()
+      data = result.data
+      error = result.error
+    }
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-    return NextResponse.json({ data: { id: data.id } }, { status: 201 })
+    return NextResponse.json({ data: { id: data!.id } }, { status: 201 })
   } catch {
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
   }

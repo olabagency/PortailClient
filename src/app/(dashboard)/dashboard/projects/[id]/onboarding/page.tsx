@@ -31,7 +31,7 @@ import {
 } from '@/components/ui/dialog'
 import {
   ArrowLeft, Plus, GripVertical, Pencil, Trash2, Eye, Layers,
-  ChevronDown, ChevronRight, Send, UserCircle,
+  ChevronDown, ChevronRight, Send, UserCircle, CheckCircle2,
 } from 'lucide-react'
 import { APP_CONFIG } from '@/config/app.config'
 import type { FormFieldType } from '@/config/app.config'
@@ -64,10 +64,13 @@ interface FormFieldMeta {
 
 interface OnboardingResponse {
   id: string
-  respondent_name: string | null
+  current_step: number
+  responses: Record<string, string | string[]>
+  client_info: Record<string, string>
+  completed: boolean
+  validated_at: string | null
   respondent_email: string | null
-  responses: Record<string, unknown>
-  completed_at: string
+  submitted_at: string | null
 }
 
 const defaultField = (): Omit<FormField, 'id' | 'order_index'> => ({
@@ -249,22 +252,49 @@ function SortableSection({
 function ResponseCard({
   response,
   formFields,
+  projectId,
+  onValidate,
 }: {
   response: OnboardingResponse
   formFields: FormFieldMeta[]
+  projectId: string
+  onValidate: (responseId: string) => void
 }) {
   const [expanded, setExpanded] = useState(false)
+  const [validating, setValidating] = useState(false)
 
   const answeredCount = formFields.filter(f => {
     const val = response.responses[f.id]
     return val !== undefined && val !== null && val !== ''
   }).length
 
-  const formatValue = (value: unknown): string => {
+  const formatValue = (value: string | string[] | undefined): string => {
     if (value === null || value === undefined || value === '') return '—'
     if (Array.isArray(value)) return value.join(', ')
     return String(value)
   }
+
+  const clientInfoEntries = response.client_info ? Object.entries(response.client_info).filter(([, v]) => v) : []
+
+  const labelMap: Record<string, string> = {
+    name: 'Nom',
+    email: 'Email',
+    company: 'Entreprise',
+    phone: 'Téléphone',
+  }
+
+  async function handleValidateClick() {
+    setValidating(true)
+    try {
+      await onValidate(response.id)
+    } finally {
+      setValidating(false)
+    }
+  }
+
+  const dateLabel = response.submitted_at
+    ? formatDistanceToNow(new Date(response.submitted_at), { addSuffix: true, locale: fr })
+    : null
 
   return (
     <Card>
@@ -274,20 +304,31 @@ function ResponseCard({
             <UserCircle className="h-8 w-8 text-muted-foreground shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium truncate">
-                {response.respondent_name ?? 'Anonyme'}
+                {response.client_info?.name ?? response.respondent_email ?? 'Anonyme'}
               </p>
               {response.respondent_email && (
                 <p className="text-xs text-muted-foreground truncate">{response.respondent_email}</p>
               )}
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {formatDistanceToNow(new Date(response.completed_at), { addSuffix: true, locale: fr })}
-              </p>
+              {dateLabel && (
+                <p className="text-xs text-muted-foreground mt-0.5">{dateLabel}</p>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <Badge variant="secondary" className="text-xs">
-              {answeredCount} champ{answeredCount > 1 ? 's' : ''} rempli{answeredCount > 1 ? 's' : ''}
-            </Badge>
+            {response.validated_at ? (
+              <Badge className="text-xs bg-green-100 text-green-800 border-green-200 hover:bg-green-100">
+                <CheckCircle2 className="h-3 w-3 mr-1" />
+                Validé ✓
+              </Badge>
+            ) : response.completed ? (
+              <Badge className="text-xs bg-blue-100 text-blue-800 border-blue-200 hover:bg-blue-100">
+                Soumis — En attente de validation
+              </Badge>
+            ) : (
+              <Badge variant="secondary" className="text-xs">
+                En cours · Étape {response.current_step}/5
+              </Badge>
+            )}
             <button
               onClick={() => setExpanded(v => !v)}
               className="text-muted-foreground hover:text-foreground transition-colors"
@@ -301,18 +342,69 @@ function ResponseCard({
           </div>
         </div>
 
-        {expanded && formFields.length > 0 && (
-          <div className="mt-4 space-y-3 border-t pt-4">
-            {formFields.map(field => {
-              const value = response.responses[field.id]
-              if (value === undefined) return null
-              return (
-                <div key={field.id}>
-                  <p className="text-xs font-medium text-muted-foreground mb-0.5">{field.label}</p>
-                  <p className="text-sm">{formatValue(value)}</p>
+        {/* Barre de progression pour les réponses incomplètes */}
+        {!response.completed && (
+          <div className="mt-3">
+            <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+              <div
+                className="h-full bg-blue-400 rounded-full transition-all"
+                style={{ width: `${Math.max(0, (response.current_step - 1) / 5 * 100)}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        {expanded && (
+          <div className="mt-4 space-y-4 border-t pt-4">
+            {/* Informations client */}
+            {clientInfoEntries.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Informations client</p>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                  {clientInfoEntries.map(([key, value]) => (
+                    <div key={key}>
+                      <p className="text-xs text-muted-foreground">{labelMap[key] ?? key}</p>
+                      <p className="text-sm font-medium">{value}</p>
+                    </div>
+                  ))}
                 </div>
-              )
-            })}
+              </div>
+            )}
+
+            {/* Réponses aux champs */}
+            {formFields.length > 0 && (
+              <div className="space-y-3">
+                {formFields.map(field => {
+                  const value = response.responses[field.id]
+                  if (value === undefined) return null
+                  return (
+                    <div key={field.id}>
+                      <p className="text-xs font-medium text-muted-foreground mb-0.5">{field.label}</p>
+                      <p className="text-sm">{formatValue(value)}</p>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            {answeredCount === 0 && clientInfoEntries.length === 0 && (
+              <p className="text-xs text-muted-foreground">Aucune réponse enregistrée.</p>
+            )}
+          </div>
+        )}
+
+        {/* Bouton valider */}
+        {response.completed && !response.validated_at && (
+          <div className="mt-3 pt-3 border-t">
+            <Button
+              size="sm"
+              className="bg-green-600 hover:bg-green-700 text-white"
+              disabled={validating}
+              onClick={handleValidateClick}
+            >
+              <CheckCircle2 className="h-4 w-4 mr-2" />
+              {validating ? 'Validation...' : '✓ Valider l\'onboarding'}
+            </Button>
           </div>
         )}
       </CardContent>
@@ -397,6 +489,24 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
       loadResponses()
     }
   }, [activeTab, loadResponses])
+
+  // --- Validation onboarding ---
+  async function handleValidate(responseId: string) {
+    try {
+      const res = await fetch(`/api/projects/${id}/responses/${responseId}`, {
+        method: 'PUT',
+      })
+      if (!res.ok) throw new Error()
+      setResponses(prev => prev.map(r =>
+        r.id === responseId
+          ? { ...r, validated_at: new Date().toISOString() }
+          : r
+      ))
+      toast.success('Onboarding validé ! Le client va recevoir un email.')
+    } catch {
+      toast.error('Erreur lors de la validation')
+    }
+  }
 
   // --- Invitation ---
   async function handleSendInvite(e: React.FormEvent) {
@@ -749,14 +859,24 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
             </Card>
           ) : (
             <div className="space-y-3">
-              <p className="text-sm text-muted-foreground">
-                {responses.length} réponse{responses.length > 1 ? 's' : ''}
-              </p>
+              <div className="flex gap-4 text-sm mb-4">
+                <span className="text-muted-foreground">
+                  <span className="font-semibold text-foreground">{responses.filter(r => r.validated_at).length}</span> validé{responses.filter(r => r.validated_at).length !== 1 ? 's' : ''}
+                </span>
+                <span className="text-muted-foreground">
+                  <span className="font-semibold text-foreground">{responses.filter(r => r.completed && !r.validated_at).length}</span> en attente de validation
+                </span>
+                <span className="text-muted-foreground">
+                  <span className="font-semibold text-foreground">{responses.filter(r => !r.completed).length}</span> en cours
+                </span>
+              </div>
               {responses.map(response => (
                 <ResponseCard
                   key={response.id}
                   response={response}
                   formFields={formFieldsMeta}
+                  projectId={id}
+                  onValidate={handleValidate}
                 />
               ))}
             </div>

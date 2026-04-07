@@ -18,12 +18,14 @@ interface FormField {
   options: string[] | null
   order_index: number
   section_id: string | null
+  sensitive: boolean
 }
 
 interface OnboardingSection {
   id: string
   title: string
   order_index: number
+  kind: string
 }
 
 async function getPortalData(publicId: string) {
@@ -42,12 +44,12 @@ async function getPortalData(publicId: string) {
   const [{ data: sections }, { data: fields }] = await Promise.all([
     supabase
       .from('onboarding_sections')
-      .select('id, title, order_index')
+      .select('id, title, order_index, kind')
       .eq('project_id', project.id)
       .order('order_index'),
     supabase
       .from('form_fields')
-      .select('id, type, label, description, placeholder, required, options, order_index, section_id')
+      .select('id, type, label, description, placeholder, required, options, order_index, section_id, sensitive')
       .eq('project_id', project.id)
       .order('order_index'),
   ])
