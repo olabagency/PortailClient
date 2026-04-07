@@ -4,6 +4,7 @@ import { z } from 'zod'
 
 const sectionSchema = z.object({
   title: z.string().min(1).max(200),
+  kind: z.enum(['default', 'access']).default('default').optional(),
 })
 
 // GET /api/projects/[id]/sections
@@ -64,7 +65,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const { data, error } = await supabase
       .from('onboarding_sections')
-      .insert({ title: parsed.data.title, project_id: id, order_index: count ?? 0 })
+      .insert({ title: parsed.data.title, kind: parsed.data.kind ?? 'default', project_id: id, order_index: count ?? 0 })
       .select()
       .single()
 

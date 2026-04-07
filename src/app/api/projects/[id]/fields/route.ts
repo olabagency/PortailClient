@@ -4,11 +4,12 @@ import { z } from 'zod'
 import { APP_CONFIG } from '@/config/app.config'
 
 const fieldSchema = z.object({
-  type: z.enum(['text','textarea','email','phone','url','date','select','multiselect','file']),
+  type: z.enum(['text','textarea','email','phone','url','date','select','multiselect','file','password']),
   label: z.string().min(1).max(200),
   description: z.string().max(500).optional().or(z.literal('')),
   placeholder: z.string().max(200).optional().or(z.literal('')),
   required: z.boolean().default(false),
+  sensitive: z.boolean().default(false),
   options: z.array(z.string()).optional().nullable(),
   section_id: z.string().uuid().optional().nullable(),
   order_index: z.number().int().min(0).default(0),

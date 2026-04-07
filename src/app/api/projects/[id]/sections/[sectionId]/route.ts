@@ -3,7 +3,8 @@ import { createClient } from '@/lib/supabase/server'
 import { z } from 'zod'
 
 const renameSectionSchema = z.object({
-  title: z.string().min(1).max(200),
+  title: z.string().min(1).max(200).optional(),
+  kind: z.enum(['default', 'access']).optional(),
 })
 
 // PUT /api/projects/[id]/sections/[sectionId]
@@ -31,7 +32,7 @@ export async function PUT(
 
     const { data, error } = await supabase
       .from('onboarding_sections')
-      .update({ title: parsed.data.title })
+      .update(parsed.data)
       .eq('id', sectionId)
       .eq('project_id', id)
       .select()

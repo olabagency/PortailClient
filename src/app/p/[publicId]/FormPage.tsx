@@ -390,6 +390,8 @@ export default function FormPage({ project, sections, fields, publicId }: FormPa
                   fields={documentFields}
                   responses={responses}
                   onChange={handleFieldChange}
+                  publicId={publicId}
+                  sessionId={sessionId}
                 />
               )}
               {currentStep === 4 && (
@@ -397,6 +399,8 @@ export default function FormPage({ project, sections, fields, publicId }: FormPa
                   fields={accessFields}
                   responses={responses}
                   onChange={handleFieldChange}
+                  publicId={publicId}
+                  sessionId={sessionId}
                 />
               )}
               {currentStep === 5 && (
@@ -552,10 +556,14 @@ function StepDocuments({
   fields,
   responses,
   onChange,
+  publicId,
+  sessionId,
 }: {
   fields: FormField[]
   responses: Record<string, unknown>
   onChange: (fieldId: string, value: unknown) => void
+  publicId: string
+  sessionId: string
 }) {
   return (
     <div className="space-y-8">
@@ -576,6 +584,8 @@ function StepDocuments({
               field={field}
               value={responses[field.id]}
               onChange={(v) => onChange(field.id, v)}
+              publicId={publicId}
+              sessionId={sessionId}
             />
           ))}
         </div>
@@ -590,10 +600,14 @@ function StepAccess({
   fields,
   responses,
   onChange,
+  publicId,
+  sessionId,
 }: {
   fields: FormField[]
   responses: Record<string, unknown>
   onChange: (fieldId: string, value: unknown) => void
+  publicId: string
+  sessionId: string
 }) {
   return (
     <div className="space-y-8">
@@ -622,6 +636,8 @@ function StepAccess({
                 field={{ ...field, label: `🔒 ${field.label}` }}
                 value={responses[field.id]}
                 onChange={(v) => onChange(field.id, v)}
+                publicId={publicId}
+                sessionId={sessionId}
               />
             </div>
           ))}

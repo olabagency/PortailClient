@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -30,15 +30,22 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
 import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import {
   ArrowLeft, Plus, GripVertical, Pencil, Trash2, Eye, Layers,
   ChevronDown, ChevronRight, Send, UserCircle, CheckCircle2,
+  FileText, Lock, KeyRound,
 } from 'lucide-react'
 import { APP_CONFIG } from '@/config/app.config'
 import type { FormFieldType } from '@/config/app.config'
 
+// ─── Types ───────────────────────────────────────────────────────────────────
+
 interface FormField {
   id: string
-  type: FormFieldType
+  type: FormFieldType | 'password'
   label: string
   description: string | null
   placeholder: string | null
@@ -46,6 +53,7 @@ interface FormField {
   options: string[] | null
   order_index: number
   section_id: string | null
+  sensitive: boolean
 }
 
 interface OnboardingSection {
@@ -53,6 +61,7 @@ interface OnboardingSection {
   title: string
   order_index: number
   project_id: string
+  kind: string
 }
 
 interface FormFieldMeta {
@@ -73,6 +82,17 @@ interface OnboardingResponse {
   submitted_at: string | null
 }
 
+// ─── Access field types ───────────────────────────────────────────────────────
+
+const ACCESS_TYPES = [
+  { value: 'password', label: 'Mot de passe', icon: '🔑' },
+  { value: 'url', label: 'Lien / URL', icon: '🌐' },
+  { value: 'text', label: 'Identifiant / Texte', icon: '📝' },
+  { value: 'textarea', label: 'Notes / Texte long', icon: '📋' },
+]
+
+// ─── Default factories ────────────────────────────────────────────────────────
+
 const defaultField = (): Omit<FormField, 'id' | 'order_index'> => ({
   type: 'text',
   label: '',
@@ -81,9 +101,29 @@ const defaultField = (): Omit<FormField, 'id' | 'order_index'> => ({
   required: false,
   options: null,
   section_id: null,
+  sensitive: false,
 })
 
-// --- Composant champ triable ---
+const defaultDocumentField = (): Omit<FormField, 'id' | 'order_index'> => ({
+  type: 'file',
+  label: '',
+  description: '',
+  placeholder: '',
+  required: false,
+  options: null,
+  section_id: null,
+  sensitive: false,
+})
+
+const defaultAccessField = (): { label: string; accessType: string; description: string; required: boolean } => ({
+  label: '',
+  accessType: 'password',
+  description: '',
+  required: false,
+})
+
+// ─── SortableField ────────────────────────────────────────────────────────────
+
 function SortableField({
   field,
   onEdit,
@@ -95,7 +135,8 @@ function SortableField({
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: field.id })
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }
-  const typeLabel = APP_CONFIG.formFieldTypes.find(t => t.type === field.type)?.label ?? field.type
+  const allTypes = [...APP_CONFIG.formFieldTypes, { type: 'password', label: 'Mot de passe' }]
+  const typeLabel = allTypes.find(t => t.type === field.type)?.label ?? field.type
 
   return (
     <div ref={setNodeRef} style={style} className="flex items-center gap-2 bg-white border rounded-lg p-3 group">
@@ -106,6 +147,7 @@ function SortableField({
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium truncate">{field.label || '(sans titre)'}</span>
           {field.required && <Badge variant="destructive" className="text-xs py-0">Requis</Badge>}
+          {field.sensitive && <Badge variant="secondary" className="text-xs py-0 text-amber-700 bg-amber-50 border-amber-200">Sensible</Badge>}
         </div>
         <p className="text-xs text-muted-foreground">{typeLabel}</p>
       </div>
@@ -121,7 +163,8 @@ function SortableField({
   )
 }
 
-// --- Composant section triable ---
+// ─── SortableSection ──────────────────────────────────────────────────────────
+
 function SortableSection({
   section,
   fields,
@@ -156,15 +199,12 @@ function SortableSection({
       }
     : {}
 
-  const isUnsectioned = section === null
-
   return (
     <div
       ref={section ? (sortableProps as ReturnType<typeof useSortable>).setNodeRef : undefined}
       style={style}
       className="border rounded-lg bg-gray-50 overflow-hidden"
     >
-      {/* En-tête de section */}
       <div className="flex items-center gap-2 px-4 py-3 bg-white border-b group">
         {section && (
           <button
@@ -209,7 +249,6 @@ function SortableSection({
         </div>
       </div>
 
-      {/* Champs de la section */}
       {!collapsed && (
         <div className="p-3">
           {fields.length === 0 ? (
@@ -248,7 +287,8 @@ function SortableSection({
   )
 }
 
-// --- Carte de réponse ---
+// ─── ResponseCard ─────────────────────────────────────────────────────────────
+
 function ResponseCard({
   response,
   formFields,
@@ -277,10 +317,9 @@ function ResponseCard({
   const clientInfoEntries = response.client_info ? Object.entries(response.client_info).filter(([, v]) => v) : []
 
   const labelMap: Record<string, string> = {
-    name: 'Nom',
-    email: 'Email',
-    company: 'Entreprise',
-    phone: 'Téléphone',
+    first_name: 'Prénom', last_name: 'Nom', email: 'Email', phone: 'Téléphone',
+    company: 'Entreprise', address: 'Adresse', city: 'Ville', zip: 'Code postal',
+    country: 'Pays', vat_number: 'TVA', siret: 'SIRET',
   }
 
   async function handleValidateClick() {
@@ -296,6 +335,10 @@ function ResponseCard({
     ? formatDistanceToNow(new Date(response.submitted_at), { addSuffix: true, locale: fr })
     : null
 
+  const clientName = response.client_info
+    ? [response.client_info.first_name, response.client_info.last_name].filter(Boolean).join(' ')
+    : null
+
   return (
     <Card>
       <CardContent className="py-4">
@@ -304,7 +347,7 @@ function ResponseCard({
             <UserCircle className="h-8 w-8 text-muted-foreground shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium truncate">
-                {response.client_info?.name ?? response.respondent_email ?? 'Anonyme'}
+                {clientName || response.respondent_email || 'Anonyme'}
               </p>
               {response.respondent_email && (
                 <p className="text-xs text-muted-foreground truncate">{response.respondent_email}</p>
@@ -334,15 +377,11 @@ function ResponseCard({
               className="text-muted-foreground hover:text-foreground transition-colors"
               aria-label={expanded ? 'Réduire' : 'Développer'}
             >
-              {expanded
-                ? <ChevronDown className="h-4 w-4" />
-                : <ChevronRight className="h-4 w-4" />
-              }
+              {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
             </button>
           </div>
         </div>
 
-        {/* Barre de progression pour les réponses incomplètes */}
         {!response.completed && (
           <div className="mt-3">
             <div className="h-1.5 bg-muted rounded-full overflow-hidden">
@@ -356,7 +395,6 @@ function ResponseCard({
 
         {expanded && (
           <div className="mt-4 space-y-4 border-t pt-4">
-            {/* Informations client */}
             {clientInfoEntries.length > 0 && (
               <div>
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Informations client</p>
@@ -371,7 +409,6 @@ function ResponseCard({
               </div>
             )}
 
-            {/* Réponses aux champs */}
             {formFields.length > 0 && (
               <div className="space-y-3">
                 {formFields.map(field => {
@@ -393,7 +430,6 @@ function ResponseCard({
           </div>
         )}
 
-        {/* Bouton valider */}
         {response.completed && !response.validated_at && (
           <div className="mt-3 pt-3 border-t">
             <Button
@@ -412,7 +448,8 @@ function ResponseCard({
   )
 }
 
-// --- Page principale ---
+// ─── Main Page ────────────────────────────────────────────────────────────────
+
 export default function OnboardingEditorPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
@@ -420,35 +457,43 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
   const [fields, setFields] = useState<FormField[]>([])
   const [sections, setSections] = useState<OnboardingSection[]>([])
   const [loading, setLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState('questionnaire')
 
-  // Tabs
-  const [activeTab, setActiveTab] = useState('editor')
-
-  // Réponses
+  // Responses
   const [responses, setResponses] = useState<OnboardingResponse[]>([])
   const [formFieldsMeta, setFormFieldsMeta] = useState<FormFieldMeta[]>([])
   const [responsesLoading, setResponsesLoading] = useState(false)
   const [responsesLoaded, setResponsesLoaded] = useState(false)
 
-  // Dialog invitation
+  // Invite dialog
   const [inviteOpen, setInviteOpen] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteSending, setInviteSending] = useState(false)
 
-  // Modal champ
+  // Field modal (for questionnaire)
   const [editField, setEditField] = useState<FormField | null>(null)
   const [newField, setNewField] = useState<Omit<FormField, 'id' | 'order_index'>>(defaultField())
   const [fieldModalOpen, setFieldModalOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [optionInput, setOptionInput] = useState('')
 
-  // Modal section
+  // Document field modal
+  const [editDocField, setEditDocField] = useState<FormField | null>(null)
+  const [newDocField, setNewDocField] = useState<Omit<FormField, 'id' | 'order_index'>>(defaultDocumentField())
+  const [docModalOpen, setDocModalOpen] = useState(false)
+  const [savingDoc, setSavingDoc] = useState(false)
+
+  // Access field modal
+  const [editAccessField, setEditAccessField] = useState<FormField | null>(null)
+  const [newAccessField, setNewAccessField] = useState(defaultAccessField())
+  const [accessModalOpen, setAccessModalOpen] = useState(false)
+  const [savingAccess, setSavingAccess] = useState(false)
+
+  // Section modal
   const [sectionModalOpen, setSectionModalOpen] = useState(false)
   const [editSection, setEditSection] = useState<OnboardingSection | null>(null)
   const [sectionTitle, setSectionTitle] = useState('')
   const [savingSection, setSavingSection] = useState(false)
-
-  // Confirmation suppression section
   const [deletingSectionId, setDeletingSectionId] = useState<string | null>(null)
 
   const sensors = useSensors(
@@ -456,7 +501,7 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   )
 
-  // Chargement initial
+  // Load data
   useEffect(() => {
     fetch(`/api/projects/${id}/fields`)
       .then(r => r.json())
@@ -467,7 +512,6 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
       })
   }, [id])
 
-  // Chargement des réponses
   const loadResponses = useCallback(async () => {
     if (responsesLoaded) return
     setResponsesLoading(true)
@@ -485,30 +529,24 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
   }, [id, responsesLoaded])
 
   useEffect(() => {
-    if (activeTab === 'responses') {
-      loadResponses()
-    }
+    if (activeTab === 'responses') loadResponses()
   }, [activeTab, loadResponses])
 
-  // --- Validation onboarding ---
+  // ── Validate onboarding ──
   async function handleValidate(responseId: string) {
     try {
-      const res = await fetch(`/api/projects/${id}/responses/${responseId}`, {
-        method: 'PUT',
-      })
+      const res = await fetch(`/api/projects/${id}/responses/${responseId}`, { method: 'PUT' })
       if (!res.ok) throw new Error()
       setResponses(prev => prev.map(r =>
-        r.id === responseId
-          ? { ...r, validated_at: new Date().toISOString() }
-          : r
+        r.id === responseId ? { ...r, validated_at: new Date().toISOString() } : r
       ))
-      toast.success('Onboarding validé ! Le client va recevoir un email.')
+      toast.success('Onboarding validé !')
     } catch {
       toast.error('Erreur lors de la validation')
     }
   }
 
-  // --- Invitation ---
+  // ── Invite ──
   async function handleSendInvite(e: React.FormEvent) {
     e.preventDefault()
     setInviteSending(true)
@@ -533,23 +571,44 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
     }
   }
 
-  // --- Champs groupés par section ---
+  // ── Derived data ──
+  const questionFields = fields
+    .filter(f => f.type !== 'file' && sections.find(s => s.id === f.section_id)?.kind !== 'access')
+    .sort((a, b) => a.order_index - b.order_index)
+
+  const documentFields = fields
+    .filter(f => f.type === 'file')
+    .sort((a, b) => a.order_index - b.order_index)
+
+  const accessFields = fields
+    .filter(f => {
+      const sec = sections.find(s => s.id === f.section_id)
+      return sec?.kind === 'access'
+    })
+    .sort((a, b) => a.order_index - b.order_index)
+
+  const defaultSections = sections.filter(s => s.kind !== 'access').sort((a, b) => a.order_index - b.order_index)
+
+  // ── Field helpers ──
   const fieldsBySectionId = useCallback((sectionId: string | null) => {
-    return fields
+    return questionFields
       .filter(f => f.section_id === sectionId)
       .sort((a, b) => a.order_index - b.order_index)
-  }, [fields])
+  }, [questionFields])
 
-  // --- Drag & drop sections ---
+  const unsectionedFields = questionFields.filter(f => !f.section_id)
+
+  // ── Drag & drop sections ──
   async function handleSectionsDragEnd(event: DragEndEvent) {
     const { active, over } = event
     if (!over || active.id === over.id) return
-
-    const oldIndex = sections.findIndex(s => s.id === active.id)
-    const newIndex = sections.findIndex(s => s.id === over.id)
-    const reordered = arrayMove(sections, oldIndex, newIndex).map((s, i) => ({ ...s, order_index: i }))
-    setSections(reordered)
-
+    const oldIndex = defaultSections.findIndex(s => s.id === active.id)
+    const newIndex = defaultSections.findIndex(s => s.id === over.id)
+    const reordered = arrayMove(defaultSections, oldIndex, newIndex).map((s, i) => ({ ...s, order_index: i }))
+    setSections(prev => {
+      const access = prev.filter(s => s.kind === 'access')
+      return [...reordered, ...access]
+    })
     await fetch(`/api/projects/${id}/sections/reorder`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -557,21 +616,18 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
     })
   }
 
-  // --- Drag & drop champs dans une section ---
+  // ── Drag & drop fields ──
   async function handleFieldsDragEnd(event: DragEndEvent, sectionId: string | null) {
     const { active, over } = event
     if (!over || active.id === over.id) return
-
     const sectionFields = fieldsBySectionId(sectionId)
     const oldIndex = sectionFields.findIndex(f => f.id === active.id)
     const newIndex = sectionFields.findIndex(f => f.id === over.id)
     const reordered = arrayMove(sectionFields, oldIndex, newIndex).map((f, i) => ({ ...f, order_index: i }))
-
     setFields(prev => {
-      const others = prev.filter(f => f.section_id !== sectionId)
+      const others = prev.filter(f => f.section_id !== sectionId || f.type === 'file')
       return [...others, ...reordered]
     })
-
     await fetch(`/api/projects/${id}/fields/reorder`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -579,7 +635,7 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
     })
   }
 
-  // --- Modal champ ---
+  // ── Questionnaire field modal ──
   function openAddFieldModal(sectionId: string | null) {
     setEditField(null)
     setNewField({ ...defaultField(), section_id: sectionId })
@@ -597,6 +653,7 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
       required: field.required,
       options: field.options,
       section_id: field.section_id,
+      sensitive: field.sensitive,
     })
     setOptionInput('')
     setFieldModalOpen(true)
@@ -605,7 +662,6 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
   async function handleSaveField(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
-
     if (editField) {
       const res = await fetch(`/api/projects/${id}/fields/${editField.id}`, {
         method: 'PUT',
@@ -613,7 +669,7 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
         body: JSON.stringify(newField),
       })
       const json = await res.json()
-      if (res.ok) setFields(prev => prev.map(f => f.id === editField.id ? json.data : f))
+      if (res.ok) setFields(prev => prev.map(f => f.id === editField.id ? { ...f, ...json.data } : f))
     } else {
       const sectionFields = fieldsBySectionId(newField.section_id)
       const res = await fetch(`/api/projects/${id}/fields`, {
@@ -624,7 +680,6 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
       const json = await res.json()
       if (res.ok) setFields(prev => [...prev, json.data])
     }
-
     setSaving(false)
     setFieldModalOpen(false)
   }
@@ -644,7 +699,7 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
     setNewField(prev => ({ ...prev, options: prev.options?.filter((_, i) => i !== idx) ?? null }))
   }
 
-  // --- Modal section ---
+  // ── Section modal ──
   function openAddSectionModal() {
     setEditSection(null)
     setSectionTitle('')
@@ -661,7 +716,6 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
     e.preventDefault()
     if (!sectionTitle.trim()) return
     setSavingSection(true)
-
     if (editSection) {
       const res = await fetch(`/api/projects/${id}/sections/${editSection.id}`, {
         method: 'PUT',
@@ -669,17 +723,16 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
         body: JSON.stringify({ title: sectionTitle.trim() }),
       })
       const json = await res.json()
-      if (res.ok) setSections(prev => prev.map(s => s.id === editSection.id ? json.data : s))
+      if (res.ok) setSections(prev => prev.map(s => s.id === editSection.id ? { ...s, ...json.data } : s))
     } else {
       const res = await fetch(`/api/projects/${id}/sections`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: sectionTitle.trim() }),
+        body: JSON.stringify({ title: sectionTitle.trim(), kind: 'default' }),
       })
       const json = await res.json()
       if (res.ok) setSections(prev => [...prev, json.data])
     }
-
     setSavingSection(false)
     setSectionModalOpen(false)
   }
@@ -687,27 +740,167 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
   async function handleDeleteSection(sectionId: string) {
     await fetch(`/api/projects/${id}/sections/${sectionId}`, { method: 'DELETE' })
     setSections(prev => prev.filter(s => s.id !== sectionId))
-    // Les champs de cette section passent en section_id = null
     setFields(prev => prev.map(f => f.section_id === sectionId ? { ...f, section_id: null } : f))
     setDeletingSectionId(null)
   }
 
-  const needsOptions = newField.type === 'select' || newField.type === 'multiselect'
+  // ── Document field modal ──
+  function openAddDocModal() {
+    setEditDocField(null)
+    setNewDocField(defaultDocumentField())
+    setDocModalOpen(true)
+  }
 
-  // Sections triées
-  const sortedSections = [...sections].sort((a, b) => a.order_index - b.order_index)
-  const unsectionedFields = fieldsBySectionId(null)
+  function openEditDocModal(field: FormField) {
+    setEditDocField(field)
+    setNewDocField({
+      type: 'file',
+      label: field.label,
+      description: field.description ?? '',
+      placeholder: field.placeholder ?? '',
+      required: field.required,
+      options: field.options,
+      section_id: field.section_id,
+      sensitive: false,
+    })
+    setDocModalOpen(true)
+  }
+
+  async function handleSaveDocField(e: React.FormEvent) {
+    e.preventDefault()
+    setSavingDoc(true)
+    if (editDocField) {
+      const res = await fetch(`/api/projects/${id}/fields/${editDocField.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ label: newDocField.label, description: newDocField.description, required: newDocField.required }),
+      })
+      const json = await res.json()
+      if (res.ok) setFields(prev => prev.map(f => f.id === editDocField.id ? { ...f, ...json.data } : f))
+    } else {
+      const res = await fetch(`/api/projects/${id}/fields`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'file',
+          label: newDocField.label,
+          description: newDocField.description,
+          placeholder: '',
+          required: newDocField.required,
+          options: null,
+          section_id: null,
+          sensitive: false,
+          order_index: documentFields.length,
+        }),
+      })
+      const json = await res.json()
+      if (res.ok) setFields(prev => [...prev, json.data])
+    }
+    setSavingDoc(false)
+    setDocModalOpen(false)
+  }
+
+  // ── Access field modal ──
+  async function getOrCreateAccessSection(): Promise<string> {
+    const existing = sections.find(s => s.kind === 'access')
+    if (existing) return existing.id
+
+    const res = await fetch(`/api/projects/${id}/sections`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 'Accès techniques', kind: 'access' }),
+    })
+    const json = await res.json()
+    if (res.ok) {
+      setSections(prev => [...prev, json.data])
+      return json.data.id as string
+    }
+    throw new Error('Impossible de créer la section accès')
+  }
+
+  function openAddAccessModal() {
+    setEditAccessField(null)
+    setNewAccessField(defaultAccessField())
+    setAccessModalOpen(true)
+  }
+
+  function openEditAccessModal(field: FormField) {
+    setEditAccessField(field)
+    const accessType = field.sensitive ? 'password' : field.type
+    setNewAccessField({
+      label: field.label,
+      accessType: accessType as string,
+      description: field.description ?? '',
+      required: field.required,
+    })
+    setAccessModalOpen(true)
+  }
+
+  async function handleSaveAccessField(e: React.FormEvent) {
+    e.preventDefault()
+    setSavingAccess(true)
+    try {
+      const isPassword = newAccessField.accessType === 'password'
+      const fieldType = isPassword ? 'text' : newAccessField.accessType
+      const sensitive = isPassword
+
+      if (editAccessField) {
+        const res = await fetch(`/api/projects/${id}/fields/${editAccessField.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            label: newAccessField.label,
+            description: newAccessField.description,
+            required: newAccessField.required,
+            sensitive,
+          }),
+        })
+        const json = await res.json()
+        if (res.ok) setFields(prev => prev.map(f => f.id === editAccessField.id ? { ...f, ...json.data } : f))
+      } else {
+        const sectionId = await getOrCreateAccessSection()
+        const res = await fetch(`/api/projects/${id}/fields`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: fieldType,
+            label: newAccessField.label,
+            description: newAccessField.description,
+            placeholder: '',
+            required: newAccessField.required,
+            options: null,
+            section_id: sectionId,
+            sensitive,
+            order_index: accessFields.length,
+          }),
+        })
+        const json = await res.json()
+        if (res.ok) setFields(prev => [...prev, json.data])
+      }
+
+      setAccessModalOpen(false)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erreur')
+    } finally {
+      setSavingAccess(false)
+    }
+  }
+
+  const needsOptions = newField.type === 'select' || newField.type === 'multiselect'
+  const sortedSections = [...defaultSections].sort((a, b) => a.order_index - b.order_index)
+
+  // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
     <div className="space-y-6 max-w-2xl">
-      {/* En-tête */}
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" onClick={() => router.back()}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
-            <h1 className="text-2xl font-bold">Formulaire d'onboarding</h1>
+            <h1 className="text-2xl font-bold">Formulaire d&apos;onboarding</h1>
             <p className="text-sm text-muted-foreground mt-0.5">Personnalisez les informations demandées au client</p>
           </div>
         </div>
@@ -723,16 +916,36 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
         </div>
       </div>
 
-      {/* Onglets */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="editor">Éditeur</TabsTrigger>
-          <TabsTrigger value="responses">Réponses</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="questionnaire">
+            📋 Questionnaire
+            {questionFields.length > 0 && (
+              <Badge variant="secondary" className="ml-1.5 text-xs py-0">{questionFields.length}</Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="documents">
+            📁 Documents
+            {documentFields.length > 0 && (
+              <Badge variant="secondary" className="ml-1.5 text-xs py-0">{documentFields.length}</Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="access">
+            🔐 Accès
+            {accessFields.length > 0 && (
+              <Badge variant="secondary" className="ml-1.5 text-xs py-0">{accessFields.length}</Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="responses">
+            Réponses
+            {responses.length > 0 && (
+              <Badge variant="secondary" className="ml-1.5 text-xs py-0">{responses.length}</Badge>
+            )}
+          </TabsTrigger>
         </TabsList>
 
-        {/* Onglet Éditeur */}
-        <TabsContent value="editor" className="mt-4 space-y-4">
-          {/* Barre d'actions */}
+        {/* ── Tab: Questionnaire ── */}
+        <TabsContent value="questionnaire" className="mt-4 space-y-4">
           <div className="flex items-center gap-2">
             <Button size="sm" onClick={() => openAddFieldModal(null)}>
               <Plus className="h-4 w-4 mr-1" />
@@ -744,31 +957,28 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
             </Button>
           </div>
 
+          <div className="rounded-lg bg-blue-50 border border-blue-100 px-4 py-3 text-sm text-blue-700">
+            Ces champs apparaissent à l&apos;étape <strong>Questionnaire</strong> du formulaire client (texte, listes, dates...).
+          </div>
+
           {loading ? (
+            <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-14 w-full rounded-lg" />)}</div>
+          ) : sortedSections.length === 0 && unsectionedFields.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center">
-                <p className="text-sm text-muted-foreground">Chargement...</p>
-              </CardContent>
-            </Card>
-          ) : sections.length === 0 && fields.length === 0 ? (
-            <Card>
-              <CardContent className="py-12 text-center">
-                <p className="text-muted-foreground text-sm mb-3">Aucun champ. Ajoutez des questions pour votre client.</p>
+                <p className="text-muted-foreground text-sm mb-3">Aucune question. Ajoutez des champs pour votre client.</p>
                 <div className="flex gap-2 justify-center">
                   <Button variant="outline" onClick={() => openAddFieldModal(null)}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Premier champ
+                    <Plus className="h-4 w-4 mr-2" />Premier champ
                   </Button>
                   <Button variant="outline" onClick={openAddSectionModal}>
-                    <Layers className="h-4 w-4 mr-2" />
-                    Première section
+                    <Layers className="h-4 w-4 mr-2" />Première section
                   </Button>
                 </div>
               </CardContent>
             </Card>
           ) : (
             <div className="space-y-3">
-              {/* Sections triables */}
               {sortedSections.length > 0 && (
                 <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleSectionsDragEnd}>
                   <SortableContext items={sortedSections.map(s => s.id)} strategy={verticalListSortingStrategy}>
@@ -791,9 +1001,7 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
                   </SortableContext>
                 </DndContext>
               )}
-
-              {/* Champs sans section */}
-              {(unsectionedFields.length > 0 || sections.length === 0) && (
+              {(unsectionedFields.length > 0 || sortedSections.length === 0) && (
                 <SortableSection
                   section={null}
                   fields={unsectionedFields}
@@ -809,23 +1017,133 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
             </div>
           )}
 
-          {/* Statistiques */}
-          {(fields.length > 0 || sections.length > 0) && (
+          {(questionFields.length > 0 || sections.filter(s => s.kind !== 'access').length > 0) && (
             <Card>
               <CardContent className="py-3">
                 <div className="flex gap-4 text-sm text-muted-foreground">
-                  <span><strong className="text-foreground">{fields.length}</strong> champ{fields.length > 1 ? 's' : ''}</span>
+                  <span><strong className="text-foreground">{questionFields.length}</strong> champ{questionFields.length > 1 ? 's' : ''}</span>
                   <Separator orientation="vertical" className="h-4" />
-                  <span><strong className="text-foreground">{fields.filter(f => f.required).length}</strong> obligatoire{fields.filter(f => f.required).length > 1 ? 's' : ''}</span>
+                  <span><strong className="text-foreground">{questionFields.filter(f => f.required).length}</strong> obligatoire{questionFields.filter(f => f.required).length > 1 ? 's' : ''}</span>
                   <Separator orientation="vertical" className="h-4" />
-                  <span><strong className="text-foreground">{sections.length}</strong> section{sections.length > 1 ? 's' : ''}</span>
+                  <span><strong className="text-foreground">{sections.filter(s => s.kind !== 'access').length}</strong> section{sections.filter(s => s.kind !== 'access').length > 1 ? 's' : ''}</span>
                 </div>
               </CardContent>
             </Card>
           )}
         </TabsContent>
 
-        {/* Onglet Réponses */}
+        {/* ── Tab: Documents ── */}
+        <TabsContent value="documents" className="mt-4 space-y-4">
+          <Button size="sm" onClick={openAddDocModal}>
+            <Plus className="h-4 w-4 mr-1" />
+            Demander un document
+          </Button>
+
+          <div className="rounded-lg bg-green-50 border border-green-100 px-4 py-3 text-sm text-green-700">
+            Définissez ici les documents que le client doit fournir (logo, charte graphique, contrats PDF, etc.). Ils apparaissent à l&apos;étape <strong>Documents</strong>.
+          </div>
+
+          {loading ? (
+            <div className="space-y-2">{[1,2].map(i => <Skeleton key={i} className="h-14 w-full rounded-lg" />)}</div>
+          ) : documentFields.length === 0 ? (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <FileText className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+                <p className="text-muted-foreground text-sm mb-3">Aucun document demandé.</p>
+                <Button variant="outline" onClick={openAddDocModal}>
+                  <Plus className="h-4 w-4 mr-2" />Demander un document
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-2">
+              {documentFields.map(field => (
+                <div key={field.id} className="flex items-center gap-3 bg-white border rounded-lg p-3 group">
+                  <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium truncate">{field.label || '(sans titre)'}</span>
+                      {field.required && <Badge variant="destructive" className="text-xs py-0">Requis</Badge>}
+                    </div>
+                    {field.description && (
+                      <p className="text-xs text-muted-foreground truncate">{field.description}</p>
+                    )}
+                  </div>
+                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditDocModal(field)}>
+                      <Pencil className="h-3 w-3" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => handleDeleteField(field.id)}>
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* ── Tab: Accès techniques ── */}
+        <TabsContent value="access" className="mt-4 space-y-4">
+          <Button size="sm" onClick={openAddAccessModal}>
+            <Plus className="h-4 w-4 mr-1" />
+            Demander un accès
+          </Button>
+
+          <div className="rounded-lg bg-amber-50 border border-amber-100 px-4 py-3 text-sm text-amber-800 flex gap-2">
+            <Lock className="h-4 w-4 shrink-0 mt-0.5" />
+            <span>
+              Définissez les accès dont vous avez besoin (FTP, hébergeur, réseaux sociaux...). Ces informations sont <strong>chiffrées AES-256</strong> et apparaissent à l&apos;étape <strong>Accès techniques</strong>.
+            </span>
+          </div>
+
+          {loading ? (
+            <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-14 w-full rounded-lg" />)}</div>
+          ) : accessFields.length === 0 ? (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <KeyRound className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+                <p className="text-muted-foreground text-sm mb-3">Aucun accès demandé.</p>
+                <Button variant="outline" onClick={openAddAccessModal}>
+                  <Plus className="h-4 w-4 mr-2" />Demander un accès
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-2">
+              {accessFields.map(field => {
+                const accessType = ACCESS_TYPES.find(t => t.value === (field.sensitive ? 'password' : field.type))
+                return (
+                  <div key={field.id} className="flex items-center gap-3 bg-white border rounded-lg p-3 group">
+                    <span className="text-base shrink-0">{accessType?.icon ?? '🔑'}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium truncate">{field.label || '(sans titre)'}</span>
+                        {field.required && <Badge variant="destructive" className="text-xs py-0">Requis</Badge>}
+                        {field.sensitive && (
+                          <Badge variant="secondary" className="text-xs py-0 text-amber-700 bg-amber-50 border-amber-200">
+                            🔒 Chiffré
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground">{accessType?.label ?? field.type}</p>
+                    </div>
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditAccessModal(field)}>
+                        <Pencil className="h-3 w-3" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => handleDeleteField(field.id)}>
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* ── Tab: Réponses ── */}
         <TabsContent value="responses" className="mt-4">
           {responsesLoading ? (
             <div className="space-y-3">
@@ -849,7 +1167,7 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
               <CardContent className="py-12 text-center">
                 <UserCircle className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
                 <p className="text-sm text-muted-foreground">
-                  Aucune réponse pour l'instant. Envoyez le formulaire à votre client.
+                  Aucune réponse pour l&apos;instant. Envoyez le formulaire à votre client.
                 </p>
                 <Button variant="outline" size="sm" className="mt-4" onClick={() => setInviteOpen(true)}>
                   <Send className="h-4 w-4 mr-2" />
@@ -884,13 +1202,13 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
         </TabsContent>
       </Tabs>
 
-      {/* Dialog invitation */}
+      {/* ── Dialog: Invitation ── */}
       <Dialog open={inviteOpen} onOpenChange={(v) => { if (!v) { setInviteOpen(false); setInviteEmail('') } }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Envoyer le formulaire</DialogTitle>
             <DialogDescription>
-              Envoyez le lien du formulaire d'onboarding à votre client par email.
+              Envoyez le lien du formulaire d&apos;onboarding à votre client par email.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSendInvite} className="space-y-4">
@@ -907,12 +1225,7 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
               />
             </div>
             <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => { setInviteOpen(false); setInviteEmail('') }}
-                disabled={inviteSending}
-              >
+              <Button type="button" variant="outline" onClick={() => { setInviteOpen(false); setInviteEmail('') }} disabled={inviteSending}>
                 Annuler
               </Button>
               <Button type="submit" disabled={inviteSending}>
@@ -923,7 +1236,7 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
         </DialogContent>
       </Dialog>
 
-      {/* Modal ajout/édition champ */}
+      {/* ── Dialog: Questionnaire field ── */}
       <Dialog open={fieldModalOpen} onOpenChange={(v) => { if (!v) setFieldModalOpen(false) }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
@@ -934,17 +1247,17 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
               <div className="space-y-2">
                 <Label>Type</Label>
                 <Select
-                  value={newField.type}
+                  value={newField.type as string}
                   onValueChange={(v) => setNewField(prev => ({ ...prev, type: v as FormFieldType, options: null }))}
                   disabled={!!editField}
                 >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {APP_CONFIG.formFieldTypes.map(t => (
-                      <SelectItem key={t.type} value={t.type}>{t.label}</SelectItem>
-                    ))}
+                    {APP_CONFIG.formFieldTypes
+                      .filter(t => t.type !== 'file')
+                      .map(t => (
+                        <SelectItem key={t.type} value={t.type}>{t.label}</SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -988,19 +1301,16 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
               </div>
             )}
 
-            {/* Sélecteur de section */}
             <div className="space-y-2">
               <Label>Section <span className="text-xs text-muted-foreground">(optionnel)</span></Label>
               <Select
                 value={newField.section_id ?? '__none__'}
                 onValueChange={(v) => setNewField(prev => ({ ...prev, section_id: v === '__none__' ? null : v }))}
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Sans section" />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Sans section" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">Sans section</SelectItem>
-                  {sortedSections.map(s => (
+                  {sections.filter(s => s.kind !== 'access').map(s => (
                     <SelectItem key={s.id} value={s.id}>{s.title}</SelectItem>
                   ))}
                 </SelectContent>
@@ -1021,10 +1331,9 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
                 </div>
                 {(newField.options ?? []).length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-2">
-                    {(newField.options ?? []).map((opt, i) => (
-                      <Badge key={i} variant="secondary" className="gap-1">
-                        {opt}
-                        <button type="button" onClick={() => removeOption(i)} className="ml-1 hover:text-destructive">×</button>
+                    {(newField.options ?? []).map((opt, idx) => (
+                      <Badge key={idx} variant="secondary" className="gap-1 cursor-pointer" onClick={() => removeOption(idx)}>
+                        {opt} ×
                       </Badge>
                     ))}
                   </div>
@@ -1034,23 +1343,131 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setFieldModalOpen(false)} disabled={saving}>Annuler</Button>
-              <Button type="submit" disabled={saving}>
-                {saving ? 'Enregistrement...' : editField ? 'Enregistrer' : 'Ajouter le champ'}
-              </Button>
+              <Button type="submit" disabled={saving}>{saving ? 'Enregistrement...' : (editField ? 'Modifier' : 'Ajouter')}</Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
-      {/* Modal ajout/renommage section */}
-      <Dialog open={sectionModalOpen} onOpenChange={(v) => { if (!v) setSectionModalOpen(false) }}>
+      {/* ── Dialog: Document field ── */}
+      <Dialog open={docModalOpen} onOpenChange={(v) => { if (!v) setDocModalOpen(false) }}>
         <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{editDocField ? 'Modifier le document' : 'Demander un document'}</DialogTitle>
+            <DialogDescription>
+              Indiquez quel document le client doit fournir.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSaveDocField} className="space-y-4">
+            <div className="space-y-2">
+              <Label>Libellé <span className="text-destructive">*</span></Label>
+              <Input
+                value={newDocField.label}
+                onChange={(e) => setNewDocField(prev => ({ ...prev, label: e.target.value }))}
+                placeholder="Ex : Logo de l'entreprise, Charte graphique..."
+                required
+                autoFocus
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Description <span className="text-xs text-muted-foreground">(optionnel)</span></Label>
+              <Input
+                value={newDocField.description ?? ''}
+                onChange={(e) => setNewDocField(prev => ({ ...prev, description: e.target.value }))}
+                placeholder="Ex : Format PNG ou SVG, fond transparent"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch
+                id="doc-required"
+                checked={newDocField.required}
+                onCheckedChange={(v) => setNewDocField(prev => ({ ...prev, required: v }))}
+              />
+              <Label htmlFor="doc-required">Document obligatoire</Label>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setDocModalOpen(false)} disabled={savingDoc}>Annuler</Button>
+              <Button type="submit" disabled={savingDoc}>{savingDoc ? 'Enregistrement...' : (editDocField ? 'Modifier' : 'Ajouter')}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Dialog: Access field ── */}
+      <Dialog open={accessModalOpen} onOpenChange={(v) => { if (!v) setAccessModalOpen(false) }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{editAccessField ? 'Modifier l\'accès' : 'Demander un accès'}</DialogTitle>
+            <DialogDescription>
+              Définissez le type d&apos;accès dont vous avez besoin.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSaveAccessField} className="space-y-4">
+            <div className="space-y-2">
+              <Label>Nom de l&apos;accès <span className="text-destructive">*</span></Label>
+              <Input
+                value={newAccessField.label}
+                onChange={(e) => setNewAccessField(prev => ({ ...prev, label: e.target.value }))}
+                placeholder="Ex : Accès FTP, Mot de passe hébergeur, Facebook..."
+                required
+                autoFocus
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Type de réponse attendu</Label>
+              <Select
+                value={newAccessField.accessType}
+                onValueChange={(v) => { if (v) setNewAccessField(prev => ({ ...prev, accessType: v })) }}
+                disabled={!!editAccessField}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {ACCESS_TYPES.map(t => (
+                    <SelectItem key={t.value} value={t.value}>
+                      {t.icon} {t.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {newAccessField.accessType === 'password' && (
+                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+                  🔒 La valeur sera masquée et chiffrée AES-256 côté serveur.
+                </p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label>Description <span className="text-xs text-muted-foreground">(optionnel)</span></Label>
+              <Input
+                value={newAccessField.description}
+                onChange={(e) => setNewAccessField(prev => ({ ...prev, description: e.target.value }))}
+                placeholder="Ex : Hôte : ftp.monsite.com, port 21"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch
+                id="access-required"
+                checked={newAccessField.required}
+                onCheckedChange={(v) => setNewAccessField(prev => ({ ...prev, required: v }))}
+              />
+              <Label htmlFor="access-required">Obligatoire</Label>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setAccessModalOpen(false)} disabled={savingAccess}>Annuler</Button>
+              <Button type="submit" disabled={savingAccess}>{savingAccess ? 'Enregistrement...' : (editAccessField ? 'Modifier' : 'Ajouter')}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Section edit modal ── */}
+      <Dialog open={sectionModalOpen} onOpenChange={(v) => { if (!v) setSectionModalOpen(false) }}>
+        <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>{editSection ? 'Renommer la section' : 'Nouvelle section'}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSaveSection} className="space-y-4">
             <div className="space-y-2">
-              <Label>Titre de la section <span className="text-destructive">*</span></Label>
+              <Label>Titre <span className="text-destructive">*</span></Label>
               <Input
                 value={sectionTitle}
                 onChange={(e) => setSectionTitle(e.target.value)}
@@ -1061,34 +1478,29 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setSectionModalOpen(false)} disabled={savingSection}>Annuler</Button>
-              <Button type="submit" disabled={savingSection}>
-                {savingSection ? 'Enregistrement...' : editSection ? 'Renommer' : 'Créer la section'}
-              </Button>
+              <Button type="submit" disabled={savingSection}>{savingSection ? 'Enregistrement...' : (editSection ? 'Renommer' : 'Créer')}</Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
-      {/* Dialog confirmation suppression section */}
-      <Dialog open={!!deletingSectionId} onOpenChange={(v) => { if (!v) setDeletingSectionId(null) }}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Supprimer la section ?</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Les champs de cette section ne seront pas supprimés — ils seront déplacés dans "Sans section".
-          </p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeletingSectionId(null)}>Annuler</Button>
-            <Button
-              variant="destructive"
-              onClick={() => deletingSectionId && handleDeleteSection(deletingSectionId)}
-            >
+      {/* ── Section delete confirmation ── */}
+      <AlertDialog open={!!deletingSectionId} onOpenChange={(v) => { if (!v) setDeletingSectionId(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Supprimer cette section ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Les champs de cette section seront conservés mais n&apos;appartiendront plus à aucune section.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction onClick={() => deletingSectionId && handleDeleteSection(deletingSectionId)} className="bg-destructive hover:bg-destructive/90">
               Supprimer
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

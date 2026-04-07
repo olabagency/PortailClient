@@ -58,6 +58,7 @@ export const APP_CONFIG = {
     { type: "select", label: "Liste déroulante" },
     { type: "multiselect", label: "Sélection multiple" },
     { type: "file", label: "Fichier" },
+    { type: "password", label: "Mot de passe" },
   ],
 
   // Metadata

@@ -8,6 +8,7 @@ const fieldUpdateSchema = z.object({
   description: z.string().max(500).optional().or(z.literal('')),
   placeholder: z.string().max(200).optional().or(z.literal('')),
   required: z.boolean().optional(),
+  sensitive: z.boolean().optional(),
   options: z.array(z.string()).optional().nullable(),
   section_id: z.string().uuid().optional().nullable(),
   order_index: z.number().int().min(0).optional(),
