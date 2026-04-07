@@ -457,6 +457,7 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
   const [fields, setFields] = useState<FormField[]>([])
   const [sections, setSections] = useState<OnboardingSection[]>([])
   const [loading, setLoading] = useState(true)
+  const [publicId, setPublicId] = useState<string>('')
   const [activeTab, setActiveTab] = useState('questionnaire')
 
   // Responses
@@ -503,13 +504,16 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
 
   // Load data
   useEffect(() => {
-    fetch(`/api/projects/${id}/fields`)
-      .then(r => r.json())
-      .then(({ data }) => {
-        setFields(data?.fields ?? [])
-        setSections(data?.sections ?? [])
-        setLoading(false)
-      })
+    // Fetch fields + sections + public_id in parallel
+    Promise.all([
+      fetch(`/api/projects/${id}/fields`).then(r => r.json()),
+      fetch(`/api/projects/${id}`).then(r => r.json()),
+    ]).then(([fieldsData, projectData]) => {
+      setFields(fieldsData.data?.fields ?? [])
+      setSections(fieldsData.data?.sections ?? [])
+      setPublicId(projectData.data?.public_id ?? '')
+      setLoading(false)
+    })
   }, [id])
 
   const loadResponses = useCallback(async () => {
@@ -769,35 +773,49 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
   async function handleSaveDocField(e: React.FormEvent) {
     e.preventDefault()
     setSavingDoc(true)
-    if (editDocField) {
-      const res = await fetch(`/api/projects/${id}/fields/${editDocField.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ label: newDocField.label, description: newDocField.description, required: newDocField.required }),
-      })
-      const json = await res.json()
-      if (res.ok) setFields(prev => prev.map(f => f.id === editDocField.id ? { ...f, ...json.data } : f))
-    } else {
-      const res = await fetch(`/api/projects/${id}/fields`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'file',
-          label: newDocField.label,
-          description: newDocField.description,
-          placeholder: '',
-          required: newDocField.required,
-          options: null,
-          section_id: null,
-          sensitive: false,
-          order_index: documentFields.length,
-        }),
-      })
-      const json = await res.json()
-      if (res.ok) setFields(prev => [...prev, json.data])
+    try {
+      if (editDocField) {
+        const res = await fetch(`/api/projects/${id}/fields/${editDocField.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ label: newDocField.label, description: newDocField.description, required: newDocField.required }),
+        })
+        const json = await res.json()
+        if (res.ok) {
+          setFields(prev => prev.map(f => f.id === editDocField.id ? { ...f, ...json.data } : f))
+          setDocModalOpen(false)
+        } else {
+          toast.error(json.error ?? 'Erreur lors de la modification')
+        }
+      } else {
+        const res = await fetch(`/api/projects/${id}/fields`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'file',
+            label: newDocField.label,
+            description: newDocField.description ?? '',
+            placeholder: '',
+            required: newDocField.required,
+            options: null,
+            section_id: null,
+            sensitive: false,
+            order_index: documentFields.length,
+          }),
+        })
+        const json = await res.json()
+        if (res.ok) {
+          setFields(prev => [...prev, json.data])
+          setDocModalOpen(false)
+        } else {
+          toast.error(json.error ?? 'Erreur lors de l\'enregistrement')
+        }
+      }
+    } catch {
+      toast.error('Erreur réseau')
+    } finally {
+      setSavingDoc(false)
     }
-    setSavingDoc(false)
-    setDocModalOpen(false)
   }
 
   // ── Access field modal ──
@@ -856,7 +874,12 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
           }),
         })
         const json = await res.json()
-        if (res.ok) setFields(prev => prev.map(f => f.id === editAccessField.id ? { ...f, ...json.data } : f))
+        if (res.ok) {
+          setFields(prev => prev.map(f => f.id === editAccessField.id ? { ...f, ...json.data } : f))
+          setAccessModalOpen(false)
+        } else {
+          toast.error(json.error ?? 'Erreur lors de la modification')
+        }
       } else {
         const sectionId = await getOrCreateAccessSection()
         const res = await fetch(`/api/projects/${id}/fields`, {
@@ -865,7 +888,7 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
           body: JSON.stringify({
             type: fieldType,
             label: newAccessField.label,
-            description: newAccessField.description,
+            description: newAccessField.description ?? '',
             placeholder: '',
             required: newAccessField.required,
             options: null,
@@ -875,10 +898,13 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
           }),
         })
         const json = await res.json()
-        if (res.ok) setFields(prev => [...prev, json.data])
+        if (res.ok) {
+          setFields(prev => [...prev, json.data])
+          setAccessModalOpen(false)
+        } else {
+          toast.error(json.error ?? 'Erreur lors de l\'enregistrement')
+        }
       }
-
-      setAccessModalOpen(false)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erreur')
     } finally {
@@ -909,10 +935,12 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
             <Send className="h-4 w-4 mr-2" />
             Envoyer au client
           </Button>
-          <Button variant="outline" size="sm" onClick={() => router.push(`/p/${id}`)}>
-            <Eye className="h-4 w-4 mr-2" />
-            Aperçu
-          </Button>
+          {publicId && (
+            <Button variant="outline" size="sm" onClick={() => router.push(`/p/${publicId}`)}>
+              <Eye className="h-4 w-4 mr-2" />
+              Aperçu
+            </Button>
+          )}
         </div>
       </div>
 
@@ -1251,7 +1279,11 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
                   onValueChange={(v) => setNewField(prev => ({ ...prev, type: v as FormFieldType, options: null }))}
                   disabled={!!editField}
                 >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue>
+                      {APP_CONFIG.formFieldTypes.find(t => t.type === newField.type)?.label ?? newField.type as string}
+                    </SelectValue>
+                  </SelectTrigger>
                   <SelectContent>
                     {APP_CONFIG.formFieldTypes
                       .filter(t => t.type !== 'file')
@@ -1420,7 +1452,14 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
                 onValueChange={(v) => { if (v) setNewAccessField(prev => ({ ...prev, accessType: v })) }}
                 disabled={!!editAccessField}
               >
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue>
+                    {(() => {
+                      const t = ACCESS_TYPES.find(t => t.value === newAccessField.accessType)
+                      return t ? `${t.icon} ${t.label}` : newAccessField.accessType
+                    })()}
+                  </SelectValue>
+                </SelectTrigger>
                 <SelectContent>
                   {ACCESS_TYPES.map(t => (
                     <SelectItem key={t.value} value={t.value}>
