@@ -35,7 +35,9 @@ async function getPortalData(publicId: string) {
     .eq('public_id', publicId)
     .single()
 
-  if (error || !project || project.status === 'archived') return null
+  if (error || !project || project.status === 'archived') {
+    return null
+  }
 
   const [{ data: sections }, { data: fields }] = await Promise.all([
     supabase
