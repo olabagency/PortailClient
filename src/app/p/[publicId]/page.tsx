@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import FormPage from './FormPage'
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { APP_CONFIG } from '@/config/app.config'
 import type { Metadata } from 'next'
 
@@ -28,12 +29,26 @@ interface OnboardingSection {
   kind: string
 }
 
+interface ClientInfo {
+  first_name: string
+  last_name: string
+  email: string
+  phone: string
+  company: string
+  address: string
+  city: string
+  zip: string
+  country: string
+  vat_number: string
+  siret: string
+}
+
 async function getPortalData(publicId: string) {
   const supabase = await createClient()
 
   const { data: project, error } = await supabase
     .from('projects')
-    .select('id, name, description, settings, status')
+    .select('id, name, description, settings, status, client_id')
     .eq('public_id', publicId)
     .single()
 
@@ -54,6 +69,51 @@ async function getPortalData(publicId: string) {
       .order('order_index'),
   ])
 
+  let initialClientInfo: ClientInfo = {
+    first_name: '',
+    last_name: '',
+    email: '',
+    phone: '',
+    company: '',
+    address: '',
+    city: '',
+    zip: '',
+    country: 'France',
+    vat_number: '',
+    siret: '',
+  }
+
+  if (project.client_id) {
+    const adminClient = createSupabaseClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
+    const { data: client } = await adminClient
+      .from('clients')
+      .select('id, name, email, phone, company')
+      .eq('id', project.client_id)
+      .single()
+
+    if (client) {
+      const nameParts = (client.name ?? '').split(' ')
+      const firstName = nameParts[0] ?? ''
+      const lastName = nameParts.slice(1).join(' ')
+      initialClientInfo = {
+        first_name: firstName,
+        last_name: lastName,
+        email: client.email ?? '',
+        phone: client.phone ?? '',
+        company: client.company ?? '',
+        address: '',
+        city: '',
+        zip: '',
+        country: 'France',
+        vat_number: '',
+        siret: '',
+      }
+    }
+  }
+
   return {
     project: {
       name: project.name,
@@ -62,6 +122,7 @@ async function getPortalData(publicId: string) {
     },
     sections: (sections ?? []) as OnboardingSection[],
     fields: (fields ?? []) as FormField[],
+    initialClientInfo,
   }
 }
 
@@ -87,6 +148,7 @@ export default async function PortalPage({ params }: PageProps) {
       sections={data.sections}
       fields={data.fields}
       publicId={publicId}
+      initialClientInfo={data.initialClientInfo}
     />
   )
 }

@@ -21,9 +21,9 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     const [{ data: responses }, { data: fields }] = await Promise.all([
       supabase
         .from('form_responses')
-        .select('id, respondent_name, respondent_email, responses, completed_at')
+        .select('id, session_id, respondent_name, respondent_email, responses, client_info, current_step, completed, validated_at, submitted_at, updated_at')
         .eq('project_id', id)
-        .order('completed_at', { ascending: false }),
+        .order('updated_at', { ascending: false }),
       supabase
         .from('form_fields')
         .select('id, label, type, order_index')

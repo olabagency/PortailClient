@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, use, useCallback } from 'react'
+import { useState, useEffect, use, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   DndContext, closestCenter, KeyboardSensor, PointerSensor,
@@ -36,7 +36,7 @@ import {
 import {
   ArrowLeft, Plus, GripVertical, Pencil, Trash2, Eye, Layers,
   ChevronDown, ChevronRight, Send, UserCircle, CheckCircle2,
-  FileText, Lock, KeyRound,
+  FileText, Lock, KeyRound, Loader2, RefreshCw,
 } from 'lucide-react'
 import { APP_CONFIG } from '@/config/app.config'
 import type { FormFieldType } from '@/config/app.config'
@@ -80,6 +80,7 @@ interface OnboardingResponse {
   validated_at: string | null
   respondent_email: string | null
   submitted_at: string | null
+  updated_at: string | null
 }
 
 // ─── Access field types ───────────────────────────────────────────────────────
@@ -331,8 +332,13 @@ function ResponseCard({
     }
   }
 
-  const dateLabel = response.submitted_at
-    ? formatDistanceToNow(new Date(response.submitted_at), { addSuffix: true, locale: fr })
+  const activityDate = response.updated_at
+    ? new Date(response.updated_at)
+    : response.submitted_at
+      ? new Date(response.submitted_at)
+      : null
+  const dateLabel = activityDate
+    ? formatDistanceToNow(activityDate, { addSuffix: true, locale: fr })
     : null
 
   const clientName = response.client_info
@@ -465,6 +471,9 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
   const [formFieldsMeta, setFormFieldsMeta] = useState<FormFieldMeta[]>([])
   const [responsesLoading, setResponsesLoading] = useState(false)
   const [responsesLoaded, setResponsesLoaded] = useState(false)
+  const [lastRefresh, setLastRefresh] = useState<Date | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // Invite dialog
   const [inviteOpen, setInviteOpen] = useState(false)
@@ -516,9 +525,10 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
     })
   }, [id])
 
-  const loadResponses = useCallback(async () => {
-    if (responsesLoaded) return
-    setResponsesLoading(true)
+  const loadResponses = useCallback(async (force = false) => {
+    if (responsesLoaded && !force) return
+    if (force) setRefreshing(true)
+    else setResponsesLoading(true)
     try {
       const res = await fetch(`/api/projects/${id}/responses`)
       const json = await res.json()
@@ -526,14 +536,36 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
         setResponses(json.data?.responses ?? [])
         setFormFieldsMeta(json.data?.fields ?? [])
         setResponsesLoaded(true)
+        setLastRefresh(new Date())
       }
     } finally {
+      setRefreshing(false)
       setResponsesLoading(false)
     }
   }, [id, responsesLoaded])
 
   useEffect(() => {
     if (activeTab === 'responses') loadResponses()
+  }, [activeTab, loadResponses])
+
+  // Polling toutes les 15s quand l'onglet Réponses est actif
+  useEffect(() => {
+    if (activeTab === 'responses') {
+      pollIntervalRef.current = setInterval(() => {
+        loadResponses(true)
+      }, 15000)
+    } else {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current)
+        pollIntervalRef.current = null
+      }
+    }
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current)
+        pollIntervalRef.current = null
+      }
+    }
   }, [activeTab, loadResponses])
 
   // ── Validate onboarding ──
@@ -1205,16 +1237,44 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
             </Card>
           ) : (
             <div className="space-y-3">
-              <div className="flex gap-4 text-sm mb-4">
-                <span className="text-muted-foreground">
-                  <span className="font-semibold text-foreground">{responses.filter(r => r.validated_at).length}</span> validé{responses.filter(r => r.validated_at).length !== 1 ? 's' : ''}
-                </span>
-                <span className="text-muted-foreground">
-                  <span className="font-semibold text-foreground">{responses.filter(r => r.completed && !r.validated_at).length}</span> en attente de validation
-                </span>
-                <span className="text-muted-foreground">
-                  <span className="font-semibold text-foreground">{responses.filter(r => !r.completed).length}</span> en cours
-                </span>
+              {/* En-tête live */}
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex gap-4 text-sm">
+                  <span className="text-muted-foreground">
+                    <span className="font-semibold text-foreground">{responses.filter(r => r.validated_at).length}</span> validé{responses.filter(r => r.validated_at).length !== 1 ? 's' : ''}
+                  </span>
+                  <span className="text-muted-foreground">
+                    <span className="font-semibold text-foreground">{responses.filter(r => r.completed && !r.validated_at).length}</span> en attente
+                  </span>
+                  <span className="text-muted-foreground">
+                    <span className="font-semibold text-foreground">{responses.filter(r => !r.completed).length}</span> en cours
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {refreshing ? (
+                    <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      Actualisation...
+                    </span>
+                  ) : lastRefresh ? (
+                    <span className="text-xs text-muted-foreground">
+                      {lastRefresh.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                    </span>
+                  ) : null}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs gap-1.5"
+                    onClick={() => loadResponses(true)}
+                    disabled={refreshing}
+                  >
+                    <RefreshCw className="h-3 w-3" />
+                    Actualiser
+                  </Button>
+                  <span className="text-xs bg-green-50 border border-green-200 text-green-700 rounded-full px-2 py-0.5 font-medium">
+                    ● Live · 15s
+                  </span>
+                </div>
               </div>
               {responses.map(response => (
                 <ResponseCard

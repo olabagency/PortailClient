@@ -39,6 +39,7 @@ interface FormPageProps {
   sections: OnboardingSection[]
   fields: FormField[]
   publicId: string
+  initialClientInfo?: Partial<ClientInfo>
 }
 
 interface ClientInfo {
@@ -63,21 +64,21 @@ const STEPS = [
   { number: 5, label: 'Vos informations' },
 ]
 
-export default function FormPage({ project, sections, fields, publicId }: FormPageProps) {
+export default function FormPage({ project, sections, fields, publicId, initialClientInfo }: FormPageProps) {
   const [currentStep, setCurrentStep] = useState(1)
   const [responses, setResponses] = useState<Record<string, unknown>>({})
   const [clientInfo, setClientInfo] = useState<ClientInfo>({
-    first_name: '',
-    last_name: '',
-    email: '',
-    phone: '',
-    company: '',
-    address: '',
-    city: '',
-    zip: '',
-    country: 'France',
-    vat_number: '',
-    siret: '',
+    first_name: initialClientInfo?.first_name ?? '',
+    last_name: initialClientInfo?.last_name ?? '',
+    email: initialClientInfo?.email ?? '',
+    phone: initialClientInfo?.phone ?? '',
+    company: initialClientInfo?.company ?? '',
+    address: initialClientInfo?.address ?? '',
+    city: initialClientInfo?.city ?? '',
+    zip: initialClientInfo?.zip ?? '',
+    country: initialClientInfo?.country ?? 'France',
+    vat_number: initialClientInfo?.vat_number ?? '',
+    siret: initialClientInfo?.siret ?? '',
   })
   const [saving, setSaving] = useState(false)
   const [submitting, setSubmitting] = useState(false)

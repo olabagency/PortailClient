@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -209,10 +209,22 @@ export function FieldRenderer({ field, value, onChange, error, publicId, session
   const strValue = typeof value === 'string' ? value : ''
   const arrValue = Array.isArray(value) ? (value as string[]) : []
   const [showPassword, setShowPassword] = useState(false)
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current)
+    }
+  }, [])
 
   function renderInput() {
     // Password / sensitive field
     if (field.sensitive) {
+      const scheduleHide = () => {
+        if (hideTimerRef.current) clearTimeout(hideTimerRef.current)
+        hideTimerRef.current = setTimeout(() => setShowPassword(false), 5000)
+      }
+
       return (
         <div className="relative">
           <Input
@@ -223,11 +235,25 @@ export function FieldRenderer({ field, value, onChange, error, publicId, session
             placeholder={field.placeholder ?? '••••••••'}
             className={`pr-10 ${error ? 'border-destructive' : ''}`}
             autoComplete="new-password"
+            onFocus={() => {
+              if (hideTimerRef.current) clearTimeout(hideTimerRef.current)
+            }}
+            onBlur={() => {
+              if (strValue) scheduleHide()
+            }}
           />
           <button
             type="button"
             className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-            onClick={() => setShowPassword(v => !v)}
+            onClick={() => {
+              if (!showPassword) {
+                setShowPassword(true)
+                if (strValue) scheduleHide()
+              } else {
+                setShowPassword(false)
+                if (hideTimerRef.current) clearTimeout(hideTimerRef.current)
+              }
+            }}
             tabIndex={-1}
           >
             {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
