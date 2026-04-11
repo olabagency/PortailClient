@@ -14,6 +14,7 @@ import {
   Clock,
   CheckCircle2,
   PauseCircle,
+  Zap,
 } from 'lucide-react'
 import { ActivityFeed } from '@/components/dashboard/ActivityFeed'
 
@@ -75,6 +76,11 @@ export default async function DashboardPage() {
 
   const firstName = profile?.full_name?.split(' ')[0] ?? null
 
+  // Bannière upgrade
+  const plan = (profile?.plan ?? 'free') as keyof typeof APP_CONFIG.plans
+  const maxProjects = APP_CONFIG.plans[plan].maxProjects
+  const showUpgradeBanner = plan === 'free' && (totalProjects ?? 0) >= maxProjects - 1
+
   return (
     <div className="space-y-8 max-w-4xl">
       {/* Bienvenue */}
@@ -86,6 +92,25 @@ export default async function DashboardPage() {
           Voici un aperçu de votre activité.
         </p>
       </div>
+
+      {/* Bannière upgrade */}
+      {showUpgradeBanner && (
+        <div className="flex items-center justify-between gap-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <div className="flex items-center gap-3">
+            <Zap className="h-4 w-4 text-amber-600 shrink-0" />
+            <p className="text-sm text-amber-800">
+              <span className="font-semibold">Limite approchante :</span>{' '}
+              vous utilisez {totalProjects}/{maxProjects} projets sur le plan Gratuit.
+            </p>
+          </div>
+          <Link
+            href="/dashboard/settings/billing"
+            className="shrink-0 text-xs font-semibold text-amber-700 hover:text-amber-900 flex items-center gap-1 whitespace-nowrap"
+          >
+            Passer au Pro <ArrowRight className="h-3 w-3" />
+          </Link>
+        </div>
+      )}
 
       {/* Métriques — 4 KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

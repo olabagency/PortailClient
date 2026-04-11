@@ -17,6 +17,7 @@ import {
   PackageOpen,
   MessageSquare,
   LogOut,
+  Crown,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { APP_CONFIG } from '@/config/app.config'
@@ -155,6 +156,10 @@ function SidebarContent() {
             <DropdownMenuItem onClick={() => router.push('/dashboard/settings')} className="cursor-pointer">
               <Settings className="mr-2 h-4 w-4" />
               Paramètres
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => router.push('/dashboard/settings/billing')} className="cursor-pointer">
+              <Crown className="mr-2 h-4 w-4" />
+              Abonnement
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={logout} className="cursor-pointer text-destructive focus:text-destructive">
