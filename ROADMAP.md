@@ -99,7 +99,7 @@
 - [x] API presign + confirm + download + delete + zip
 - [x] Composant `FileUploader.tsx` — drag & drop + progression
 - [x] Upload direct vers S3 (pas de transit serveur)
-- [ ] Affichage fichiers dans la vue projet
+- [x] Affichage fichiers dans la vue projet
 
 ### 3.3 Portail client authentifié
 - [x] Page `/client/login` + `/client/signup/[token]`
@@ -108,7 +108,7 @@
 - [x] Page `/client` — dashboard (liste projets + progression)
 - [x] Page `/client/projects/[id]` — vue projet (avancement, étapes, deadlines)
 - [ ] Page `/client/projects/[id]/files` — fichiers (download only)
-- [ ] Page `/client/settings` — paramètres compte
+- [x] Page `/client/settings` — paramètres compte
 - [x] Client ne voit QUE ses projets et tâches visibles
 - [ ] Notifications email au client
 
@@ -130,7 +130,7 @@
 - [x] Drag & drop tâches entre colonnes (@dnd-kit)
 - [x] Colonnes personnalisables (ajouter, renommer, supprimer, couleur)
 - [x] Toggle visibilité client par tâche
-- [ ] Vue liste alternative
+- [x] Vue liste alternative
 - [ ] Filtres par statut, priorité, assignation
 
 ### 4.2 Templates

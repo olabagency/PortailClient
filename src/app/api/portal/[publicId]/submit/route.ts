@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { z } from 'zod'
+import { APP_CONFIG } from '@/config/app.config'
 
 const submitSchema = z.object({
   session_id: z.string().optional(),
@@ -18,7 +19,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // Chercher le projet par public_id
     const { data: project, error: projectError } = await supabase
       .from('projects')
-      .select('id, status, settings')
+      .select('id, name, status, settings, user_id')
       .eq('public_id', publicId)
       .single()
 
@@ -100,6 +101,43 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    // Envoyer email de notification au freelance
+    try {
+      const { data: ownerData } = await supabase.auth.admin.getUserById(project.user_id)
+      const ownerEmail = ownerData?.user?.email
+      if (ownerEmail && process.env.RESEND_API_KEY) {
+        const { Resend } = await import('resend')
+        const resend = new Resend(process.env.RESEND_API_KEY)
+        const fromEmail = process.env.RESEND_FROM_EMAIL ?? `noreply@${APP_CONFIG.url.replace(/https?:\/\//, '')}`
+        const respondentName = parsed.data.respondent_name || parsed.data.respondent_email || 'Votre client'
+        const projectUrl = `${APP_CONFIG.url}/dashboard/projects/${project.id}/onboarding`
+
+        await resend.emails.send({
+          from: fromEmail,
+          to: ownerEmail,
+          subject: `✅ Onboarding complété — ${project.name}`,
+          html: `
+            <div style="font-family:sans-serif;max-width:500px;margin:0 auto;padding:24px;color:#1a1a1a">
+              <h2 style="margin:0 0 16px">Onboarding complété</h2>
+              <p style="color:#555;margin:0 0 16px">
+                <strong>${respondentName}</strong> vient de compléter le formulaire d'onboarding pour le projet
+                <strong>${project.name}</strong>.
+              </p>
+              <a href="${projectUrl}" style="display:inline-block;background:#3b82f6;color:white;text-decoration:none;padding:10px 20px;border-radius:8px;font-weight:600;margin-bottom:16px">
+                Voir les réponses →
+              </a>
+              <p style="color:#999;font-size:12px;margin:16px 0 0">
+                Envoyé par ${APP_CONFIG.name}
+              </p>
+            </div>
+          `,
+        })
+      }
+    } catch (emailErr) {
+      console.error('[submit] Email notification error:', emailErr)
+      // Ne pas bloquer la réponse si l'email échoue
+    }
 
     return NextResponse.json({ data: { id: data!.id } }, { status: 201 })
   } catch {

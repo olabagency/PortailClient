@@ -142,11 +142,18 @@ function ListView({
 
 // ── KanbanBoard ─────────────────────────────────────────────────────────────
 
+type PriorityFilter = 'all' | 'low' | 'medium' | 'high' | 'urgent'
+type VisibilityFilter = 'all' | 'client' | 'hidden'
+
 export function KanbanBoard({ projectId, initialColumns, initialTasks }: KanbanBoardProps) {
   const [columns, setColumns] = useState<KanbanColumnType[]>(initialColumns)
   const [tasks, setTasks] = useState<Record<string, KanbanTask[]>>(initialTasks)
   const [activeTask, setActiveTask] = useState<KanbanTask | null>(null)
   const [viewMode, setViewMode] = useState<'board' | 'list'>('board')
+
+  // Filtres
+  const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('all')
+  const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilter>('all')
 
   // Modal état
   const [modalOpen, setModalOpen] = useState(false)
@@ -387,10 +394,59 @@ export function KanbanBoard({ projectId, initialColumns, initialTasks }: KanbanB
   const activeTaskColId = activeTask ? findColumnOfTask(activeTask.id) : null
   const allColumns = columns
 
+  // Filtrage des tâches
+  function filterTask(task: KanbanTask): boolean {
+    if (priorityFilter !== 'all' && task.priority !== priorityFilter) return false
+    if (visibilityFilter === 'client' && !task.visible_to_client) return false
+    if (visibilityFilter === 'hidden' && task.visible_to_client) return false
+    return true
+  }
+  const filteredTasks: Record<string, KanbanTask[]> = Object.fromEntries(
+    Object.entries(tasks).map(([colId, colTasks]) => [colId, colTasks.filter(filterTask)])
+  )
+  const hasFilters = priorityFilter !== 'all' || visibilityFilter !== 'all'
+  const totalHidden = Object.values(tasks).flat().length - Object.values(filteredTasks).flat().length
+
   return (
     <div className="flex flex-col h-full">
-      {/* View mode toggle */}
-      <div className="flex items-center justify-end mb-3 gap-1">
+      {/* Filters + view toggle */}
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        {/* Priority filter */}
+        <select
+          value={priorityFilter}
+          onChange={(e) => setPriorityFilter(e.target.value as PriorityFilter)}
+          className="h-7 text-xs border rounded-md px-2 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-primary"
+        >
+          <option value="all">Toutes priorités</option>
+          <option value="urgent">🔥 Urgente</option>
+          <option value="high">⚠️ Haute</option>
+          <option value="medium">↑ Normale</option>
+          <option value="low">○ Faible</option>
+        </select>
+
+        {/* Visibility filter */}
+        <select
+          value={visibilityFilter}
+          onChange={(e) => setVisibilityFilter(e.target.value as VisibilityFilter)}
+          className="h-7 text-xs border rounded-md px-2 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-primary"
+        >
+          <option value="all">Toute visibilité</option>
+          <option value="client">👁 Visibles client</option>
+          <option value="hidden">🔒 Cachées</option>
+        </select>
+
+        {hasFilters && (
+          <button
+            onClick={() => { setPriorityFilter('all'); setVisibilityFilter('all') }}
+            className="flex items-center gap-1 text-xs text-primary hover:underline"
+          >
+            <X className="h-3 w-3" />
+            Réinitialiser ({totalHidden} masquée{totalHidden !== 1 ? 's' : ''})
+          </button>
+        )}
+
+        <div className="flex-1" />
+
         <button
           onClick={() => setViewMode('board')}
           className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${viewMode === 'board' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent'}`}
@@ -412,7 +468,7 @@ export function KanbanBoard({ projectId, initialColumns, initialTasks }: KanbanB
         <div className="flex-1 overflow-y-auto">
           <ListView
             columns={columns}
-            tasks={tasks}
+            tasks={filteredTasks}
             onEditTask={handleEditTask}
             onAddTask={handleAddTask}
           />
@@ -442,7 +498,7 @@ export function KanbanBoard({ projectId, initialColumns, initialTasks }: KanbanB
             <KanbanColumn
               key={col.id}
               column={col}
-              tasks={tasks[col.id] ?? []}
+              tasks={filteredTasks[col.id] ?? []}
               onAddTask={handleAddTask}
               onEditTask={handleEditTask}
               onDeleteTask={handleDeleteTask}
