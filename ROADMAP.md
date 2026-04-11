@@ -110,7 +110,7 @@
 - [x] Page `/client/projects/[id]/files` — fichiers (download only)
 - [x] Page `/client/settings` — paramètres compte
 - [x] Client ne voit QUE ses projets et tâches visibles
-- [ ] Notifications email au client
+- [x] Notifications email au client
 
 ### 3.4 Page partage de projet
 - [x] Page `/dashboard/projects/[id]/share` — lien unique
@@ -174,11 +174,11 @@
 - [ ] Gestion du downgrade
 
 ### 5.3 Landing page
-- [ ] Intégrer la landing page en Next.js
+- [x] Intégrer la landing page en Next.js
 - [ ] Connecter waitlist à Supabase
-- [ ] Page pricing
-- [ ] SEO (meta, sitemap, robots.txt)
-- [ ] Pages légales (mentions, confidentialité, CGV)
+- [x] Page pricing
+- [x] SEO (meta, sitemap, robots.txt)
+- [x] Pages légales (mentions, confidentialité, CGV)
 
 ---
 
