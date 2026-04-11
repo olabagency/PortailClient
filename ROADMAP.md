@@ -107,7 +107,7 @@
 - [x] Layout client avec sidebar simplifiée
 - [x] Page `/client` — dashboard (liste projets + progression)
 - [x] Page `/client/projects/[id]` — vue projet (avancement, étapes, deadlines)
-- [ ] Page `/client/projects/[id]/files` — fichiers (download only)
+- [x] Page `/client/projects/[id]/files` — fichiers (download only)
 - [x] Page `/client/settings` — paramètres compte
 - [x] Client ne voit QUE ses projets et tâches visibles
 - [ ] Notifications email au client
@@ -163,14 +163,14 @@
 - [ ] Messages d'erreur (toasts)
 - [ ] Confirmation avant suppression
 - [ ] Optimisation images + performance
-- [ ] Favicon + meta tags + Open Graph
+- [x] Favicon + meta tags + Open Graph
 
 ### 5.2 Stripe
 - [ ] Configurer Stripe (produits, prix, webhook)
-- [ ] API checkout + webhook + portal
-- [ ] Page `/dashboard/settings/billing`
+- [x] API checkout + webhook + portal
+- [x] Page `/dashboard/settings/billing`
 - [ ] Logique de limitation par plan
-- [ ] Période d'essai Pro 14 jours
+- [x] Période d'essai Pro 14 jours
 - [ ] Gestion du downgrade
 
 ### 5.3 Landing page
