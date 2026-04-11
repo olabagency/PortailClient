@@ -189,11 +189,11 @@ export default function SettingsPage() {
               {planConfig?.name ?? 'Gratuit'}
             </Badge>
           </div>
-          {profile?.plan === 'free' && (
-            <Button variant="outline" disabled>
-              Passer au plan Pro — bientôt disponible
+          <a href="/dashboard/settings/billing">
+            <Button variant={profile?.plan === 'free' ? 'default' : 'outline'} size="sm">
+              {profile?.plan === 'free' ? 'Passer au plan Pro' : 'Gérer l\'abonnement'}
             </Button>
-          )}
+          </a>
         </CardContent>
       </Card>
 

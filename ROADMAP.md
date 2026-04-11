@@ -91,7 +91,7 @@
 - [x] Barre de progression globale
 - [ ] Protection PIN (optionnel)
 - [x] Page `/p/[publicId]/success` — confirmation + invitation compte
-- [ ] Email au freelance quand onboarding complété
+- [x] Email au freelance quand onboarding complété
 
 ### 3.2 Upload de fichiers (Scaleway S3)
 - [ ] Configurer Scaleway S3 (bucket, CORS)
@@ -131,7 +131,7 @@
 - [x] Colonnes personnalisables (ajouter, renommer, supprimer, couleur)
 - [x] Toggle visibilité client par tâche
 - [x] Vue liste alternative
-- [ ] Filtres par statut, priorité, assignation
+- [x] Filtres par statut, priorité, assignation
 
 ### 4.2 Templates
 - [x] API CRUD templates

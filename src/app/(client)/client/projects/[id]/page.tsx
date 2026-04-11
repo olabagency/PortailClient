@@ -68,6 +68,7 @@ interface Document {
   name: string
   type: 'file' | 'link'
   url: string
+  download_url: string | null
   size_bytes: number | null
   mime_type: string | null
   created_at: string
@@ -177,9 +178,17 @@ export default function ClientProjectPage({ params }: { params: Promise<{ id: st
 
   const fetchData = useCallback(async () => {
     try {
-      const res = await fetch(`/api/client/projects/${projectId}`)
-      if (!res.ok) throw new Error()
-      const json = await res.json() as { data: PortalData }
+      const [projectRes, docsRes] = await Promise.all([
+        fetch(`/api/client/projects/${projectId}`),
+        fetch(`/api/client/projects/${projectId}/documents`),
+      ])
+      if (!projectRes.ok) throw new Error()
+      const json = await projectRes.json() as { data: PortalData }
+      // Merge presigned document URLs
+      if (docsRes.ok) {
+        const docsJson = await docsRes.json() as { data: Document[] }
+        json.data.documents = docsJson.data ?? json.data.documents
+      }
       setData(json.data)
     } catch {
       toast.error('Impossible de charger le projet')
@@ -663,19 +672,21 @@ export default function ClientProjectPage({ params }: { params: Promise<{ id: st
                       {doc.size_bytes ? ` · ${formatBytes(doc.size_bytes)}` : ''}
                     </p>
                   </div>
-                  <a
-                    href={doc.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="shrink-0"
-                  >
-                    <Button variant="ghost" size="sm" className="gap-1.5">
-                      {doc.type === 'file'
-                        ? <><Download className="h-3.5 w-3.5" />Télécharger</>
-                        : <><ExternalLink className="h-3.5 w-3.5" />Ouvrir</>
-                      }
-                    </Button>
-                  </a>
+                  {(doc.download_url ?? doc.url) && (
+                    <a
+                      href={doc.download_url ?? doc.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="shrink-0"
+                    >
+                      <Button variant="ghost" size="sm" className="gap-1.5">
+                        {doc.type === 'file'
+                          ? <><Download className="h-3.5 w-3.5" />Télécharger</>
+                          : <><ExternalLink className="h-3.5 w-3.5" />Ouvrir</>
+                        }
+                      </Button>
+                    </a>
+                  )}
                 </div>
               ))}
             </div>
