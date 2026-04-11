@@ -15,7 +15,10 @@ import {
 import { arrayMove } from '@dnd-kit/sortable'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Plus, X, Check } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import { Plus, X, Check, LayoutGrid, List, Eye, EyeOff, Circle, AlertCircle, ArrowUp, Flame } from 'lucide-react'
+import { format } from 'date-fns'
+import { fr } from 'date-fns/locale'
 import { KanbanColumn as KanbanColumnType, KanbanTask } from '@/types/kanban'
 import { KanbanColumn } from './KanbanColumn'
 import { TaskCard } from './TaskCard'
@@ -28,10 +31,122 @@ interface KanbanBoardProps {
   initialTasks: Record<string, KanbanTask[]>
 }
 
+const PRIORITY_CONFIG = {
+  low:    { label: 'Faible',  icon: Circle,       color: 'text-gray-400' },
+  medium: { label: 'Normale', icon: ArrowUp,      color: 'text-blue-500' },
+  high:   { label: 'Haute',   icon: AlertCircle,  color: 'text-orange-500' },
+  urgent: { label: 'Urgente', icon: Flame,        color: 'text-red-500' },
+}
+
+// ── Vue liste ───────────────────────────────────────────────────────────────
+
+function ListView({
+  columns,
+  tasks,
+  onEditTask,
+  onAddTask,
+}: {
+  columns: KanbanColumnType[]
+  tasks: Record<string, KanbanTask[]>
+  onEditTask: (t: KanbanTask) => void
+  onAddTask: (colId: string) => void
+}) {
+  const allTasks = columns.flatMap(col => (tasks[col.id] ?? []).map(t => ({ ...t, colName: col.name, colColor: col.color })))
+  const total = allTasks.length
+  const done = allTasks.filter(t => {
+    const col = columns.find(c => c.id === t.column_id)
+    return col && col.order_index === Math.max(...columns.map(c => c.order_index))
+  }).length
+
+  return (
+    <div className="space-y-4">
+      {/* Summary bar */}
+      <div className="flex items-center gap-4 text-sm text-muted-foreground px-1">
+        <span>{total} tâche{total !== 1 ? 's' : ''}</span>
+        {total > 0 && (
+          <>
+            <span>·</span>
+            <span>{done} terminée{done !== 1 ? 's' : ''}</span>
+            <div className="flex-1 max-w-32 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-primary rounded-full transition-all"
+                style={{ width: `${total > 0 ? Math.round((done / total) * 100) : 0}%` }}
+              />
+            </div>
+          </>
+        )}
+      </div>
+
+      {columns.map(col => {
+        const colTasks = tasks[col.id] ?? []
+        return (
+          <div key={col.id} className="border rounded-xl overflow-hidden">
+            {/* Column header */}
+            <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50 border-b">
+              <div className="flex items-center gap-2">
+                {col.color && (
+                  <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: col.color }} />
+                )}
+                <span className="font-medium text-sm">{col.name}</span>
+                <Badge variant="secondary" className="text-xs h-4 px-1.5">{colTasks.length}</Badge>
+              </div>
+              <button
+                onClick={() => onAddTask(col.id)}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Ajouter
+              </button>
+            </div>
+
+            {/* Tasks */}
+            {colTasks.length === 0 ? (
+              <div className="px-4 py-4 text-center text-xs text-muted-foreground">
+                Aucune tâche dans cette colonne
+              </div>
+            ) : (
+              <div className="divide-y">
+                {colTasks.map(task => {
+                  const priority = task.priority ? PRIORITY_CONFIG[task.priority] : null
+                  const PIcon = priority?.icon
+                  return (
+                    <button
+                      key={task.id}
+                      onClick={() => onEditTask(task)}
+                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 text-left transition-colors group"
+                    >
+                      {PIcon && (
+                        <PIcon className={`h-3.5 w-3.5 shrink-0 ${priority?.color}`} />
+                      )}
+                      {!priority && <div className="h-3.5 w-3.5 shrink-0" />}
+                      <span className="flex-1 text-sm font-medium truncate">{task.title}</span>
+                      {task.due_date && (
+                        <span className="text-xs text-muted-foreground shrink-0 hidden sm:block">
+                          {format(new Date(task.due_date), 'd MMM', { locale: fr })}
+                        </span>
+                      )}
+                      {task.visible_to_client
+                        ? <Eye className="h-3.5 w-3.5 text-green-500 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        : <EyeOff className="h-3.5 w-3.5 text-gray-300 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ── KanbanBoard ─────────────────────────────────────────────────────────────
+
 export function KanbanBoard({ projectId, initialColumns, initialTasks }: KanbanBoardProps) {
   const [columns, setColumns] = useState<KanbanColumnType[]>(initialColumns)
   const [tasks, setTasks] = useState<Record<string, KanbanTask[]>>(initialTasks)
   const [activeTask, setActiveTask] = useState<KanbanTask | null>(null)
+  const [viewMode, setViewMode] = useState<'board' | 'list'>('board')
 
   // Modal état
   const [modalOpen, setModalOpen] = useState(false)
@@ -274,7 +389,48 @@ export function KanbanBoard({ projectId, initialColumns, initialTasks }: KanbanB
 
   return (
     <div className="flex flex-col h-full">
-      <DndContext
+      {/* View mode toggle */}
+      <div className="flex items-center justify-end mb-3 gap-1">
+        <button
+          onClick={() => setViewMode('board')}
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${viewMode === 'board' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent'}`}
+        >
+          <LayoutGrid className="h-3.5 w-3.5" />
+          Kanban
+        </button>
+        <button
+          onClick={() => setViewMode('list')}
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${viewMode === 'list' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent'}`}
+        >
+          <List className="h-3.5 w-3.5" />
+          Liste
+        </button>
+      </div>
+
+      {/* Vue liste */}
+      {viewMode === 'list' && (
+        <div className="flex-1 overflow-y-auto">
+          <ListView
+            columns={columns}
+            tasks={tasks}
+            onEditTask={handleEditTask}
+            onAddTask={handleAddTask}
+          />
+          <TaskModal
+            task={editingTask}
+            columns={columns}
+            projectId={projectId}
+            open={modalOpen}
+            defaultColumnId={defaultColumnId}
+            onSave={handleSaveTask}
+            onDelete={handleDeleteTask}
+            onClose={() => { setModalOpen(false); setEditingTask(null) }}
+          />
+        </div>
+      )}
+
+      {/* Vue kanban */}
+      {viewMode === 'board' && <DndContext
         sensors={sensors}
         collisionDetection={closestCorners}
         onDragStart={handleDragStart}
@@ -341,19 +497,21 @@ export function KanbanBoard({ projectId, initialColumns, initialTasks }: KanbanB
             </div>
           ) : null}
         </DragOverlay>
-      </DndContext>
+      </DndContext>}
 
-      {/* Modal tâche */}
-      <TaskModal
-        task={editingTask}
-        columns={columns}
-        projectId={projectId}
-        open={modalOpen}
-        defaultColumnId={defaultColumnId}
-        onSave={handleSaveTask}
-        onDelete={handleDeleteTask}
-        onClose={() => { setModalOpen(false); setEditingTask(null) }}
-      />
+      {/* Modal tâche (board view) */}
+      {viewMode === 'board' && (
+        <TaskModal
+          task={editingTask}
+          columns={columns}
+          projectId={projectId}
+          open={modalOpen}
+          defaultColumnId={defaultColumnId}
+          onSave={handleSaveTask}
+          onDelete={handleDeleteTask}
+          onClose={() => { setModalOpen(false); setEditingTask(null) }}
+        />
+      )}
     </div>
   )
 }

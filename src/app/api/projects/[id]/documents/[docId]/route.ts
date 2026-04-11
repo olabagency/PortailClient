@@ -1,7 +1,57 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { z } from 'zod'
-import { deleteS3Object } from '@/lib/s3'
+import { deleteS3Object, generatePresignedDownloadUrl } from '@/lib/s3'
+
+// GET /api/projects/[id]/documents/[docId]?action=download
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string; docId: string }> }
+) {
+  try {
+    const { id, docId } = await params
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+
+    const { data: project } = await supabase
+      .from('projects')
+      .select('id')
+      .eq('id', id)
+      .eq('user_id', user.id)
+      .single()
+
+    if (!project) return NextResponse.json({ error: 'Projet introuvable' }, { status: 404 })
+
+    const { data: doc } = await supabase
+      .from('project_documents')
+      .select('id, name, type, url, s3_key')
+      .eq('id', docId)
+      .eq('project_id', id)
+      .single()
+
+    if (!doc) return NextResponse.json({ error: 'Document introuvable' }, { status: 404 })
+
+    if (doc.type === 'link') {
+      return NextResponse.json({ url: doc.url })
+    }
+
+    // File : generate presigned download URL
+    const key = doc.s3_key ?? doc.url
+    const url = await generatePresignedDownloadUrl(key)
+    return NextResponse.json({ url })
+  } catch {
+    return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
+  }
+}
+
+// PATCH /api/projects/[id]/documents/[docId] — alias de PUT pour la visibilité
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string; docId: string }> }
+) {
+  return PUT(request, { params })
+}
 
 const documentUpdateSchema = z.object({
   name: z.string().min(1).max(200).optional(),

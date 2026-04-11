@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -9,14 +9,163 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog'
-import { ArrowLeft, ExternalLink, ClipboardList, Share2, Kanban, BookmarkPlus, Activity, ListChecks, FolderOpen } from 'lucide-react'
+import {
+  ArrowLeft, ExternalLink, ClipboardList, Share2, Kanban, BookmarkPlus,
+  Activity, ListChecks, FolderOpen, FileText, Image, File, Link2,
+  Download, Eye, EyeOff, Plus,
+} from 'lucide-react'
 import { KanbanBoard } from '@/components/kanban/KanbanBoard'
 import { KanbanColumn, KanbanTask } from '@/types/kanban'
 import { ActivityFeed } from '@/components/dashboard/ActivityFeed'
 import { toast } from 'sonner'
+import { format } from 'date-fns'
+import { fr } from 'date-fns/locale'
+
+// ── Inline document list ────────────────────────────────────────────────────
+
+interface Doc {
+  id: string
+  name: string
+  type: 'file' | 'link'
+  url: string
+  size_bytes: number | null
+  mime_type: string | null
+  visible_to_client: boolean
+  created_at: string
+}
+
+function fileIcon(mime: string | null) {
+  if (!mime) return <File className="h-4 w-4 text-gray-400" />
+  if (mime.startsWith('image/')) return <Image className="h-4 w-4 text-blue-400" />
+  if (mime === 'application/pdf') return <FileText className="h-4 w-4 text-red-400" />
+  return <File className="h-4 w-4 text-gray-400" />
+}
+
+function formatBytes(bytes: number | null): string {
+  if (!bytes) return ''
+  if (bytes < 1024) return `${bytes} o`
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} Ko`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`
+}
+
+function InlineDocuments({ projectId }: { projectId: string }) {
+  const [docs, setDocs] = useState<Doc[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    const res = await fetch(`/api/projects/${projectId}/documents`)
+    const json = await res.json()
+    setDocs(json.data ?? [])
+    setLoading(false)
+  }, [projectId])
+
+  useEffect(() => { load() }, [load])
+
+  async function toggleVisibility(doc: Doc) {
+    const res = await fetch(`/api/projects/${projectId}/documents/${doc.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ visible_to_client: !doc.visible_to_client }),
+    })
+    if (res.ok) {
+      setDocs(prev => prev.map(d => d.id === doc.id ? { ...d, visible_to_client: !d.visible_to_client } : d))
+    }
+  }
+
+  async function openDoc(doc: Doc) {
+    if (doc.type === 'link') { window.open(doc.url, '_blank'); return }
+    const res = await fetch(`/api/projects/${projectId}/documents/${doc.id}?action=download`)
+    const json = await res.json()
+    if (json.url) window.open(json.url, '_blank')
+    else toast.error('Impossible d\'ouvrir le fichier')
+  }
+
+  if (loading) return (
+    <div className="space-y-2 p-4">
+      {[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full" />)}
+    </div>
+  )
+
+  return (
+    <div>
+      {docs.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-12 gap-3 text-center">
+          <FolderOpen className="h-8 w-8 text-gray-300" />
+          <div>
+            <p className="font-medium text-sm text-gray-700">Aucun document</p>
+            <p className="text-xs text-muted-foreground mt-1">Partagez des fichiers et liens avec votre client.</p>
+          </div>
+          <Link
+            href={`/dashboard/projects/${projectId}/documents`}
+            className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Ajouter des documents
+          </Link>
+        </div>
+      ) : (
+        <>
+          <div className="divide-y">
+            {docs.map(doc => (
+              <div key={doc.id} className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 group">
+                <div className="shrink-0">
+                  {doc.type === 'link' ? <Link2 className="h-4 w-4 text-purple-400" /> : fileIcon(doc.mime_type)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{doc.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatBytes(doc.size_bytes)}
+                    {doc.size_bytes && <span className="mx-1">·</span>}
+                    {format(new Date(doc.created_at), 'd MMM yyyy', { locale: fr })}
+                  </p>
+                </div>
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={() => toggleVisibility(doc)}
+                    className="p-1.5 rounded-md hover:bg-gray-200 transition-colors"
+                    title={doc.visible_to_client ? 'Masquer au client' : 'Visible par le client'}
+                  >
+                    {doc.visible_to_client
+                      ? <Eye className="h-3.5 w-3.5 text-green-600" />
+                      : <EyeOff className="h-3.5 w-3.5 text-gray-400" />}
+                  </button>
+                  <button
+                    onClick={() => openDoc(doc)}
+                    className="p-1.5 rounded-md hover:bg-gray-200 transition-colors"
+                    title={doc.type === 'link' ? 'Ouvrir le lien' : 'Télécharger'}
+                  >
+                    {doc.type === 'link'
+                      ? <ExternalLink className="h-3.5 w-3.5 text-gray-500" />
+                      : <Download className="h-3.5 w-3.5 text-gray-500" />}
+                  </button>
+                </div>
+                {doc.visible_to_client && (
+                  <Badge variant="outline" className="text-[10px] h-4 px-1 text-green-700 border-green-200 hidden group-hover:hidden shrink-0">
+                    Client
+                  </Badge>
+                )}
+              </div>
+            ))}
+          </div>
+          <div className="px-4 py-3 border-t bg-gray-50/50">
+            <Link
+              href={`/dashboard/projects/${projectId}/documents`}
+              className="text-xs text-primary hover:underline flex items-center gap-1"
+            >
+              <FolderOpen className="h-3.5 w-3.5" />
+              Gérer tous les documents ({docs.length})
+            </Link>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
 
 interface Project {
   id: string
@@ -174,21 +323,20 @@ export function ProjectView({ project, columns, initialTasks, portalUrl }: Proje
         {/* Tab Documents */}
         <TabsContent value="documents" className="mt-4">
           <Card>
-            <CardContent className="py-8 flex flex-col items-center gap-4 text-center">
-              <FolderOpen className="h-10 w-10 text-muted-foreground" />
-              <div>
-                <p className="font-medium">Documents</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Partagez des fichiers et liens avec votre client.
-                </p>
+            <div className="flex items-center justify-between px-4 py-3 border-b">
+              <div className="flex items-center gap-2">
+                <FolderOpen className="h-4 w-4 text-muted-foreground" />
+                <span className="font-medium text-sm">Documents</span>
               </div>
               <Link
                 href={`/dashboard/projects/${project.id}/documents`}
-                className="inline-flex items-center justify-center rounded-lg bg-primary text-primary-foreground text-sm font-medium h-8 px-2.5 transition-all hover:bg-primary/80"
+                className="text-xs text-primary hover:underline flex items-center gap-1"
               >
-                Gérer les documents
+                <Plus className="h-3.5 w-3.5" />
+                Ajouter
               </Link>
-            </CardContent>
+            </div>
+            <InlineDocuments projectId={project.id} />
           </Card>
         </TabsContent>
 
