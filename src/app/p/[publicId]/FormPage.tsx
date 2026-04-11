@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { FieldRenderer } from '@/components/portal/FieldRenderer'
 import { CheckCircle2, Lock, Loader2, Check } from 'lucide-react'
@@ -54,6 +55,7 @@ interface ClientInfo {
   country: string
   vat_number: string
   siret: string
+  notes: string
 }
 
 const STEPS = [
@@ -79,6 +81,7 @@ export default function FormPage({ project, sections, fields, publicId, initialC
     country: initialClientInfo?.country ?? 'France',
     vat_number: initialClientInfo?.vat_number ?? '',
     siret: initialClientInfo?.siret ?? '',
+    notes: initialClientInfo?.notes ?? '',
   })
   const [saving, setSaving] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -336,7 +339,7 @@ export default function FormPage({ project, sections, fields, publicId, initialC
                   Envoi...
                 </>
               ) : currentStep === 5 ? (
-                'Envoyer mon dossier'
+                'Terminer l\'onboarding'
               ) : (
                 'Suivant →'
               )}
@@ -377,7 +380,7 @@ export default function FormPage({ project, sections, fields, publicId, initialC
             <SuccessScreen />
           ) : (
             <>
-              {currentStep === 1 && <StepWelcome projectName={project.name} />}
+              {currentStep === 1 && <StepWelcome projectName={project.name} settings={project.settings} />}
               {currentStep === 2 && (
                 <StepQuestionnaire
                   fields={questionFields}
@@ -420,14 +423,16 @@ export default function FormPage({ project, sections, fields, publicId, initialC
 
 // ── Step 1: Bienvenue ──────────────────────────────────────────────────────────
 
-function StepWelcome({ projectName }: { projectName: string }) {
+function StepWelcome({ projectName, settings }: { projectName: string; settings: Record<string, unknown> | null }) {
+  const welcome = (settings?.welcome ?? {}) as Record<string, string>
+  const title = welcome.title || 'Bienvenue ! 🎉'
+  const message = welcome.message || 'Nous sommes ravis de vous accompagner sur votre projet'
+
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">Bienvenue ! 🎉</h1>
-        <p className="mt-2 text-gray-500 text-lg">
-          Nous sommes ravis de vous accompagner sur votre projet
-        </p>
+        <h1 className="text-3xl font-bold text-gray-900">{title}</h1>
+        <p className="mt-2 text-gray-500 text-lg">{message}</p>
         <span className="inline-block mt-4 px-4 py-1.5 bg-gray-100 rounded-full text-sm font-medium text-gray-700">
           {projectName}
         </span>
@@ -634,7 +639,7 @@ function StepAccess({
           {fields.map((field) => (
             <div key={field.id}>
               <FieldRenderer
-                field={{ ...field, label: `🔒 ${field.label}` }}
+                field={{ ...field, label: `🔒 ${field.label}`, sensitive: true }}
                 value={responses[field.id]}
                 onChange={(v) => onChange(field.id, v)}
                 publicId={publicId}
@@ -790,6 +795,20 @@ function StepClientInfo({
             placeholder="000 000 000 00000"
           />
         </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="ci_notes">Commentaire / Informations complémentaires</Label>
+        <Textarea
+          id="ci_notes"
+          value={clientInfo.notes}
+          onChange={(e) => onChange('notes', e.target.value)}
+          placeholder="Toute information utile : contexte, contraintes, questions, remarques..."
+          rows={4}
+        />
+        <p className="text-xs text-muted-foreground">
+          Partagez tout ce qui pourrait être utile à votre prestataire.
+        </p>
       </div>
     </div>
   )

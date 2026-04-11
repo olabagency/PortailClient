@@ -3,7 +3,11 @@ import { createClient } from '@/lib/supabase/server'
 import { z } from 'zod'
 
 const reorderSchema = z.object({
-  items: z.array(z.object({ id: z.string().uuid(), order_index: z.number().int().min(0) })),
+  items: z.array(z.object({
+    id: z.string().uuid(),
+    order_index: z.number().int().min(0),
+    section_id: z.string().uuid().optional().nullable(),
+  })),
 })
 
 // POST /api/projects/[id]/fields/reorder
@@ -23,9 +27,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     // Mise à jour en parallèle
     await Promise.all(
-      parsed.data.items.map(({ id: fieldId, order_index }) =>
-        supabase.from('form_fields').update({ order_index }).eq('id', fieldId).eq('project_id', id)
-      )
+      parsed.data.items.map(({ id: fieldId, order_index, section_id }) => {
+        const update: Record<string, unknown> = { order_index }
+        if (section_id !== undefined) update.section_id = section_id
+        return supabase.from('form_fields').update(update).eq('id', fieldId).eq('project_id', id)
+      })
     )
 
     return NextResponse.json({ data: { success: true } })

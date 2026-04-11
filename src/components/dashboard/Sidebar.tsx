@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useState } from 'react'
 import {
   LayoutDashboard,
@@ -16,11 +16,22 @@ import {
   Share2,
   PackageOpen,
   MessageSquare,
+  LogOut,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { APP_CONFIG } from '@/config/app.config'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { useAuth } from '@/hooks/useAuth'
 
 const globalNavItems = [
   { href: '/dashboard', label: 'Tableau de bord', icon: LayoutDashboard, exact: true },
@@ -74,6 +85,12 @@ function NavLink({ href, label, icon: Icon, exact, indent = false }: {
 
 function SidebarContent() {
   const pathname = usePathname()
+  const router = useRouter()
+  const { user, logout } = useAuth()
+
+  const initials = user?.user_metadata?.full_name
+    ? user.user_metadata.full_name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
+    : user?.email?.[0]?.toUpperCase() ?? '?'
 
   // Détecter si on est dans un projet spécifique
   const projectMatch = pathname.match(/^\/dashboard\/projects\/([^/]+)/)
@@ -113,10 +130,39 @@ function SidebarContent() {
       </nav>
 
       {/* Navigation bas */}
-      <div className="px-3 py-4 border-t space-y-1">
-        {bottomItems.map((item) => (
-          <NavLink key={item.href} {...item} />
-        ))}
+      <div className="px-3 py-3 border-t space-y-1">
+        {/* User account */}
+        <DropdownMenu>
+          <DropdownMenuTrigger className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors mt-1">
+            <Avatar className="h-6 w-6 shrink-0">
+              <AvatarImage src={user?.user_metadata?.avatar_url} />
+              <AvatarFallback className="text-[10px] bg-muted text-muted-foreground">
+                {initials}
+              </AvatarFallback>
+            </Avatar>
+            <span className="flex-1 truncate text-left">
+              {user?.user_metadata?.full_name ?? user?.email ?? 'Mon compte'}
+            </span>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="top" align="start" className="w-56 mb-1">
+            <DropdownMenuLabel className="font-normal">
+              <div className="flex flex-col space-y-1">
+                <p className="text-sm font-medium leading-none">{user?.user_metadata?.full_name ?? 'Mon compte'}</p>
+                <p className="text-xs leading-none text-muted-foreground">{user?.email}</p>
+              </div>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => router.push('/dashboard/settings')} className="cursor-pointer">
+              <Settings className="mr-2 h-4 w-4" />
+              Paramètres
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={logout} className="cursor-pointer text-destructive focus:text-destructive">
+              <LogOut className="mr-2 h-4 w-4" />
+              Se déconnecter
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
   )

@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
     if (template_id) {
       const { data: template } = await supabase
         .from('templates')
-        .select('kanban_config, form_config')
+        .select('kanban_config, form_config, sections_config')
         .eq('id', template_id)
         .single()
 
@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
         await supabase.from('kanban_columns').delete().eq('project_id', data.id)
 
         // Créer les colonnes du template
-        const kanbanConfig = template.kanban_config as Array<{ name: string; color: string }>
+        const kanbanConfig = (template.kanban_config ?? []) as Array<{ name: string; color: string }>
         if (kanbanConfig.length > 0) {
           await supabase.from('kanban_columns').insert(
             kanbanConfig.map((col, i) => ({
@@ -114,20 +114,52 @@ export async function POST(request: NextRequest) {
           )
         }
 
-        // Créer les champs formulaire du template
-        const formConfig = template.form_config as Array<Record<string, unknown>>
+        // Créer les sections onboarding depuis le template
+        const sectionsConfig = (template.sections_config ?? []) as Array<{
+          title: string; kind: string; order_index: number
+        }>
+        const sectionIdMap: Record<number, string> = {}
+
+        if (sectionsConfig.length > 0) {
+          const insertedSections = await supabase
+            .from('onboarding_sections')
+            .insert(
+              sectionsConfig.map((s, i) => ({
+                project_id: data.id,
+                title: s.title,
+                kind: s.kind ?? 'default',
+                order_index: i,
+              }))
+            )
+            .select('id, order_index')
+
+          ;(insertedSections.data ?? []).forEach(s => {
+            sectionIdMap[s.order_index] = s.id
+          })
+        }
+
+        // Créer les champs formulaire du template avec section_id résolu
+        const formConfig = (template.form_config ?? []) as Array<Record<string, unknown>>
         if (formConfig.length > 0) {
           await supabase.from('form_fields').insert(
-            formConfig.map((field, i) => ({
-              project_id: data.id,
-              type: field.type,
-              label: field.label,
-              description: field.description ?? null,
-              placeholder: field.placeholder ?? null,
-              required: field.required ?? false,
-              options: field.options ?? null,
-              order_index: i,
-            }))
+            formConfig.map((field, i) => {
+              const sectionIndex = field.section_index as number | null
+              const sectionId = (sectionIndex != null && sectionIdMap[sectionIndex])
+                ? sectionIdMap[sectionIndex]
+                : null
+              return {
+                project_id: data.id,
+                type: field.type,
+                label: field.label,
+                description: field.description ?? null,
+                placeholder: field.placeholder ?? null,
+                required: field.required ?? false,
+                options: field.options ?? null,
+                sensitive: field.sensitive ?? false,
+                section_id: sectionId,
+                order_index: i,
+              }
+            })
           )
         }
       }

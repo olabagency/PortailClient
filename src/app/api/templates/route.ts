@@ -76,6 +76,7 @@ export async function POST(request: NextRequest) {
 
     let kanbanConfig: Array<{ name: string; color: string }> = []
     let formConfig: Array<Record<string, unknown>> = []
+    let sectionsConfig: Array<Record<string, unknown>> = []
 
     if (project_id) {
       // Vérifier ownership du projet
@@ -99,21 +100,41 @@ export async function POST(request: NextRequest) {
 
       kanbanConfig = (columns ?? []).map(c => ({ name: c.name, color: c.color }))
 
-      // Copier la config formulaire
-      const { data: fields } = await supabase
-        .from('form_fields')
-        .select('type, label, description, placeholder, required, options')
+      // Copier les sections (hors access)
+      const { data: sections } = await supabase
+        .from('onboarding_sections')
+        .select('id, title, kind, order_index')
         .eq('project_id', project_id)
         .order('order_index')
 
-      formConfig = (fields ?? []).map(f => ({
-        type: f.type,
-        label: f.label,
-        ...(f.description ? { description: f.description } : {}),
-        ...(f.placeholder ? { placeholder: f.placeholder } : {}),
-        required: f.required,
-        ...(f.options ? { options: f.options } : {}),
+      const sectionList = (sections ?? []).filter(s => s.kind !== 'access')
+      sectionsConfig = sectionList.map((s, i) => ({
+        title: s.title,
+        kind: s.kind,
+        order_index: i,
+        _orig_id: s.id,
       }))
+
+      // Copier les champs formulaire avec section_index
+      const { data: fields } = await supabase
+        .from('form_fields')
+        .select('type, label, description, placeholder, required, options, sensitive, section_id')
+        .eq('project_id', project_id)
+        .order('order_index')
+
+      formConfig = (fields ?? []).map(f => {
+        const sectionIndex = sectionList.findIndex(s => s.id === f.section_id)
+        return {
+          type: f.type,
+          label: f.label,
+          ...(f.description ? { description: f.description } : {}),
+          ...(f.placeholder ? { placeholder: f.placeholder } : {}),
+          required: f.required,
+          ...(f.options ? { options: f.options } : {}),
+          sensitive: f.sensitive ?? false,
+          section_index: sectionIndex >= 0 ? sectionIndex : null,
+        }
+      })
     } else {
       // Template vide avec colonnes par défaut
       kanbanConfig = APP_CONFIG.defaultKanbanColumns.map(c => ({ name: c.name, color: c.color }))
@@ -127,6 +148,7 @@ export async function POST(request: NextRequest) {
         description: description || null,
         kanban_config: kanbanConfig,
         form_config: formConfig,
+        sections_config: sectionsConfig,
         is_default: false,
       })
       .select()

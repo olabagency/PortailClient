@@ -41,6 +41,7 @@ interface ClientInfo {
   country: string
   vat_number: string
   siret: string
+  notes: string
 }
 
 async function getPortalData(publicId: string) {
@@ -81,6 +82,7 @@ async function getPortalData(publicId: string) {
     country: 'France',
     vat_number: '',
     siret: '',
+    notes: '',
   }
 
   if (project.client_id) {
@@ -110,6 +112,7 @@ async function getPortalData(publicId: string) {
         country: 'France',
         vat_number: '',
         siret: '',
+        notes: '',
       }
     }
   }

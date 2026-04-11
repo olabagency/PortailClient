@@ -17,6 +17,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
@@ -36,7 +37,7 @@ import {
 import {
   ArrowLeft, Plus, GripVertical, Pencil, Trash2, Eye, Layers,
   ChevronDown, ChevronRight, Send, UserCircle, CheckCircle2,
-  FileText, Lock, KeyRound, Loader2, RefreshCw,
+  FileText, Lock, KeyRound, Loader2, RefreshCw, BookmarkPlus,
 } from 'lucide-react'
 import { APP_CONFIG } from '@/config/app.config'
 import type { FormFieldType } from '@/config/app.config'
@@ -174,8 +175,6 @@ function SortableSection({
   onEditField,
   onDeleteField,
   onAddField,
-  sensors,
-  onFieldsDragEnd,
 }: {
   section: OnboardingSection | null
   fields: FormField[]
@@ -184,8 +183,6 @@ function SortableSection({
   onEditField: (f: FormField) => void
   onDeleteField: (id: string) => void
   onAddField: (sectionId: string | null) => void
-  sensors: ReturnType<typeof useSensors>
-  onFieldsDragEnd: (event: DragEndEvent, sectionId: string | null) => void
 }) {
   const [collapsed, setCollapsed] = useState(false)
   const sortableProps = section
@@ -263,24 +260,18 @@ function SortableSection({
               </Button>
             </div>
           ) : (
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={(e) => onFieldsDragEnd(e, section?.id ?? null)}
-            >
-              <SortableContext items={fields.map(f => f.id)} strategy={verticalListSortingStrategy}>
-                <div className="space-y-2">
-                  {fields.map(field => (
-                    <SortableField
-                      key={field.id}
-                      field={field}
-                      onEdit={onEditField}
-                      onDelete={onDeleteField}
-                    />
-                  ))}
-                </div>
-              </SortableContext>
-            </DndContext>
+            <SortableContext items={fields.map(f => f.id)} strategy={verticalListSortingStrategy}>
+              <div className="space-y-2">
+                {fields.map(field => (
+                  <SortableField
+                    key={field.id}
+                    field={field}
+                    onEdit={onEditField}
+                    onDelete={onDeleteField}
+                  />
+                ))}
+              </div>
+            </SortableContext>
           )}
         </div>
       )}
@@ -475,6 +466,12 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
   const [refreshing, setRefreshing] = useState(false)
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
+  // Welcome settings
+  const [welcomeTitle, setWelcomeTitle] = useState('')
+  const [welcomeMessage, setWelcomeMessage] = useState('')
+  const [projectSettings, setProjectSettings] = useState<Record<string, unknown> | null>(null)
+  const [savingWelcome, setSavingWelcome] = useState(false)
+
   // Invite dialog
   const [inviteOpen, setInviteOpen] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
@@ -492,6 +489,11 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
   const [newDocField, setNewDocField] = useState<Omit<FormField, 'id' | 'order_index'>>(defaultDocumentField())
   const [docModalOpen, setDocModalOpen] = useState(false)
   const [savingDoc, setSavingDoc] = useState(false)
+
+  // Save as template
+  const [saveTemplateOpen, setSaveTemplateOpen] = useState(false)
+  const [templateName, setTemplateName] = useState('')
+  const [savingTemplate, setSavingTemplate] = useState(false)
 
   // Access field modal
   const [editAccessField, setEditAccessField] = useState<FormField | null>(null)
@@ -521,6 +523,11 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
       setFields(fieldsData.data?.fields ?? [])
       setSections(fieldsData.data?.sections ?? [])
       setPublicId(projectData.data?.public_id ?? '')
+      const settings = projectData.data?.settings ?? null
+      setProjectSettings(settings)
+      const welcome = (settings?.welcome ?? {}) as Record<string, string>
+      setWelcomeTitle(welcome.title ?? '')
+      setWelcomeMessage(welcome.message ?? '')
       setLoading(false)
     })
   }, [id])
@@ -653,22 +660,112 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
   }
 
   // ── Drag & drop fields ──
-  async function handleFieldsDragEnd(event: DragEndEvent, sectionId: string | null) {
+  async function handleFieldsDragEnd(event: DragEndEvent) {
     const { active, over } = event
     if (!over || active.id === over.id) return
-    const sectionFields = fieldsBySectionId(sectionId)
-    const oldIndex = sectionFields.findIndex(f => f.id === active.id)
-    const newIndex = sectionFields.findIndex(f => f.id === over.id)
-    const reordered = arrayMove(sectionFields, oldIndex, newIndex).map((f, i) => ({ ...f, order_index: i }))
-    setFields(prev => {
-      const others = prev.filter(f => f.section_id !== sectionId || f.type === 'file')
-      return [...others, ...reordered]
-    })
-    await fetch(`/api/projects/${id}/fields/reorder`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items: reordered.map(f => ({ id: f.id, order_index: f.order_index })) }),
-    })
+
+    const activeField = fields.find(f => f.id === active.id)
+    const overField = fields.find(f => f.id === over.id)
+    if (!activeField || !overField) return
+
+    const activeSectionId = activeField.section_id
+    const overSectionId = overField.section_id
+
+    if (activeSectionId === overSectionId) {
+      // Same section — reorder
+      const sectionFields = fieldsBySectionId(activeSectionId)
+      const oldIndex = sectionFields.findIndex(f => f.id === active.id)
+      const newIndex = sectionFields.findIndex(f => f.id === over.id)
+      const reordered = arrayMove(sectionFields, oldIndex, newIndex).map((f, i) => ({ ...f, order_index: i }))
+      setFields(prev => {
+        const others = prev.filter(f => f.section_id !== activeSectionId || f.type === 'file')
+        return [...others, ...reordered]
+      })
+      await fetch(`/api/projects/${id}/fields/reorder`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: reordered.map(f => ({ id: f.id, order_index: f.order_index })) }),
+      })
+    } else {
+      // Cross-section — move field to new section
+      const activeSectionFields = fieldsBySectionId(activeSectionId).filter(f => f.id !== active.id)
+      const reorderedActive = activeSectionFields.map((f, i) => ({ ...f, order_index: i }))
+
+      const overSectionFields = fieldsBySectionId(overSectionId)
+      const newIndex = overSectionFields.findIndex(f => f.id === over.id)
+      const movedField = { ...activeField, section_id: overSectionId }
+      const newOverFields = [...overSectionFields]
+      newOverFields.splice(newIndex, 0, movedField)
+      const reorderedOver = newOverFields.map((f, i) => ({ ...f, order_index: i }))
+
+      setFields(prev => {
+        const others = prev.filter(f =>
+          (f.section_id !== activeSectionId && f.section_id !== overSectionId) ||
+          f.type === 'file'
+        )
+        return [...others, ...reorderedActive, ...reorderedOver]
+      })
+
+      const allItems = [...reorderedActive, ...reorderedOver].map(f => ({
+        id: f.id,
+        order_index: f.order_index,
+        section_id: f.section_id,
+      }))
+      await fetch(`/api/projects/${id}/fields/reorder`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: allItems }),
+      })
+    }
+  }
+
+  // ── Save as template ──
+  async function handleSaveAsTemplate(e: React.FormEvent) {
+    e.preventDefault()
+    setSavingTemplate(true)
+    try {
+      const res = await fetch('/api/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: templateName.trim(), project_id: id }),
+      })
+      const json = await res.json()
+      if (res.ok) {
+        setSaveTemplateOpen(false)
+        setTemplateName('')
+        toast.success('Template créé ! Retrouvez-le dans la section Templates.')
+      } else {
+        toast.error(json.error ?? 'Erreur lors de la création du template')
+      }
+    } catch {
+      toast.error('Erreur réseau')
+    } finally {
+      setSavingTemplate(false)
+    }
+  }
+
+  // ── Welcome settings ──
+  async function handleSaveWelcome() {
+    setSavingWelcome(true)
+    try {
+      const newSettings = { ...(projectSettings ?? {}), welcome: { title: welcomeTitle, message: welcomeMessage } }
+      const res = await fetch(`/api/projects/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ settings: newSettings }),
+      })
+      if (res.ok) {
+        setProjectSettings(newSettings)
+        toast.success('Page de bienvenue mise à jour')
+      } else {
+        const json = await res.json()
+        toast.error(json.error ?? 'Erreur lors de la sauvegarde')
+      }
+    } catch {
+      toast.error('Erreur réseau')
+    } finally {
+      setSavingWelcome(false)
+    }
   }
 
   // ── Questionnaire field modal ──
@@ -963,6 +1060,10 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => { setTemplateName(''); setSaveTemplateOpen(true) }}>
+            <BookmarkPlus className="h-4 w-4 mr-2" />
+            Sauvegarder comme template
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setInviteOpen(true)}>
             <Send className="h-4 w-4 mr-2" />
             Envoyer au client
@@ -977,32 +1078,81 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
+          <TabsTrigger value="bienvenue">👋 Bienvenue</TabsTrigger>
           <TabsTrigger value="questionnaire">
-            📋 Questionnaire
+            ✏️ Questionnaire
             {questionFields.length > 0 && (
               <Badge variant="secondary" className="ml-1.5 text-xs py-0">{questionFields.length}</Badge>
             )}
           </TabsTrigger>
           <TabsTrigger value="documents">
-            📁 Documents
+            📎 Documents
             {documentFields.length > 0 && (
               <Badge variant="secondary" className="ml-1.5 text-xs py-0">{documentFields.length}</Badge>
             )}
           </TabsTrigger>
           <TabsTrigger value="access">
-            🔐 Accès
+            🔑 Accès
             {accessFields.length > 0 && (
               <Badge variant="secondary" className="ml-1.5 text-xs py-0">{accessFields.length}</Badge>
             )}
           </TabsTrigger>
           <TabsTrigger value="responses">
-            Réponses
+            💬 Réponses
             {responses.length > 0 && (
               <Badge variant="secondary" className="ml-1.5 text-xs py-0">{responses.length}</Badge>
             )}
           </TabsTrigger>
         </TabsList>
+
+        {/* ── Tab: Bienvenue ── */}
+        <TabsContent value="bienvenue" className="mt-4 space-y-4">
+          <div className="rounded-lg bg-blue-50 border border-blue-100 px-4 py-3 text-sm text-blue-700">
+            Personnalisez le message de bienvenue affiché au client à la première étape de son onboarding.
+          </div>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="welcome_title">Titre de bienvenue</Label>
+              <Input
+                id="welcome_title"
+                value={welcomeTitle}
+                onChange={(e) => setWelcomeTitle(e.target.value)}
+                placeholder="Bienvenue ! 🎉"
+                maxLength={100}
+              />
+              <p className="text-xs text-muted-foreground">Laissez vide pour utiliser le titre par défaut</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="welcome_message">Message d&apos;accueil</Label>
+              <Textarea
+                id="welcome_message"
+                value={welcomeMessage}
+                onChange={(e) => setWelcomeMessage(e.target.value)}
+                placeholder="Nous sommes ravis de vous accompagner sur votre projet"
+                rows={3}
+                maxLength={300}
+              />
+              <p className="text-xs text-muted-foreground">Laissez vide pour utiliser le message par défaut</p>
+            </div>
+
+            <Button onClick={handleSaveWelcome} disabled={savingWelcome}>
+              {savingWelcome ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Sauvegarde...</> : 'Sauvegarder'}
+            </Button>
+          </div>
+
+          <Card>
+            <CardContent className="py-4">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Aperçu</p>
+              <div className="space-y-1">
+                <p className="text-lg font-bold text-gray-900">{welcomeTitle || 'Bienvenue ! 🎉'}</p>
+                <p className="text-sm text-gray-500">{welcomeMessage || 'Nous sommes ravis de vous accompagner sur votre projet'}</p>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         {/* ── Tab: Questionnaire ── */}
         <TabsContent value="questionnaire" className="mt-4 space-y-4">
@@ -1039,41 +1189,39 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
             </Card>
           ) : (
             <div className="space-y-3">
-              {sortedSections.length > 0 && (
-                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleSectionsDragEnd}>
-                  <SortableContext items={sortedSections.map(s => s.id)} strategy={verticalListSortingStrategy}>
-                    <div className="space-y-3">
-                      {sortedSections.map(section => (
-                        <SortableSection
-                          key={section.id}
-                          section={section}
-                          fields={fieldsBySectionId(section.id)}
-                          onEditSection={openEditSectionModal}
-                          onDeleteSection={(sid) => setDeletingSectionId(sid)}
-                          onEditField={openEditFieldModal}
-                          onDeleteField={handleDeleteField}
-                          onAddField={openAddFieldModal}
-                          sensors={sensors}
-                          onFieldsDragEnd={handleFieldsDragEnd}
-                        />
-                      ))}
-                    </div>
-                  </SortableContext>
-                </DndContext>
-              )}
-              {(unsectionedFields.length > 0 || sortedSections.length === 0) && (
-                <SortableSection
-                  section={null}
-                  fields={unsectionedFields}
-                  onEditSection={() => {}}
-                  onDeleteSection={() => {}}
-                  onEditField={openEditFieldModal}
-                  onDeleteField={handleDeleteField}
-                  onAddField={openAddFieldModal}
-                  sensors={sensors}
-                  onFieldsDragEnd={handleFieldsDragEnd}
-                />
-              )}
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleFieldsDragEnd}>
+                {sortedSections.length > 0 && (
+                  <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleSectionsDragEnd}>
+                    <SortableContext items={sortedSections.map(s => s.id)} strategy={verticalListSortingStrategy}>
+                      <div className="space-y-3">
+                        {sortedSections.map(section => (
+                          <SortableSection
+                            key={section.id}
+                            section={section}
+                            fields={fieldsBySectionId(section.id)}
+                            onEditSection={openEditSectionModal}
+                            onDeleteSection={(sid) => setDeletingSectionId(sid)}
+                            onEditField={openEditFieldModal}
+                            onDeleteField={handleDeleteField}
+                            onAddField={openAddFieldModal}
+                          />
+                        ))}
+                      </div>
+                    </SortableContext>
+                  </DndContext>
+                )}
+                {(unsectionedFields.length > 0 || sortedSections.length === 0) && (
+                  <SortableSection
+                    section={null}
+                    fields={unsectionedFields}
+                    onEditSection={() => {}}
+                    onDeleteSection={() => {}}
+                    onEditField={openEditFieldModal}
+                    onDeleteField={handleDeleteField}
+                    onAddField={openAddFieldModal}
+                  />
+                )}
+              </DndContext>
             </div>
           )}
 
@@ -1318,6 +1466,38 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
               </Button>
               <Button type="submit" disabled={inviteSending}>
                 {inviteSending ? 'Envoi...' : 'Envoyer'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Dialog: Sauvegarder comme template ── */}
+      <Dialog open={saveTemplateOpen} onOpenChange={(v) => { if (!v) setSaveTemplateOpen(false) }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Sauvegarder comme template</DialogTitle>
+            <DialogDescription>
+              Toute la configuration de ce projet (kanban, sections, questions) sera copiée dans un nouveau template réutilisable.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSaveAsTemplate} className="space-y-4 mt-2">
+            <div className="space-y-2">
+              <Label>Nom du template <span className="text-destructive">*</span></Label>
+              <Input
+                value={templateName}
+                onChange={(e) => setTemplateName(e.target.value)}
+                placeholder="Ex : Site vitrine client type"
+                required
+                autoFocus
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setSaveTemplateOpen(false)} disabled={savingTemplate}>
+                Annuler
+              </Button>
+              <Button type="submit" disabled={savingTemplate || !templateName.trim()}>
+                {savingTemplate ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Création...</> : 'Créer le template'}
               </Button>
             </DialogFooter>
           </form>

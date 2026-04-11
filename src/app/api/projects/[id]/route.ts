@@ -10,6 +10,7 @@ const projectUpdateSchema = z.object({
   status: z.enum(['active', 'paused', 'completed', 'archived']).optional(),
   pin: z.string().max(10).optional().nullable(),
   pin_enabled: z.boolean().optional(),
+  settings: z.record(z.string(), z.unknown()).optional().nullable(),
 })
 
 // GET /api/projects/[id]

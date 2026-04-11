@@ -36,13 +36,20 @@ const updateTemplateSchema = z.object({
     name: z.string().min(1).max(50),
     color: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
   })).optional(),
+  sections_config: z.array(z.object({
+    title: z.string().min(1).max(100),
+    kind: z.string().default('default'),
+    order_index: z.number().int().min(0),
+  })).optional(),
   form_config: z.array(z.object({
     type: z.string(),
     label: z.string().min(1),
     description: z.string().optional().nullable(),
     placeholder: z.string().optional().nullable(),
     required: z.boolean().optional().default(false),
+    sensitive: z.boolean().optional().default(false),
     options: z.array(z.string()).optional().nullable(),
+    section_index: z.number().int().min(0).optional().nullable(),
   })).optional(),
 })
 
