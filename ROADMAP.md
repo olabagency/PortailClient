@@ -103,7 +103,7 @@
 
 ### 3.3 Portail client authentifié
 - [x] Page `/client/login` + `/client/signup/[token]`
-- [ ] API invitation client par email
+- [x] API invitation client par email
 - [x] Layout client avec sidebar simplifiée
 - [x] Page `/client` — dashboard (liste projets + progression)
 - [x] Page `/client/projects/[id]` — vue projet (avancement, étapes, deadlines)
