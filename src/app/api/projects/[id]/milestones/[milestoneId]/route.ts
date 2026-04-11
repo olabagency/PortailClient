@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { z } from 'zod'
+import { sendEmail, milestoneCompletedEmail } from '@/lib/email'
+import { APP_CONFIG } from '@/config/app.config'
 
 const milestoneUpdateSchema = z.object({
   title: z.string().min(1).max(200).optional(),
@@ -25,7 +27,7 @@ export async function PUT(
     // Vérifier ownership
     const { data: project } = await supabase
       .from('projects')
-      .select('id')
+      .select('id, name')
       .eq('id', id)
       .eq('user_id', user.id)
       .single()
@@ -38,6 +40,13 @@ export async function PUT(
       return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
     }
 
+    // Récupérer le milestone actuel pour détecter changement de statut
+    const { data: currentMilestone } = await supabase
+      .from('project_milestones')
+      .select('status, title, visible_to_client')
+      .eq('id', milestoneId)
+      .single()
+
     const { data, error } = await supabase
       .from('project_milestones')
       .update({ ...parsed.data, updated_at: new Date().toISOString() })
@@ -47,6 +56,34 @@ export async function PUT(
       .single()
 
     if (error || !data) return NextResponse.json({ error: 'Jalon introuvable' }, { status: 404 })
+
+    // Notifier le client si étape terminée et visible
+    const wasCompleted = currentMilestone?.status !== 'completed' && parsed.data.status === 'completed'
+    const isVisibleToClient = parsed.data.visible_to_client ?? currentMilestone?.visible_to_client ?? false
+
+    if (wasCompleted && isVisibleToClient) {
+      try {
+        const { data: portal } = await supabase
+          .from('client_portals')
+          .select('email')
+          .eq('project_id', id)
+          .single()
+
+        if (portal?.email) {
+          await sendEmail({
+            to: portal.email,
+            subject: `Étape terminée : ${data.title} — ${project.name}`,
+            html: milestoneCompletedEmail({
+              projectName: project.name,
+              milestoneTitle: data.title,
+              clientPortalUrl: `${APP_CONFIG.url}/client`,
+            }),
+          })
+        }
+      } catch (emailErr) {
+        console.error('[milestone/put] Email error:', emailErr)
+      }
+    }
 
     return NextResponse.json({ data })
   } catch {

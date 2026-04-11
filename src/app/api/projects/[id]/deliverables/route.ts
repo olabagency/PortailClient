@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { z } from 'zod'
+import { sendEmail, newDeliverableEmail } from '@/lib/email'
+import { APP_CONFIG } from '@/config/app.config'
 
 const deliverableCreateSchema = z.object({
   name: z.string().min(1).max(200),
@@ -61,7 +63,7 @@ export async function POST(
 
     const { data: project } = await supabase
       .from('projects')
-      .select('id')
+      .select('id, name, public_id')
       .eq('id', id)
       .eq('user_id', user.id)
       .single()
@@ -93,6 +95,32 @@ export async function POST(
       .single()
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    // Notifier le client par email si livrable visible
+    if (parsed.data.visible_to_client) {
+      try {
+        const { data: portal } = await supabase
+          .from('client_portals')
+          .select('email')
+          .eq('project_id', id)
+          .single()
+
+        if (portal?.email) {
+          const clientPortalUrl = `${APP_CONFIG.url}/client`
+          await sendEmail({
+            to: portal.email,
+            subject: `Nouveau livrable : ${parsed.data.name} — ${project.name}`,
+            html: newDeliverableEmail({
+              projectName: project.name,
+              deliverableName: parsed.data.name,
+              clientPortalUrl,
+            }),
+          })
+        }
+      } catch (emailErr) {
+        console.error('[deliverables/post] Email error:', emailErr)
+      }
+    }
 
     return NextResponse.json({ data }, { status: 201 })
   } catch {
