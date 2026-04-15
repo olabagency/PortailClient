@@ -7,15 +7,6 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { FolderOpen, ArrowRight } from 'lucide-react'
 
-interface KanbanTask {
-  id: string
-  status: string
-}
-
-interface KanbanColumn {
-  kanban_tasks: KanbanTask[]
-}
-
 interface Project {
   id: string
   name: string
@@ -23,20 +14,14 @@ interface Project {
   status: string
   color: string | null
   created_at: string
-  kanban_columns: KanbanColumn[]
+  milestone_total: number
+  milestone_done: number
 }
 
 const statusLabels: Record<string, { label: string; variant: 'default' | 'secondary' | 'outline' }> = {
   active: { label: 'En cours', variant: 'default' },
   paused: { label: 'En pause', variant: 'secondary' },
   completed: { label: 'Terminé', variant: 'outline' },
-}
-
-function computeProgress(project: Project): number {
-  const allTasks = project.kanban_columns.flatMap(c => c.kanban_tasks)
-  if (allTasks.length === 0) return 0
-  const done = allTasks.filter(t => t.status === 'done' || t.status === 'completed').length
-  return Math.round((done / allTasks.length) * 100)
 }
 
 export default async function ClientDashboardPage() {
@@ -80,17 +65,27 @@ export default async function ClientDashboardPage() {
     )
   }
 
-  const { data: projects } = await admin
+  const { data: projectsRaw } = await admin
     .from('projects')
-    .select(`
-      id, name, description, status, color, created_at,
-      kanban_columns(kanban_tasks(id, status))
-    `)
+    .select('id, name, description, status, color, created_at')
     .eq('client_id', client.id)
     .neq('status', 'archived')
     .order('created_at', { ascending: false })
 
-  const projectList = (projects ?? []) as Project[]
+  // Récupérer les jalons pour la progression (sans kanban qui bloque)
+  const { data: milestones } = await admin
+    .from('project_milestones')
+    .select('project_id, status')
+    .in('project_id', (projectsRaw ?? []).map(p => p.id))
+
+  const projectList: Project[] = (projectsRaw ?? []).map(p => {
+    const ms = (milestones ?? []).filter(m => m.project_id === p.id)
+    return {
+      ...p,
+      milestone_total: ms.length,
+      milestone_done: ms.filter(m => m.status === 'completed').length,
+    }
+  })
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -109,7 +104,9 @@ export default async function ClientDashboardPage() {
       ) : (
         <div className="space-y-3">
           {projectList.map(project => {
-            const progress = computeProgress(project)
+            const progress = project.milestone_total > 0
+              ? Math.round((project.milestone_done / project.milestone_total) * 100)
+              : 0
             const statusInfo = statusLabels[project.status] ?? { label: project.status, variant: 'secondary' as const }
 
             return (
