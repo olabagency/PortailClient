@@ -162,7 +162,7 @@ export default function SharePage({ params }: { params: Promise<{ id: string }> 
   }
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-6 max-w-3xl">
       {/* En-tête */}
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => router.back()}>

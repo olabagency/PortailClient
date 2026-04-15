@@ -4,9 +4,8 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { toast } from 'sonner'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
+import { Button } from '@/components/ui/button'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,18 +17,38 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
   ArrowLeft,
   ExternalLink,
   ClipboardList,
   FolderOpen,
   PackageOpen,
   MessageSquare,
+  ShieldCheck,
   RotateCcw,
   CheckCircle,
   Trash2,
+  MoreHorizontal,
+  Users,
+  CalendarDays,
+  ListChecks,
+  ChevronRight,
+  Share2,
+  Flag,
+  Clock,
+  AlertTriangle,
+  Inbox,
+  FileText,
 } from 'lucide-react'
-import { format } from 'date-fns'
+import { format, isPast, differenceInDays } from 'date-fns'
 import { fr } from 'date-fns/locale'
+import { cn } from '@/lib/utils'
 
 interface Project {
   id: string
@@ -48,31 +67,43 @@ interface Project {
   created_at: string
 }
 
+interface UpcomingMilestone {
+  id: string
+  title: string
+  due_date: string
+  status: string
+  priority: string
+}
+
 interface ProjectOverviewProps {
   project: Project
   portalUrl: string
   milestoneStats: { total: number; completed: number }
+  upcomingMilestones: UpcomingMilestone[]
   responseCount: number
   documentCount: number
   deliverableStats: { total: number; validated: number; pending: number }
   feedbackCount: number
+  vaultCount: number
 }
 
-const statusConfig: Record<string, { label: string; variant: 'default' | 'secondary' | 'outline' | 'destructive' }> = {
-  active: { label: 'Actif', variant: 'default' },
-  paused: { label: 'En pause', variant: 'secondary' },
-  completed: { label: 'Terminé', variant: 'outline' },
-  archived: { label: 'Archivé', variant: 'destructive' },
+const statusConfig: Record<string, { label: string; bg: string; text: string; border: string; dot: string }> = {
+  active:    { label: 'Actif',     bg: 'bg-emerald-50',  text: 'text-emerald-700', border: 'border-emerald-200', dot: 'bg-emerald-500' },
+  paused:    { label: 'En pause',  bg: 'bg-amber-50',    text: 'text-amber-700',   border: 'border-amber-200',   dot: 'bg-amber-400' },
+  completed: { label: 'Terminé',   bg: 'bg-gray-50',     text: 'text-gray-600',    border: 'border-gray-200',    dot: 'bg-gray-400' },
+  archived:  { label: 'Archivé',   bg: 'bg-gray-50',     text: 'text-gray-500',    border: 'border-gray-200',    dot: 'bg-gray-300' },
 }
 
 export function ProjectOverview({
   project,
   portalUrl,
   milestoneStats,
+  upcomingMilestones,
   responseCount,
   documentCount,
   deliverableStats,
   feedbackCount,
+  vaultCount,
 }: ProjectOverviewProps) {
   const router = useRouter()
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -80,13 +111,35 @@ export function ProjectOverview({
   const [closing, setClosing] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [resetting, setResetting] = useState(false)
+  const [invitingPortal, setInvitingPortal] = useState(false)
+  const [portalInvited, setPortalInvited] = useState(false)
 
-  const statusInfo = statusConfig[project.status] ?? { label: project.status, variant: 'secondary' as const }
-  const progressPct =
-    milestoneStats.total > 0
-      ? Math.round((milestoneStats.completed / milestoneStats.total) * 100)
-      : 0
-  const pendingMilestones = milestoneStats.total - milestoneStats.completed
+  const statusInfo = statusConfig[project.status] ?? { label: project.status, bg: 'bg-gray-50', text: 'text-gray-600', border: 'border-gray-200', dot: 'bg-gray-400' }
+  const progressPct = milestoneStats.total > 0
+    ? Math.round((milestoneStats.completed / milestoneStats.total) * 100)
+    : 0
+  const accentColor = project.color ?? '#E8553A'
+  const initials = project.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
+
+  async function handleInvitePortal() {
+    const email = project.clients?.email
+    if (!email) return
+    setInvitingPortal(true)
+    try {
+      const res = await fetch(`/api/projects/${project.id}/invite-portal`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+      if (res.ok) {
+        setPortalInvited(true)
+        toast.success(`Invitation envoyée à ${email}`)
+      } else {
+        const json = await res.json() as { error?: string }
+        toast.error(json.error ?? 'Erreur lors de l\'envoi')
+      }
+    } catch { toast.error('Erreur réseau') } finally { setInvitingPortal(false) }
+  }
 
   async function handleClose() {
     setClosing(true)
@@ -103,11 +156,7 @@ export function ProjectOverview({
         toast.success('Projet clôturé avec succès')
         router.refresh()
       }
-    } catch {
-      toast.error('Erreur réseau')
-    } finally {
-      setClosing(false)
-    }
+    } catch { toast.error('Erreur réseau') } finally { setClosing(false) }
   }
 
   async function handleDelete() {
@@ -122,10 +171,7 @@ export function ProjectOverview({
         toast.success('Projet supprimé')
         router.push('/dashboard/projects')
       }
-    } catch {
-      toast.error('Erreur réseau')
-      setDeleting(false)
-    }
+    } catch { toast.error('Erreur réseau'); setDeleting(false) }
   }
 
   async function handleReset() {
@@ -140,228 +186,387 @@ export function ProjectOverview({
         setResetDialogOpen(false)
         router.refresh()
       }
-    } catch {
-      toast.error('Erreur réseau')
-    } finally {
-      setResetting(false)
-    }
+    } catch { toast.error('Erreur réseau') } finally { setResetting(false) }
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      {/* Bouton retour */}
-      <div>
-        <button
-          onClick={() => router.push('/dashboard/projects')}
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Retour au dashboard
-        </button>
-      </div>
+    <div className="flex flex-col gap-6 pb-8">
 
-      {/* Layout deux colonnes */}
-      <div className="flex flex-col lg:flex-row gap-6 items-start">
-        {/* Colonne principale */}
-        <div className="flex-1 flex flex-col gap-6 min-w-0">
+      {/* ── Breadcrumb ── */}
+      <button
+        onClick={() => router.push('/dashboard/projects')}
+        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors w-fit"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Retour aux projets
+      </button>
 
-          {/* Card en-tête projet */}
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-start justify-between gap-4 flex-wrap">
-                <div className="flex items-center gap-3 flex-wrap">
-                  {project.color && (
-                    <div
-                      className="h-4 w-4 rounded-full shrink-0"
-                      style={{ backgroundColor: project.color }}
-                    />
-                  )}
-                  <h1 className="text-2xl font-bold">{project.name}</h1>
-                  <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>
+      {/* ── Hero ── */}
+      <div className="rounded-2xl border bg-white overflow-hidden shadow-sm">
+        {/* Top color stripe */}
+        <div className="h-2 w-full" style={{ backgroundColor: accentColor }} />
+
+        <div className="px-6 py-6">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            {/* Left: avatar + info */}
+            <div className="flex items-start gap-4">
+              <div
+                className="h-14 w-14 rounded-xl flex items-center justify-center text-white text-xl font-bold shrink-0 shadow-sm"
+                style={{ backgroundColor: accentColor }}
+              >
+                {initials}
+              </div>
+              <div>
+                <div className="flex items-center gap-2.5 flex-wrap mb-1">
+                  <h1 className="text-2xl font-bold tracking-tight">{project.name}</h1>
+                  <span className={cn(
+                    'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium',
+                    statusInfo.bg, statusInfo.text, statusInfo.border,
+                  )}>
+                    <span className={cn('h-1.5 w-1.5 rounded-full', statusInfo.dot)} />
+                    {statusInfo.label}
+                  </span>
                 </div>
-                <a
-                  href={portalUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline shrink-0"
-                >
-                  Voir côté client
-                  <ExternalLink className="h-3.5 w-3.5" />
-                </a>
+                {project.description && (
+                  <p className="text-sm text-muted-foreground mb-2 max-w-xl">{project.description}</p>
+                )}
+                <div className="flex items-center gap-4 flex-wrap text-sm text-muted-foreground">
+                  {project.clients && (
+                    <Link
+                      href={`/dashboard/clients/${project.clients.id}`}
+                      className="flex items-center gap-1.5 hover:text-primary transition-colors"
+                    >
+                      <Users className="h-3.5 w-3.5" />
+                      <span className="font-medium text-foreground">{project.clients.name}</span>
+                      {project.clients.company && (
+                        <span>· {project.clients.company}</span>
+                      )}
+                    </Link>
+                  )}
+                  <span className="flex items-center gap-1.5">
+                    <CalendarDays className="h-3.5 w-3.5" />
+                    Créé le {format(new Date(project.created_at), 'd MMM yyyy', { locale: fr })}
+                  </span>
+                </div>
               </div>
+            </div>
 
-              {project.description && (
-                <p className="mt-2 text-sm text-muted-foreground">{project.description}</p>
+            {/* Right: actions */}
+            <div className="flex items-center gap-2 shrink-0 flex-wrap">
+              {project.clients?.email && (
+                portalInvited ? (
+                  <span className="inline-flex items-center gap-1.5 text-xs text-emerald-600 border border-emerald-200 bg-emerald-50 rounded-lg px-3 py-1.5 font-medium">
+                    <CheckCircle className="h-3.5 w-3.5" />
+                    Invitation envoyée
+                  </span>
+                ) : (
+                  <Button variant="outline" size="sm" className="gap-1.5" disabled={invitingPortal} onClick={handleInvitePortal}>
+                    <Share2 className="h-3.5 w-3.5" />
+                    {invitingPortal ? 'Envoi...' : 'Inviter au portail'}
+                  </Button>
+                )
               )}
+              <a
+                href={portalUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-sm font-medium rounded-lg px-3 py-1.5 border transition-colors hover:bg-accent"
+              >
+                Portail client
+                <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+              <DropdownMenu>
+                <DropdownMenuTrigger className="inline-flex items-center justify-center rounded-lg border h-9 w-9 hover:bg-accent text-muted-foreground hover:text-foreground transition-colors">
+                  <MoreHorizontal className="h-4 w-4" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    className="text-emerald-600 focus:text-emerald-600"
+                    onClick={handleClose}
+                    disabled={closing || project.status === 'completed'}
+                  >
+                    <CheckCircle className="mr-2 h-4 w-4" />
+                    Clôturer le projet
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="text-amber-600 focus:text-amber-600"
+                    onClick={() => setResetDialogOpen(true)}
+                  >
+                    <RotateCcw className="mr-2 h-4 w-4" />
+                    Réinitialiser l&apos;onboarding
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onClick={() => setDeleteDialogOpen(true)}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Supprimer le projet
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
 
-              {/* Grille d'infos */}
-              <div className="mt-5 grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3">
-                <InfoItem label="Client" value={project.clients?.name ?? '—'} />
-                <InfoItem label="Email" value={project.clients?.email ?? '—'} />
-                <InfoItem label="Entreprise" value={project.clients?.company ?? '—'} />
-                <InfoItem
-                  label="Site web"
-                  value={project.clients?.website ?? '—'}
-                />
-                <InfoItem
-                  label="Date de création"
-                  value={format(new Date(project.created_at), 'd MMM yyyy', { locale: fr })}
-                />
-                <InfoItem
-                  label="Statut onboarding"
-                  value={responseCount > 0 ? 'Complété' : 'En attente'}
-                  valueClassName={responseCount > 0 ? 'text-green-600' : 'text-amber-600'}
-                />
+          {/* Progress bar */}
+          <div className="mt-6 pt-5 border-t">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <ListChecks className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-semibold">Progression du projet</span>
               </div>
-            </CardContent>
-          </Card>
-
-          {/* Card progression */}
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base">Progression du projet</CardTitle>
+              <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                  {milestoneStats.completed} terminée{milestoneStats.completed !== 1 ? 's' : ''}
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-muted-foreground/40" />
+                  {milestoneStats.total - milestoneStats.completed} restante{milestoneStats.total - milestoneStats.completed !== 1 ? 's' : ''}
+                </span>
                 <Link
                   href={`/dashboard/projects/${project.id}/milestones`}
-                  className="text-sm text-primary hover:underline flex items-center gap-1"
+                  className="text-primary hover:underline flex items-center gap-0.5 ml-2 font-medium"
                 >
-                  Voir la timeline →
+                  Voir la timeline <ChevronRight className="h-3 w-3" />
                 </Link>
               </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex items-center justify-between text-sm text-muted-foreground mb-1">
-                <span>{progressPct}% complété</span>
-                <span>{milestoneStats.completed}/{milestoneStats.total} étapes</span>
-              </div>
-              <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-2.5 bg-muted rounded-full overflow-hidden">
                 <div
-                  className="h-2 bg-primary rounded-full transition-all duration-500"
-                  style={{ width: `${progressPct}%` }}
+                  className="h-full rounded-full transition-all duration-700"
+                  style={{
+                    width: `${progressPct}%`,
+                    backgroundColor: progressPct === 100 ? '#22c55e' : accentColor,
+                  }}
                 />
               </div>
-              <div className="flex items-center gap-6 text-sm mt-2">
-                <span className="flex items-center gap-1.5 text-green-600">
-                  <span className="inline-block h-2 w-2 rounded-full bg-green-500" />
-                  {milestoneStats.completed} terminée{milestoneStats.completed !== 1 ? 's' : ''} ✓
-                </span>
-                <span className="flex items-center gap-1.5 text-amber-600">
-                  <span className="inline-block h-2 w-2 rounded-full bg-amber-400" />
-                  {pendingMilestones} en attente ○
-                </span>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* 4 cartes accès rapide */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <QuickCard
-              icon={<ClipboardList className="h-5 w-5 text-primary" />}
-              title="Questionnaire"
-              description={
-                responseCount > 0
-                  ? `${responseCount} réponse${responseCount > 1 ? 's' : ''}`
-                  : 'En attente'
-              }
-              descriptionClassName={responseCount > 0 ? 'text-green-600' : 'text-amber-600'}
-              href={`/dashboard/projects/${project.id}/onboarding`}
-            />
-            <QuickCard
-              icon={<FolderOpen className="h-5 w-5 text-primary" />}
-              title="Documents"
-              description={
-                documentCount > 0
-                  ? `${documentCount} document${documentCount > 1 ? 's' : ''}`
-                  : 'Aucun document'
-              }
-              href={`/dashboard/projects/${project.id}/documents`}
-            />
-            <QuickCard
-              icon={<PackageOpen className="h-5 w-5 text-primary" />}
-              title="Livrables"
-              description={
-                deliverableStats.total > 0
-                  ? `${deliverableStats.validated} validé${deliverableStats.validated !== 1 ? 's' : ''} / ${deliverableStats.total}`
-                  : 'Aucun livrable'
-              }
-              descriptionClassName={
-                deliverableStats.pending > 0 ? 'text-amber-600' : undefined
-              }
-              href={`/dashboard/projects/${project.id}/deliverables`}
-            />
-            <QuickCard
-              icon={<MessageSquare className="h-5 w-5 text-primary" />}
-              title="Retours clients"
-              description={
-                feedbackCount > 0
-                  ? `${feedbackCount} retour${feedbackCount > 1 ? 's' : ''}`
-                  : 'Aucun retour'
-              }
-              href={`/dashboard/projects/${project.id}/feedback`}
-            />
+              <span className="text-sm font-bold tabular-nums w-10 text-right" style={{ color: progressPct === 100 ? '#16a34a' : accentColor }}>
+                {progressPct}%
+              </span>
+            </div>
           </div>
-        </div>
-
-        {/* Colonne droite — Actions */}
-        <div className="w-full lg:w-72 shrink-0">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">Actions</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-1 pt-0">
-              <Separator className="mb-3" />
-
-              <ActionButton
-                icon={<RotateCcw className="h-4 w-4" />}
-                label="Réinitialiser l'onboarding"
-                className="text-amber-600 hover:bg-amber-50"
-                onClick={() => setResetDialogOpen(true)}
-                disabled={resetting}
-              />
-
-              <ActionButton
-                icon={<CheckCircle className="h-4 w-4" />}
-                label="Clôturer le projet"
-                className="text-green-600 hover:bg-green-50"
-                onClick={handleClose}
-                disabled={closing || project.status === 'completed'}
-              />
-
-              <ActionButton
-                icon={<Trash2 className="h-4 w-4" />}
-                label="Supprimer le projet"
-                className="text-destructive hover:bg-destructive/10"
-                onClick={() => setDeleteDialogOpen(true)}
-                disabled={deleting}
-              />
-            </CardContent>
-          </Card>
         </div>
       </div>
 
-      {/* Dialog confirmation réinitialisation */}
+      {/* ── Module cards grid ── */}
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+        <ModuleCard
+          href={`/dashboard/projects/${project.id}/onboarding`}
+          icon={<ClipboardList className="h-5 w-5" />}
+          iconBg="bg-violet-100 text-violet-600"
+          title="Onboarding"
+          subtitle="Questionnaire client"
+          metric={responseCount}
+          metricLabel={responseCount === 1 ? 'réponse' : 'réponses'}
+          status={
+            responseCount > 0
+              ? { label: 'Reçu', color: 'text-emerald-600 bg-emerald-50 border-emerald-200' }
+              : { label: 'En attente', color: 'text-amber-600 bg-amber-50 border-amber-200' }
+          }
+        />
+        <ModuleCard
+          href={`/dashboard/projects/${project.id}/milestones`}
+          icon={<Flag className="h-5 w-5" />}
+          iconBg="bg-blue-100 text-blue-600"
+          title="Timeline"
+          subtitle="Étapes du projet"
+          metric={milestoneStats.total}
+          metricLabel={milestoneStats.total === 1 ? 'étape' : 'étapes'}
+          status={
+            milestoneStats.total === 0
+              ? { label: 'Aucune étape', color: 'text-muted-foreground bg-muted border-border' }
+              : milestoneStats.completed === milestoneStats.total
+              ? { label: 'Tout terminé', color: 'text-emerald-600 bg-emerald-50 border-emerald-200' }
+              : { label: `${milestoneStats.completed}/${milestoneStats.total} faites`, color: 'text-blue-600 bg-blue-50 border-blue-200' }
+          }
+        />
+        <ModuleCard
+          href={`/dashboard/projects/${project.id}/deliverables`}
+          icon={<PackageOpen className="h-5 w-5" />}
+          iconBg="bg-orange-100 text-orange-600"
+          title="Livrables"
+          subtitle="Validation & retours"
+          metric={deliverableStats.total}
+          metricLabel={deliverableStats.total === 1 ? 'livrable' : 'livrables'}
+          status={
+            deliverableStats.total === 0
+              ? { label: 'Aucun livrable', color: 'text-muted-foreground bg-muted border-border' }
+              : deliverableStats.pending > 0
+              ? { label: `${deliverableStats.pending} en attente`, color: 'text-amber-600 bg-amber-50 border-amber-200' }
+              : { label: 'Tout validé', color: 'text-emerald-600 bg-emerald-50 border-emerald-200' }
+          }
+        />
+        <ModuleCard
+          href={`/dashboard/projects/${project.id}/documents`}
+          icon={<FolderOpen className="h-5 w-5" />}
+          iconBg="bg-teal-100 text-teal-600"
+          title="Documents"
+          subtitle="Fichiers & ressources"
+          metric={documentCount}
+          metricLabel={documentCount === 1 ? 'fichier' : 'fichiers'}
+          status={
+            documentCount > 0
+              ? { label: 'Disponibles', color: 'text-teal-600 bg-teal-50 border-teal-200' }
+              : { label: 'Vide', color: 'text-muted-foreground bg-muted border-border' }
+          }
+        />
+        <ModuleCard
+          href={`/dashboard/projects/${project.id}/feedback`}
+          icon={<MessageSquare className="h-5 w-5" />}
+          iconBg="bg-pink-100 text-pink-600"
+          title="Retours"
+          subtitle="Feedbacks & questions"
+          metric={feedbackCount}
+          metricLabel={feedbackCount === 1 ? 'retour' : 'retours'}
+          status={
+            feedbackCount > 0
+              ? { label: 'À traiter', color: 'text-pink-600 bg-pink-50 border-pink-200' }
+              : { label: 'Aucun retour', color: 'text-muted-foreground bg-muted border-border' }
+          }
+        />
+        <ModuleCard
+          href={`/dashboard/projects/${project.id}/vault`}
+          icon={<ShieldCheck className="h-5 w-5" />}
+          iconBg="bg-slate-100 text-slate-600"
+          title="Coffre-fort"
+          subtitle="Accès & identifiants"
+          metric={vaultCount}
+          metricLabel={vaultCount === 1 ? 'accès' : 'accès'}
+          status={
+            vaultCount > 0
+              ? { label: 'Sécurisé', color: 'text-slate-600 bg-slate-50 border-slate-200' }
+              : { label: 'Vide', color: 'text-muted-foreground bg-muted border-border' }
+          }
+        />
+      </div>
+
+      {/* ── Prochaines échéances ── */}
+      {upcomingMilestones.length > 0 && (
+        <div className="rounded-2xl border bg-white overflow-hidden shadow-sm">
+          <div className="px-5 py-4 border-b flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4 text-muted-foreground" />
+              <h2 className="text-sm font-semibold">Prochaines échéances</h2>
+            </div>
+            <Link
+              href={`/dashboard/projects/${project.id}/milestones`}
+              className="text-xs text-primary hover:underline flex items-center gap-0.5 font-medium"
+            >
+              Tout voir <ChevronRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+          <div className="divide-y">
+            {upcomingMilestones.map(m => {
+              const dueDate = new Date(m.due_date)
+              const overdue = isPast(dueDate)
+              const daysLeft = differenceInDays(dueDate, new Date())
+              return (
+                <Link
+                  key={m.id}
+                  href={`/dashboard/projects/${project.id}/milestones`}
+                  className="flex items-center gap-4 px-5 py-3.5 hover:bg-muted/40 transition-colors"
+                >
+                  <div className={cn(
+                    'flex h-8 w-8 items-center justify-center rounded-lg shrink-0',
+                    overdue ? 'bg-red-50 text-red-500' : daysLeft <= 3 ? 'bg-amber-50 text-amber-600' : 'bg-muted text-muted-foreground',
+                  )}>
+                    {overdue ? <AlertTriangle className="h-4 w-4" /> : <Flag className="h-4 w-4" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{m.title}</p>
+                    <p className={cn(
+                      'text-xs mt-0.5',
+                      overdue ? 'text-red-500 font-medium' : daysLeft <= 3 ? 'text-amber-600' : 'text-muted-foreground',
+                    )}>
+                      {overdue
+                        ? `En retard de ${Math.abs(daysLeft)} jour${Math.abs(daysLeft) > 1 ? 's' : ''}`
+                        : daysLeft === 0
+                        ? 'Aujourd\'hui'
+                        : daysLeft === 1
+                        ? 'Demain'
+                        : `Dans ${daysLeft} jours`
+                      }
+                      {' · '}
+                      {format(dueDate, 'd MMM yyyy', { locale: fr })}
+                    </p>
+                  </div>
+                  {m.priority === 'urgent' && (
+                    <span className="text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-full px-2 py-0.5 shrink-0">
+                      Urgent
+                    </span>
+                  )}
+                  {m.priority === 'high' && (
+                    <span className="text-xs font-medium text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5 shrink-0">
+                      Haute
+                    </span>
+                  )}
+                </Link>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Accès rapide ── */}
+      <div className="rounded-2xl border bg-white overflow-hidden shadow-sm">
+        <div className="px-5 py-4 border-b">
+          <div className="flex items-center gap-2">
+            <FileText className="h-4 w-4 text-muted-foreground" />
+            <h2 className="text-sm font-semibold">Accès rapide</h2>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-y sm:divide-y-0">
+          {[
+            { label: 'Partager le formulaire', href: `/dashboard/projects/${project.id}/share`, icon: <Share2 className="h-4 w-4" /> },
+            { label: 'Calendrier', href: `/dashboard/projects/${project.id}/calendar`, icon: <CalendarDays className="h-4 w-4" /> },
+            { label: 'Portail client', href: portalUrl, icon: <ExternalLink className="h-4 w-4" />, external: true },
+            { label: 'Accès techniques', href: `/dashboard/projects/${project.id}/onboarding?tab=access`, icon: <Inbox className="h-4 w-4" /> },
+          ].map(item => (
+            item.external ? (
+              <a
+                key={item.label}
+                href={item.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex flex-col items-center gap-2 px-4 py-5 hover:bg-muted/40 transition-colors text-center group"
+              >
+                <span className="text-muted-foreground group-hover:text-primary transition-colors">{item.icon}</span>
+                <span className="text-xs font-medium text-muted-foreground group-hover:text-foreground transition-colors leading-tight">{item.label}</span>
+              </a>
+            ) : (
+              <Link
+                key={item.label}
+                href={item.href}
+                className="flex flex-col items-center gap-2 px-4 py-5 hover:bg-muted/40 transition-colors text-center group"
+              >
+                <span className="text-muted-foreground group-hover:text-primary transition-colors">{item.icon}</span>
+                <span className="text-xs font-medium text-muted-foreground group-hover:text-foreground transition-colors leading-tight">{item.label}</span>
+              </Link>
+            )
+          ))}
+        </div>
+      </div>
+
+      {/* ── Dialogs ── */}
       <AlertDialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Réinitialiser le questionnaire ?</AlertDialogTitle>
             <AlertDialogDescription>
-              Toutes les réponses du client seront supprimées. Le formulaire pourra être
-              rempli à nouveau. Cette action est irréversible.
+              Toutes les réponses du client seront supprimées. Le formulaire pourra être rempli à nouveau. Cette action est irréversible.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={resetting}>Annuler</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleReset}
-              disabled={resetting}
-            >
+            <AlertDialogAction onClick={handleReset} disabled={resetting}>
               {resetting ? 'Réinitialisation...' : 'Réinitialiser'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Dialog confirmation suppression */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -388,76 +593,57 @@ export function ProjectOverview({
   )
 }
 
-/* ─── Sous-composants ─── */
+/* ─── ModuleCard ─── */
 
-function InfoItem({
-  label,
-  value,
-  valueClassName,
-}: {
-  label: string
-  value: string
-  valueClassName?: string
-}) {
-  return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <span className={`text-sm font-medium truncate ${valueClassName ?? ''}`}>{value}</span>
-    </div>
-  )
-}
-
-function QuickCard({
-  icon,
-  title,
-  description,
-  descriptionClassName,
+function ModuleCard({
   href,
+  icon,
+  iconBg,
+  title,
+  subtitle,
+  metric,
+  metricLabel,
+  status,
 }: {
-  icon: React.ReactNode
-  title: string
-  description: string
-  descriptionClassName?: string
   href: string
+  icon: React.ReactNode
+  iconBg: string
+  title: string
+  subtitle: string
+  metric: number
+  metricLabel: string
+  status: { label: string; color: string }
 }) {
   return (
     <Link href={href}>
-      <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">
-        <CardContent className="pt-5 pb-5">
-          <div className="flex items-center gap-3 mb-2">
-            {icon}
-            <span className="font-medium text-sm">{title}</span>
+      <div className="group bg-white rounded-2xl border hover:border-primary/30 hover:shadow-md transition-all h-full overflow-hidden">
+        <div className="p-5 flex flex-col gap-4 h-full">
+          {/* Header */}
+          <div className="flex items-start justify-between">
+            <div className={cn('flex h-10 w-10 items-center justify-center rounded-xl', iconBg)}>
+              {icon}
+            </div>
+            <ChevronRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-primary group-hover:translate-x-0.5 transition-all mt-1" />
           </div>
-          <p className={`text-sm ${descriptionClassName ?? 'text-muted-foreground'}`}>
-            {description}
-          </p>
-        </CardContent>
-      </Card>
-    </Link>
-  )
-}
 
-function ActionButton({
-  icon,
-  label,
-  className,
-  onClick,
-  disabled,
-}: {
-  icon: React.ReactNode
-  label: string
-  className: string
-  onClick: () => void
-  disabled?: boolean
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-md text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${className}`}
-    >
-      {icon}
-      {label}
-    </button>
+          {/* Metric */}
+          <div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-3xl font-bold tabular-nums">{metric}</span>
+              <span className="text-sm text-muted-foreground">{metricLabel}</span>
+            </div>
+            <p className="text-sm font-semibold text-foreground mt-0.5">{title}</p>
+            <p className="text-xs text-muted-foreground">{subtitle}</p>
+          </div>
+
+          {/* Status chip */}
+          <div className="mt-auto">
+            <span className={cn('inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium', status.color)}>
+              {status.label}
+            </span>
+          </div>
+        </div>
+      </div>
+    </Link>
   )
 }

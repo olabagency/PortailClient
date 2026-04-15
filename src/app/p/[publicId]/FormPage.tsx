@@ -1,11 +1,12 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import Link from 'next/link'
 import { toast } from 'sonner'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { FieldRenderer } from '@/components/portal/FieldRenderer'
 import { CheckCircle2, Lock, Loader2, Check } from 'lucide-react'
 
@@ -86,6 +87,7 @@ export default function FormPage({ project, sections, fields, publicId, initialC
   const [saving, setSaving] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
+  const [portalInvited, setPortalInvited] = useState(false)
   const [sessionId, setSessionId] = useState<string>('')
   const [showSaved, setShowSaved] = useState(false)
   const autoSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -224,6 +226,8 @@ export default function FormPage({ project, sections, fields, publicId, initialC
         }),
       })
       if (res.ok) {
+        const json = (await res.json()) as { data?: { id: string; portal_invited?: boolean } }
+        setPortalInvited(json.data?.portal_invited ?? false)
         setSubmitted(true)
         localStorage.removeItem(`cf_session_${publicId}`)
       } else {
@@ -377,7 +381,7 @@ export default function FormPage({ project, sections, fields, publicId, initialC
         {/* Step content */}
         <div className="flex-1 px-8 py-10 max-w-2xl mx-auto w-full">
           {submitted ? (
-            <SuccessScreen />
+            <SuccessScreen portalInvited={portalInvited} />
           ) : (
             <>
               {currentStep === 1 && <StepWelcome projectName={project.name} settings={project.settings} />}
@@ -816,19 +820,39 @@ function StepClientInfo({
 
 // ── Success screen ─────────────────────────────────────────────────────────────
 
-function SuccessScreen() {
+function SuccessScreen({ portalInvited: _portalInvited }: { portalInvited: boolean }) {
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-6">
+    <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-8">
       <div className="w-20 h-20 rounded-full bg-emerald-100 flex items-center justify-center">
         <CheckCircle2 className="w-10 h-10 text-emerald-500" />
       </div>
-      <div className="space-y-2">
-        <h2 className="text-3xl font-bold text-gray-900">Merci pour vos réponses ! 🎉</h2>
-        <p className="text-gray-500 max-w-md mx-auto">
-          Votre prestataire va examiner vos informations. Vous recevrez un email dès que votre
-          onboarding sera validé.
+
+      <div className="space-y-3">
+        <h2 className="text-3xl font-bold text-gray-900">Merci, votre dossier est bien envoyé ! 🎉</h2>
+        <p className="text-gray-500 max-w-md mx-auto text-lg">
+          Votre prestataire va examiner vos informations. En attendant, créez votre espace client pour suivre l&apos;avancement de votre projet.
         </p>
       </div>
+
+      <div className="flex flex-col items-center gap-3 w-full max-w-xs">
+        <Link
+          href="/client/signup"
+          className={buttonVariants({ size: 'lg' }) + ' w-full justify-center text-base font-semibold'}
+          style={{ backgroundColor: 'oklch(0.611 0.196 26.9)', color: '#fff', borderColor: 'transparent' }}
+        >
+          Créer mon espace client →
+        </Link>
+        <Link
+          href="/client"
+          className="text-sm text-gray-500 hover:text-gray-800 transition-colors"
+        >
+          J&apos;ai déjà un compte
+        </Link>
+      </div>
+
+      <p className="text-xs text-gray-400 max-w-sm mx-auto">
+        Vous pourrez voir l&apos;avancement de votre projet, les documents partagés et les étapes validées.
+      </p>
     </div>
   )
 }

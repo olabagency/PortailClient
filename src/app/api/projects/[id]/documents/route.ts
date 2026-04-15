@@ -2,13 +2,25 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { z } from 'zod'
 
-const documentLinkCreateSchema = z.object({
-  name: z.string().min(1).max(200),
-  type: z.literal('link'),
-  url: z.string().url(),
-  folder_id: z.string().uuid().optional().nullable(),
-  visible_to_client: z.boolean().optional().default(false),
-})
+const documentCreateSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('link'),
+    name: z.string().min(1).max(200),
+    url: z.string().url(),
+    folder_id: z.string().uuid().optional().nullable(),
+    visible_to_client: z.boolean().optional().default(false),
+  }),
+  z.object({
+    type: z.literal('file'),
+    name: z.string().min(1).max(200),
+    url: z.string().min(1),
+    s3_key: z.string().min(1),
+    size_bytes: z.number().int().positive().optional().nullable(),
+    mime_type: z.string().optional().nullable(),
+    folder_id: z.string().uuid().optional().nullable(),
+    visible_to_client: z.boolean().optional().default(false),
+  }),
+])
 
 // GET /api/projects/[id]/documents?folder_id=xxx
 // Passer folder_id='root' pour les documents sans dossier
@@ -79,7 +91,7 @@ export async function POST(
     if (!project) return NextResponse.json({ error: 'Projet introuvable' }, { status: 404 })
 
     const body = await request.json()
-    const parsed = documentLinkCreateSchema.safeParse(body)
+    const parsed = documentCreateSchema.safeParse(body)
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
     }
@@ -91,6 +103,9 @@ export async function POST(
         name: parsed.data.name,
         type: parsed.data.type,
         url: parsed.data.url,
+        s3_key: parsed.data.type === 'file' ? parsed.data.s3_key : null,
+        size_bytes: parsed.data.type === 'file' ? (parsed.data.size_bytes ?? null) : null,
+        mime_type: parsed.data.type === 'file' ? (parsed.data.mime_type ?? null) : null,
         folder_id: parsed.data.folder_id ?? null,
         visible_to_client: parsed.data.visible_to_client,
         uploaded_by: user.id,

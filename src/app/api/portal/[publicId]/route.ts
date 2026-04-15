@@ -22,7 +22,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: 'Ce formulaire n\'est plus disponible' }, { status: 410 })
     }
 
-    const [{ data: sections }, { data: fields }] = await Promise.all([
+    const [{ data: sections }, { data: fields }, { data: completedResponse }] = await Promise.all([
       supabase
         .from('onboarding_sections')
         .select('id, title, order_index')
@@ -33,6 +33,13 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
         .select('id, type, label, description, placeholder, required, options, order_index, section_id')
         .eq('project_id', project.id)
         .order('order_index'),
+      supabase
+        .from('form_responses')
+        .select('id, completed, validated_at')
+        .eq('project_id', project.id)
+        .eq('completed', true)
+        .limit(1)
+        .single(),
     ])
 
     return NextResponse.json({
@@ -44,6 +51,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
         },
         sections: sections ?? [],
         fields: fields ?? [],
+        already_submitted: !!completedResponse,
       },
     })
   } catch {

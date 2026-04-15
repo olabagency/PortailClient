@@ -31,6 +31,22 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: 'Ce formulaire n\'est plus disponible' }, { status: 410 })
     }
 
+    // Block if already has a completed submission (unless revision was requested)
+    const { data: existingCompleted } = await supabase
+      .from('form_responses')
+      .select('id')
+      .eq('project_id', project.id)
+      .eq('completed', true)
+      .limit(1)
+      .single()
+
+    if (existingCompleted) {
+      return NextResponse.json(
+        { error: 'Ce formulaire a déjà été soumis. Contactez votre prestataire si des modifications sont nécessaires.' },
+        { status: 409 }
+      )
+    }
+
     const body = await request.json()
     const parsed = submitSchema.safeParse(body)
     if (!parsed.success) {
@@ -139,7 +155,50 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       // Ne pas bloquer la réponse si l'email échoue
     }
 
-    return NextResponse.json({ data: { id: data!.id } }, { status: 201 })
+    // Auto-inviter le client dans son portail si email fourni
+    let portalInvited = false
+    if (parsed.data.respondent_email) {
+      try {
+        const { createAdminClient } = await import('@/lib/supabase/admin')
+        const { sendEmail, clientPortalInviteEmail } = await import('@/lib/email')
+        const adminSupabase = createAdminClient()
+
+        // Upsert dans client_portals
+        await adminSupabase
+          .from('client_portals')
+          .upsert(
+            { project_id: project.id, email: parsed.data.respondent_email },
+            { onConflict: 'project_id,email', ignoreDuplicates: true }
+          )
+
+        // Générer le magic link
+        const { data: linkData } = await adminSupabase.auth.admin.generateLink({
+          type: 'magiclink',
+          email: parsed.data.respondent_email,
+          options: {
+            redirectTo: `${APP_CONFIG.url}/client/auth/callback?project=${project.id}`,
+          },
+        })
+
+        const actionLink = linkData?.properties?.action_link
+        if (actionLink) {
+          await sendEmail({
+            to: parsed.data.respondent_email,
+            subject: `Accès à votre espace client — ${project.name}`,
+            html: clientPortalInviteEmail({
+              projectName: project.name,
+              magicLink: actionLink,
+              respondentName: parsed.data.respondent_name || undefined,
+            }),
+          })
+          portalInvited = true
+        }
+      } catch (inviteErr) {
+        console.error('[submit] Auto-invite error:', inviteErr)
+      }
+    }
+
+    return NextResponse.json({ data: { id: data!.id, portal_invited: portalInvited } }, { status: 201 })
   } catch {
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
   }

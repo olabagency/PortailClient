@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, use, useCallback, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { toast } from 'sonner'
@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
@@ -21,10 +22,12 @@ import { Textarea } from '@/components/ui/textarea'
 import {
   ArrowLeft, FolderOpen, FileText, Link2, Plus, Trash2,
   CheckCircle2, XCircle, Clock, AlertCircle, Upload,
+  MessageSquare, Wrench, HelpCircle, ChevronLeft, ChevronRight, Lock,
+  Info, RotateCcw, CheckCheck, LayersIcon,
 } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
-// Types
+// Types — Deliverables
 // ---------------------------------------------------------------------------
 
 type DeliverableStatus = 'pending' | 'validated' | 'rejected' | 'revision_requested'
@@ -53,10 +56,44 @@ interface Milestone {
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Types — Feedback
 // ---------------------------------------------------------------------------
 
-function statusLabel(status: DeliverableStatus): string {
+type FeedbackStatus = 'pending' | 'in_progress' | 'treated'
+type FeedbackType = 'feedback' | 'modification_request' | 'question'
+
+interface FeedbackItem {
+  id: string
+  project_id: string
+  deliverable_id: string | null
+  phase: number
+  title: string
+  content: string | null
+  type: FeedbackType
+  status: FeedbackStatus
+  source: 'client' | 'freelance'
+  created_at: string
+  updated_at: string
+}
+
+interface FeedbackStats {
+  total: number
+  pending: number
+  in_progress: number
+  treated: number
+  questions: number
+}
+
+interface DeliverableMin {
+  id: string
+  name: string
+}
+
+// ---------------------------------------------------------------------------
+// Helpers — Deliverables
+// ---------------------------------------------------------------------------
+
+function deliverableStatusLabel(status: DeliverableStatus): string {
   switch (status) {
     case 'pending': return 'En attente'
     case 'validated': return 'Validé'
@@ -65,34 +102,43 @@ function statusLabel(status: DeliverableStatus): string {
   }
 }
 
-function StatusBadge({ status }: { status: DeliverableStatus }) {
+function deliverableStatusBorderClass(status: DeliverableStatus): string {
+  switch (status) {
+    case 'validated': return 'border-l-4 border-l-emerald-400'
+    case 'rejected': return 'border-l-4 border-l-red-400'
+    case 'revision_requested': return 'border-l-4 border-l-orange-400'
+    default: return 'border-l-4 border-l-gray-200'
+  }
+}
+
+function DeliverableStatusBadge({ status }: { status: DeliverableStatus }) {
   if (status === 'validated') {
     return (
-      <Badge className="text-xs py-0 bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100">
-        <CheckCircle2 className="h-3 w-3 mr-1" />
+      <Badge className="text-xs py-0.5 px-2 bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100 gap-1">
+        <CheckCircle2 className="h-3 w-3" />
         Validé
       </Badge>
     )
   }
   if (status === 'rejected') {
     return (
-      <Badge className="text-xs py-0 bg-red-100 text-red-700 border-red-200 hover:bg-red-100">
-        <XCircle className="h-3 w-3 mr-1" />
+      <Badge className="text-xs py-0.5 px-2 bg-red-100 text-red-700 border-red-200 hover:bg-red-100 gap-1">
+        <XCircle className="h-3 w-3" />
         Refusé
       </Badge>
     )
   }
   if (status === 'revision_requested') {
     return (
-      <Badge className="text-xs py-0 bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-100">
-        <AlertCircle className="h-3 w-3 mr-1" />
+      <Badge className="text-xs py-0.5 px-2 bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-100 gap-1">
+        <AlertCircle className="h-3 w-3" />
         Révision demandée
       </Badge>
     )
   }
   return (
-    <Badge variant="outline" className="text-xs py-0">
-      <Clock className="h-3 w-3 mr-1" />
+    <Badge variant="outline" className="text-xs py-0.5 px-2 gap-1">
+      <Clock className="h-3 w-3" />
       En attente
     </Badge>
   )
@@ -106,25 +152,80 @@ function formatFileSize(bytes: number | null): string {
 }
 
 // ---------------------------------------------------------------------------
-// Add Link dialog form
+// Helpers — Feedback
 // ---------------------------------------------------------------------------
 
-interface LinkFormData {
-  name: string
-  url: string
-  description: string
-  milestone_id: string
+const STATUS_CYCLE: FeedbackStatus[] = ['pending', 'in_progress', 'treated']
+
+function nextFeedbackStatus(current: FeedbackStatus): FeedbackStatus {
+  const idx = STATUS_CYCLE.indexOf(current)
+  return STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length]
 }
 
-const defaultLinkForm = (): LinkFormData => ({
-  name: '',
-  url: '',
-  description: '',
-  milestone_id: '',
-})
+function feedbackStatusBorderClass(status: FeedbackStatus): string {
+  switch (status) {
+    case 'treated': return 'border-l-4 border-l-emerald-400'
+    case 'in_progress': return 'border-l-4 border-l-blue-400'
+    default: return 'border-l-4 border-l-gray-200'
+  }
+}
+
+function FeedbackStatusBadge({ status }: { status: FeedbackStatus }) {
+  if (status === 'treated') {
+    return (
+      <Badge className="text-xs py-0.5 px-2 bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100 shrink-0 gap-1">
+        <CheckCircle2 className="h-3 w-3" />
+        Traité
+      </Badge>
+    )
+  }
+  if (status === 'in_progress') {
+    return (
+      <Badge className="text-xs py-0.5 px-2 bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-100 shrink-0">
+        En cours
+      </Badge>
+    )
+  }
+  return (
+    <Badge variant="outline" className="text-xs py-0.5 px-2 shrink-0 text-gray-500">
+      À traiter
+    </Badge>
+  )
+}
+
+function TypeBadge({ type }: { type: FeedbackType }) {
+  if (type === 'modification_request') {
+    return (
+      <Badge className="text-xs py-0.5 px-2 bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-100 gap-1 shrink-0">
+        <Wrench className="h-3 w-3" />
+        Modification
+      </Badge>
+    )
+  }
+  if (type === 'question') {
+    return (
+      <Badge className="text-xs py-0.5 px-2 bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-100 gap-1 shrink-0">
+        <HelpCircle className="h-3 w-3" />
+        Question
+      </Badge>
+    )
+  }
+  return (
+    <Badge className="text-xs py-0.5 px-2 bg-violet-100 text-violet-700 border-violet-200 hover:bg-violet-100 gap-1 shrink-0">
+      <MessageSquare className="h-3 w-3" />
+      Retour
+    </Badge>
+  )
+}
+
+function typeLabel(type: FeedbackType): string {
+  if (type === 'modification_request') return 'Modification'
+  if (type === 'question') return 'Question'
+  return 'Retour'
+}
 
 // ---------------------------------------------------------------------------
-// Detail dialog
+// Deliverable — Detail dialog
 // ---------------------------------------------------------------------------
 
 function DetailDialog({
@@ -183,7 +284,7 @@ function DetailDialog({
 
   return (
     <Dialog open={open} onOpenChange={open => { if (!open) onClose() }}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {deliverable.type === 'file'
@@ -289,8 +390,22 @@ function DetailDialog({
 }
 
 // ---------------------------------------------------------------------------
-// Add Link Dialog
+// Deliverable — Add Link Dialog
 // ---------------------------------------------------------------------------
+
+interface LinkFormData {
+  name: string
+  url: string
+  description: string
+  milestone_id: string
+}
+
+const defaultLinkForm = (): LinkFormData => ({
+  name: '',
+  url: '',
+  description: '',
+  milestone_id: '',
+})
 
 function AddLinkDialog({
   open,
@@ -324,7 +439,7 @@ function AddLinkDialog({
 
   return (
     <Dialog open={open} onOpenChange={o => { if (!o) onClose() }}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>Ajouter un lien</DialogTitle>
         </DialogHeader>
@@ -390,6 +505,204 @@ function AddLinkDialog({
 }
 
 // ---------------------------------------------------------------------------
+// Feedback — Add Feedback Dialog
+// ---------------------------------------------------------------------------
+
+interface FeedbackFormData {
+  title: string
+  content: string
+  type: FeedbackType
+  deliverable_id: string
+}
+
+const defaultFeedbackForm = (): FeedbackFormData => ({
+  title: '',
+  content: '',
+  type: 'feedback',
+  deliverable_id: '',
+})
+
+function AddFeedbackDialog({
+  open,
+  deliverables,
+  onClose,
+  onAdd,
+}: {
+  open: boolean
+  deliverables: DeliverableMin[]
+  onClose: () => void
+  onAdd: (form: FeedbackFormData) => Promise<void>
+}) {
+  const [form, setForm] = useState<FeedbackFormData>(defaultFeedbackForm())
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (open) setForm(defaultFeedbackForm())
+  }, [open])
+
+  async function handleSubmit() {
+    if (!form.title.trim()) { toast.error('Le titre est requis'); return }
+    setSaving(true)
+    try {
+      await onAdd(form)
+      onClose()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={o => { if (!o) onClose() }}>
+      <DialogContent className="sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle>Nouveau retour ou question</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          {/* Type selector — visual pills */}
+          <div className="space-y-1.5">
+            <Label>Type</Label>
+            <div className="grid grid-cols-3 gap-2">
+              {(
+                [
+                  { value: 'feedback', label: 'Retour', icon: MessageSquare, color: 'violet' },
+                  { value: 'modification_request', label: 'Modification', icon: Wrench, color: 'orange' },
+                  { value: 'question', label: 'Question', icon: HelpCircle, color: 'blue' },
+                ] as const
+              ).map(({ value, label, icon: Icon, color }) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setForm(f => ({ ...f, type: value }))}
+                  className={[
+                    'flex flex-col items-center gap-1.5 rounded-xl border-2 p-3 text-xs font-medium transition-all',
+                    form.type === value
+                      ? color === 'violet'
+                        ? 'border-violet-400 bg-violet-50 text-violet-700'
+                        : color === 'orange'
+                          ? 'border-orange-400 bg-orange-50 text-orange-700'
+                          : 'border-blue-400 bg-blue-50 text-blue-700'
+                      : 'border-border bg-background text-muted-foreground hover:border-muted-foreground/40',
+                  ].join(' ')}
+                >
+                  <Icon className="h-4 w-4" />
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="fb-title">Titre <span className="text-destructive">*</span></Label>
+            <Input
+              id="fb-title"
+              placeholder="Ex : Revoir la couleur du bouton principal"
+              value={form.title}
+              onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="fb-content">Description <span className="text-muted-foreground font-normal">(optionnel)</span></Label>
+            <Textarea
+              id="fb-content"
+              placeholder="Détails supplémentaires…"
+              rows={3}
+              value={form.content}
+              onChange={e => setForm(f => ({ ...f, content: e.target.value }))}
+            />
+          </div>
+
+          {deliverables.length > 0 && (
+            <div className="space-y-1.5">
+              <Label>Livrable concerné <span className="text-muted-foreground font-normal">(optionnel)</span></Label>
+              <Select
+                value={form.deliverable_id || 'none'}
+                onValueChange={(v: string | null) => setForm(f => ({ ...f, deliverable_id: !v || v === 'none' ? '' : v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Aucun livrable" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Aucun livrable</SelectItem>
+                  {deliverables.map(d => (
+                    <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={saving}>Annuler</Button>
+          <Button onClick={handleSubmit} disabled={saving}>
+            {saving ? 'Ajout…' : 'Ajouter'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Feedback — Card
+// ---------------------------------------------------------------------------
+
+function FeedbackRow({
+  item,
+  deliverables,
+  onStatusCycle,
+}: {
+  item: FeedbackItem
+  deliverables: DeliverableMin[]
+  onStatusCycle: (id: string, next: FeedbackStatus) => void
+}) {
+  const deliverableName = deliverables.find(d => d.id === item.deliverable_id)?.name ?? null
+
+  return (
+    <div
+      className={[
+        'flex items-start gap-4 bg-white rounded-xl px-4 py-4 border transition-shadow hover:shadow-sm group',
+        feedbackStatusBorderClass(item.status),
+      ].join(' ')}
+    >
+      {/* Left: type + content */}
+      <div className="flex-1 min-w-0 space-y-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <TypeBadge type={item.type} />
+          {item.source === 'client' && (
+            <Badge variant="secondary" className="text-xs py-0.5 px-2">Client</Badge>
+          )}
+          {deliverableName && (
+            <span className="text-xs text-muted-foreground bg-muted rounded-md px-2 py-0.5 flex items-center gap-1">
+              <FileText className="h-3 w-3" />
+              {deliverableName}
+            </span>
+          )}
+        </div>
+        <p className="text-sm font-medium leading-snug">{item.title}</p>
+        {item.content && (
+          <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">{item.content}</p>
+        )}
+        <p className="text-xs text-muted-foreground">
+          {format(new Date(item.created_at), 'd MMM yyyy', { locale: fr })}
+        </p>
+      </div>
+
+      {/* Right: status cycle button */}
+      <button
+        onClick={() => onStatusCycle(item.id, nextFeedbackStatus(item.status))}
+        className="shrink-0 mt-0.5 hover:opacity-75 transition-opacity"
+        title="Cliquer pour changer le statut"
+      >
+        <FeedbackStatusBadge status={item.status} />
+      </button>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Main page
 // ---------------------------------------------------------------------------
 
@@ -400,24 +713,35 @@ export default function DeliverablesPage({
 }) {
   const { id: projectId } = use(params)
   const router = useRouter()
+  const searchParams = useSearchParams()
 
+  const defaultTab = searchParams.get('tab') === 'retours' ? 'retours' : 'livrables'
+
+  // ---- Deliverables state ----
   const [deliverables, setDeliverables] = useState<Deliverable[]>([])
   const [milestones, setMilestones] = useState<Milestone[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loadingDeliverables, setLoadingDeliverables] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [dragOver, setDragOver] = useState(false)
-
   const [selectedDeliverable, setSelectedDeliverable] = useState<Deliverable | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
   const [linkDialogOpen, setLinkDialogOpen] = useState(false)
-
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // ---- Feedback state ----
+  const [feedback, setFeedback] = useState<FeedbackItem[]>([])
+  const [stats, setStats] = useState<FeedbackStats>({ total: 0, pending: 0, in_progress: 0, treated: 0, questions: 0 })
+  const [currentPhase, setCurrentPhase] = useState(1)
+  const [viewPhase, setViewPhase] = useState(1)
+  const [loadingFeedback, setLoadingFeedback] = useState(true)
+  const [closingPhase, setClosingPhase] = useState(false)
+  const [addDialogOpen, setAddDialogOpen] = useState(false)
+
   // -------------------------------------------------------------------------
-  // Fetch
+  // Fetch — Deliverables
   // -------------------------------------------------------------------------
 
-  const fetchData = useCallback(async () => {
+  const fetchDeliverables = useCallback(async () => {
     try {
       const [resD, resM] = await Promise.all([
         fetch(`/api/projects/${projectId}/deliverables`),
@@ -433,13 +757,41 @@ export default function DeliverablesPage({
     } catch {
       toast.error('Impossible de charger les livrables')
     } finally {
-      setLoading(false)
+      setLoadingDeliverables(false)
     }
   }, [projectId])
 
+  // -------------------------------------------------------------------------
+  // Fetch — Feedback
+  // -------------------------------------------------------------------------
+
+  const fetchFeedback = useCallback(async (phase?: number) => {
+    try {
+      const targetPhase = phase ?? viewPhase
+      const res = await fetch(`/api/projects/${projectId}/feedback?phase=${targetPhase}`)
+      if (!res.ok) throw new Error()
+      const json = (await res.json()) as {
+        data: {
+          feedback: FeedbackItem[]
+          stats: FeedbackStats
+          current_phase: number
+        }
+      }
+      setFeedback(json.data.feedback)
+      setStats(json.data.stats)
+      setCurrentPhase(json.data.current_phase)
+      if (phase === undefined) setViewPhase(json.data.current_phase)
+    } catch {
+      toast.error('Impossible de charger les retours')
+    } finally {
+      setLoadingFeedback(false)
+    }
+  }, [projectId, viewPhase])
+
   useEffect(() => {
-    void fetchData()
-  }, [fetchData])
+    void fetchDeliverables()
+    void fetchFeedback()
+  }, [fetchDeliverables]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // -------------------------------------------------------------------------
   // Upload flow
@@ -448,7 +800,6 @@ export default function DeliverablesPage({
   async function uploadFile(file: File) {
     setUploading(true)
     try {
-      // 1. Obtenir la presigned URL
       const presignRes = await fetch(`/api/projects/${projectId}/deliverables/presign`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -463,7 +814,6 @@ export default function DeliverablesPage({
         data: { presign_url: string; s3_key: string }
       }
 
-      // 2. Upload vers S3
       const s3Res = await fetch(presignData.presign_url, {
         method: 'PUT',
         body: file,
@@ -471,7 +821,6 @@ export default function DeliverablesPage({
       })
       if (!s3Res.ok) throw new Error('Erreur lors de l\'upload')
 
-      // 3. Créer le livrable en base
       const createRes = await fetch(`/api/projects/${projectId}/deliverables`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -531,7 +880,7 @@ export default function DeliverablesPage({
   }
 
   // -------------------------------------------------------------------------
-  // Update
+  // Update deliverable
   // -------------------------------------------------------------------------
 
   async function handleUpdate(id: string, patch: Partial<Deliverable>) {
@@ -550,7 +899,7 @@ export default function DeliverablesPage({
   }
 
   // -------------------------------------------------------------------------
-  // Delete
+  // Delete deliverable
   // -------------------------------------------------------------------------
 
   async function handleDelete(id: string) {
@@ -566,7 +915,126 @@ export default function DeliverablesPage({
   }
 
   // -------------------------------------------------------------------------
-  // Render
+  // Quick status change on deliverable card
+  // -------------------------------------------------------------------------
+
+  async function handleQuickStatus(id: string, newStatus: DeliverableStatus) {
+    const res = await fetch(`/api/projects/${projectId}/deliverables/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: newStatus }),
+    })
+    if (!res.ok) { toast.error('Erreur lors de la mise à jour'); return }
+    const { data } = (await res.json()) as { data: Deliverable }
+    setDeliverables(prev => prev.map(d => (d.id === id ? data : d)))
+    toast.success(deliverableStatusLabel(newStatus))
+  }
+
+  // -------------------------------------------------------------------------
+  // Phase navigation
+  // -------------------------------------------------------------------------
+
+  async function navigatePhase(newPhase: number) {
+    if (newPhase < 1 || newPhase > currentPhase) return
+    setViewPhase(newPhase)
+    setLoadingFeedback(true)
+    await fetchFeedback(newPhase)
+  }
+
+  // -------------------------------------------------------------------------
+  // Close phase
+  // -------------------------------------------------------------------------
+
+  async function handleClosePhase() {
+    if (viewPhase !== currentPhase) return
+    setClosingPhase(true)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/feedback/phase`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ current_phase: currentPhase }),
+      })
+      if (!res.ok) throw new Error()
+      const json = (await res.json()) as { data: { new_phase: number } }
+      const newPhase = json.data.new_phase
+      setCurrentPhase(newPhase)
+      setViewPhase(newPhase)
+      setFeedback([])
+      setStats({ total: 0, pending: 0, in_progress: 0, treated: 0, questions: 0 })
+      toast.success(`Phase ${newPhase - 1} clôturée · Phase ${newPhase} ouverte`)
+    } catch {
+      toast.error('Erreur lors de la clôture de la phase')
+    } finally {
+      setClosingPhase(false)
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Add feedback
+  // -------------------------------------------------------------------------
+
+  async function handleAddFeedback(form: FeedbackFormData) {
+    const res = await fetch(`/api/projects/${projectId}/feedback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: form.title.trim(),
+        content: form.content.trim() || null,
+        type: form.type,
+        deliverable_id: form.deliverable_id || null,
+        phase: viewPhase,
+        source: 'freelance',
+      }),
+    })
+    if (!res.ok) throw new Error()
+    const { data } = (await res.json()) as { data: FeedbackItem }
+    setFeedback(prev => [data, ...prev])
+    setStats(s => ({
+      ...s,
+      total: s.total + 1,
+      pending: s.pending + 1,
+      questions: data.type === 'question' ? s.questions + 1 : s.questions,
+    }))
+    toast.success('Retour ajouté')
+  }
+
+  // -------------------------------------------------------------------------
+  // Status cycle
+  // -------------------------------------------------------------------------
+
+  async function handleStatusCycle(id: string, next: FeedbackStatus) {
+    const prev = feedback
+    const item = feedback.find(f => f.id === id)
+    if (!item) return
+
+    setFeedback(fs => fs.map(f => (f.id === id ? { ...f, status: next } : f)))
+
+    setStats(s => {
+      const updated = { ...s }
+      if (item.status === 'pending') updated.pending = Math.max(0, s.pending - 1)
+      if (item.status === 'in_progress') updated.in_progress = Math.max(0, s.in_progress - 1)
+      if (item.status === 'treated') updated.treated = Math.max(0, s.treated - 1)
+      if (next === 'pending') updated.pending += 1
+      if (next === 'in_progress') updated.in_progress += 1
+      if (next === 'treated') updated.treated += 1
+      return updated
+    })
+
+    try {
+      const res = await fetch(`/api/projects/${projectId}/feedback/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: next }),
+      })
+      if (!res.ok) throw new Error()
+    } catch {
+      toast.error('Erreur lors de la mise à jour')
+      setFeedback(prev)
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Render helpers
   // -------------------------------------------------------------------------
 
   function getMilestoneName(milestoneId: string | null): string | null {
@@ -574,8 +1042,22 @@ export default function DeliverablesPage({
     return milestones.find(m => m.id === milestoneId)?.title ?? null
   }
 
+  const isCurrentPhase = viewPhase === currentPhase
+
+  const deliverablesMins: DeliverableMin[] = deliverables.map(d => ({ id: d.id, name: d.name }))
+
+  // Deliverable stats
+  const totalDeliverables = deliverables.length
+  const validatedCount = deliverables.filter(d => d.status === 'validated').length
+  const pendingCount = deliverables.filter(d => d.status === 'pending').length
+  const revisionCount = deliverables.filter(d => d.status === 'revision_requested').length
+
+  // -------------------------------------------------------------------------
+  // Render
+  // -------------------------------------------------------------------------
+
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -588,138 +1070,434 @@ export default function DeliverablesPage({
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
-            <h1 className="text-2xl font-semibold">Livrables</h1>
-            <p className="text-sm text-muted-foreground">Fichiers et liens à livrer au client</p>
+            <h1 className="text-2xl font-bold tracking-tight">Livrables & Retours</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Partagez vos fichiers avec le client et gérez ses retours
+            </p>
           </div>
         </div>
-
-        <div className="flex items-center gap-2 shrink-0">
-          <Button
-            variant="ghost"
-            onClick={() => setLinkDialogOpen(true)}
-          >
-            <Link2 className="h-4 w-4 mr-2" />
-            Ajouter un lien
-          </Button>
-          <Button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
-          >
-            <Upload className="h-4 w-4 mr-2" />
-            {uploading ? 'Upload en cours…' : 'Uploader'}
-          </Button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            className="hidden"
-            onChange={e => handleFiles(e.target.files)}
-          />
-        </div>
       </div>
 
-      {/* Drop zone */}
-      <div
-        onDragOver={e => { e.preventDefault(); setDragOver(true) }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={handleDrop}
-        onClick={() => fileInputRef.current?.click()}
-        className={[
-          'border-2 border-dashed rounded-xl p-10 flex flex-col items-center justify-center gap-3 cursor-pointer transition-colors',
-          dragOver
-            ? 'border-primary bg-primary/5'
-            : 'border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/30',
-        ].join(' ')}
-      >
-        <FolderOpen className={`h-10 w-10 ${dragOver ? 'text-primary' : 'text-muted-foreground'}`} />
-        <div className="text-center">
-          <p className="text-sm font-medium">
-            {uploading ? 'Upload en cours…' : 'Glissez-déposez vos fichiers ici'}
-          </p>
-          <p className="text-xs text-muted-foreground mt-1">
-            ou cliquez pour parcourir
-          </p>
-        </div>
-      </div>
+      {/* Tabs */}
+      <Tabs defaultValue={defaultTab}>
+        <TabsList className="w-full sm:w-auto">
+          <TabsTrigger value="livrables" className="gap-2">
+            <FolderOpen className="h-4 w-4" />
+            Livrables
+            {totalDeliverables > 0 && (
+              <Badge variant="secondary" className="ml-1 text-xs py-0 px-1.5 h-4">
+                {totalDeliverables}
+              </Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="retours" className="gap-2">
+            <MessageSquare className="h-4 w-4" />
+            Retours & Questions
+            {stats.pending > 0 && (
+              <Badge className="ml-1 text-xs py-0 px-1.5 h-4 bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-100">
+                {stats.pending}
+              </Badge>
+            )}
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Grid */}
-      {loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[1, 2, 3, 4, 5, 6].map(i => (
-            <Skeleton key={i} className="h-36 rounded-xl" />
-          ))}
-        </div>
-      ) : deliverables.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-14 text-center">
-            <FolderOpen className="h-12 w-12 text-muted-foreground mb-4" />
-            <h2 className="text-lg font-medium mb-1">Aucun livrable</h2>
-            <p className="text-sm text-muted-foreground mb-6">
-              Uploadez des fichiers ou ajoutez des liens à livrer au client.
+        {/* ---------------------------------------------------------------- */}
+        {/* Tab — Livrables                                                   */}
+        {/* ---------------------------------------------------------------- */}
+        <TabsContent value="livrables" className="space-y-5 mt-6">
+
+          {/* Info callout */}
+          <div className="flex items-start gap-3 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
+            <Info className="h-4 w-4 text-blue-500 mt-0.5 shrink-0" />
+            <p className="text-sm text-blue-700 leading-relaxed">
+              Les livrables sont les fichiers ou liens que vous partagez avec votre client (maquettes, exports, documents finaux). Le client peut les valider ou demander des révisions.
             </p>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setLinkDialogOpen(true)}>
-                <Link2 className="h-4 w-4 mr-2" />
-                Ajouter un lien
-              </Button>
-              <Button onClick={() => fileInputRef.current?.click()}>
-                <Upload className="h-4 w-4 mr-2" />
-                Uploader
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {deliverables.map(deliverable => {
-            const milestoneName = getMilestoneName(deliverable.milestone_id)
-            return (
-              <button
-                key={deliverable.id}
-                onClick={() => { setSelectedDeliverable(deliverable); setDetailOpen(true) }}
-                className="text-left bg-white border rounded-xl p-4 space-y-3 hover:shadow-md transition-shadow hover:border-primary/30 group"
-              >
-                {/* Status badge */}
-                <div className="flex items-start justify-between gap-2">
-                  <StatusBadge status={deliverable.status} />
-                </div>
+          </div>
 
-                {/* Icon + name */}
-                <div className="flex items-start gap-2">
-                  <div className="mt-0.5 shrink-0">
-                    {deliverable.type === 'file'
-                      ? <FileText className="h-5 w-5 text-primary" />
-                      : <Link2 className="h-5 w-5 text-blue-500" />
-                    }
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">{deliverable.name}</p>
-                    {deliverable.description && (
-                      <p className="text-xs text-muted-foreground truncate mt-0.5">
-                        {deliverable.description}
-                      </p>
+          {/* Stats bar — only when there are deliverables */}
+          {!loadingDeliverables && totalDeliverables > 0 && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="rounded-xl border bg-white px-4 py-3 flex items-center gap-3">
+                <div className="h-8 w-8 rounded-lg bg-gray-100 flex items-center justify-center shrink-0">
+                  <LayersIcon className="h-4 w-4 text-gray-500" />
+                </div>
+                <div>
+                  <p className="text-lg font-bold leading-none">{totalDeliverables}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Total</p>
+                </div>
+              </div>
+              <div className="rounded-xl border bg-white px-4 py-3 flex items-center gap-3">
+                <div className="h-8 w-8 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0">
+                  <CheckCheck className="h-4 w-4 text-emerald-500" />
+                </div>
+                <div>
+                  <p className="text-lg font-bold leading-none text-emerald-600">{validatedCount}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Validés</p>
+                </div>
+              </div>
+              <div className="rounded-xl border bg-white px-4 py-3 flex items-center gap-3">
+                <div className="h-8 w-8 rounded-lg bg-gray-50 flex items-center justify-center shrink-0">
+                  <Clock className="h-4 w-4 text-gray-400" />
+                </div>
+                <div>
+                  <p className="text-lg font-bold leading-none text-gray-500">{pendingCount}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">En attente</p>
+                </div>
+              </div>
+              <div className="rounded-xl border bg-white px-4 py-3 flex items-center gap-3">
+                <div className="h-8 w-8 rounded-lg bg-orange-50 flex items-center justify-center shrink-0">
+                  <RotateCcw className="h-4 w-4 text-orange-400" />
+                </div>
+                <div>
+                  <p className="text-lg font-bold leading-none text-orange-600">{revisionCount}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Révisions</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="flex items-center gap-2 justify-end">
+            <Button
+              variant="outline"
+              onClick={() => setLinkDialogOpen(true)}
+            >
+              <Link2 className="h-4 w-4 mr-2" />
+              Ajouter un lien
+            </Button>
+            <Button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+            >
+              <Upload className="h-4 w-4 mr-2" />
+              {uploading ? 'Upload en cours…' : 'Uploader un fichier'}
+            </Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={e => handleFiles(e.target.files)}
+            />
+          </div>
+
+          {/* Drop zone */}
+          <div
+            onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={handleDrop}
+            onClick={() => fileInputRef.current?.click()}
+            className={[
+              'border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center gap-3 cursor-pointer transition-all',
+              dragOver
+                ? 'border-primary bg-primary/5 scale-[1.01]'
+                : 'border-muted-foreground/20 hover:border-primary/40 hover:bg-muted/20',
+            ].join(' ')}
+          >
+            <div className={[
+              'h-12 w-12 rounded-xl flex items-center justify-center transition-colors',
+              dragOver ? 'bg-primary/10' : 'bg-muted',
+            ].join(' ')}>
+              <Upload className={`h-5 w-5 ${dragOver ? 'text-primary' : 'text-muted-foreground'}`} />
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-medium">
+                {uploading ? 'Upload en cours…' : 'Glissez-déposez vos fichiers ici'}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                ou <span className="text-primary">cliquez pour parcourir</span>
+              </p>
+            </div>
+          </div>
+
+          {/* Grid */}
+          {loadingDeliverables ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[1, 2, 3, 4, 5, 6].map(i => (
+                <Skeleton key={i} className="h-44 rounded-xl" />
+              ))}
+            </div>
+          ) : deliverables.length === 0 ? (
+            <Card className="border-dashed">
+              <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+                <div className="h-16 w-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
+                  <FolderOpen className="h-8 w-8 text-muted-foreground" />
+                </div>
+                <h2 className="text-base font-semibold mb-1">Aucun livrable pour l'instant</h2>
+                <p className="text-sm text-muted-foreground mb-6 max-w-xs">
+                  Uploadez vos premiers fichiers ou ajoutez un lien (Figma, Google Drive, etc.) à partager avec votre client.
+                </p>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => setLinkDialogOpen(true)}>
+                    <Link2 className="h-4 w-4 mr-2" />
+                    Ajouter un lien
+                  </Button>
+                  <Button onClick={() => fileInputRef.current?.click()}>
+                    <Upload className="h-4 w-4 mr-2" />
+                    Uploader
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {deliverables.map(deliverable => {
+                const milestoneName = getMilestoneName(deliverable.milestone_id)
+                const isFile = deliverable.type === 'file'
+                return (
+                  <div
+                    key={deliverable.id}
+                    className={[
+                      'bg-white rounded-xl border overflow-hidden flex flex-col transition-shadow hover:shadow-md group',
+                      deliverableStatusBorderClass(deliverable.status),
+                    ].join(' ')}
+                  >
+                    {/* Card header */}
+                    <button
+                      onClick={() => { setSelectedDeliverable(deliverable); setDetailOpen(true) }}
+                      className="text-left flex-1 p-4 space-y-3"
+                    >
+                      {/* Type + Status row */}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className={[
+                          'h-8 w-8 rounded-lg flex items-center justify-center shrink-0',
+                          isFile ? 'bg-primary/10' : 'bg-blue-50',
+                        ].join(' ')}>
+                          {isFile
+                            ? <FileText className="h-4 w-4 text-primary" />
+                            : <Link2 className="h-4 w-4 text-blue-500" />
+                          }
+                        </div>
+                        <DeliverableStatusBadge status={deliverable.status} />
+                      </div>
+
+                      {/* Name + description */}
+                      <div className="space-y-0.5">
+                        <p className="text-sm font-semibold truncate leading-snug">{deliverable.name}</p>
+                        {deliverable.description && (
+                          <p className="text-xs text-muted-foreground truncate">
+                            {deliverable.description}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Meta */}
+                      <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground">
+                          {format(new Date(deliverable.created_at), 'd MMM yyyy', { locale: fr })}
+                          {deliverable.size_bytes ? ` · ${formatFileSize(deliverable.size_bytes)}` : ''}
+                        </p>
+                        {milestoneName && (
+                          <p className="text-xs text-primary flex items-center gap-1.5">
+                            <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary" />
+                            {milestoneName}
+                          </p>
+                        )}
+                      </div>
+                    </button>
+
+                    {/* Quick action footer */}
+                    {deliverable.status !== 'validated' && (
+                      <div className="border-t px-4 py-2.5 flex gap-2 bg-muted/20">
+                        <button
+                          onClick={() => handleQuickStatus(deliverable.id, 'validated')}
+                          className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg py-1.5 transition-colors"
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          Valider
+                        </button>
+                        {deliverable.status !== 'revision_requested' && (
+                          <button
+                            onClick={() => handleQuickStatus(deliverable.id, 'revision_requested')}
+                            className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-orange-700 bg-orange-50 hover:bg-orange-100 rounded-lg py-1.5 transition-colors"
+                          >
+                            <RotateCcw className="h-3.5 w-3.5" />
+                            Révision
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    {deliverable.status === 'validated' && (
+                      <div className="border-t px-4 py-2.5 bg-emerald-50/50">
+                        <p className="text-xs text-center text-emerald-600 font-medium flex items-center justify-center gap-1.5">
+                          <CheckCheck className="h-3.5 w-3.5" />
+                          Livrable validé
+                        </p>
+                      </div>
                     )}
                   </div>
-                </div>
+                )
+              })}
+            </div>
+          )}
+        </TabsContent>
 
-                {/* Footer */}
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">
-                    {format(new Date(deliverable.created_at), 'd MMM yyyy', { locale: fr })}
-                    {deliverable.size_bytes ? ` · ${formatFileSize(deliverable.size_bytes)}` : ''}
-                  </p>
-                  {milestoneName && (
-                    <p className="text-xs text-primary flex items-center gap-1">
-                      <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary" />
-                      {milestoneName}
-                    </p>
-                  )}
+        {/* ---------------------------------------------------------------- */}
+        {/* Tab — Retours & Questions                                          */}
+        {/* ---------------------------------------------------------------- */}
+        <TabsContent value="retours" className="space-y-5 mt-6">
+
+          {/* Info callout */}
+          <div className="flex items-start gap-3 rounded-xl border border-violet-100 bg-violet-50 px-4 py-3">
+            <Info className="h-4 w-4 text-violet-500 mt-0.5 shrink-0" />
+            <p className="text-sm text-violet-700 leading-relaxed">
+              Les retours regroupent les commentaires, demandes de modifications et questions du client sur votre travail. Chaque phase correspond à une itération — clôturez une phase pour en ouvrir une nouvelle.
+            </p>
+          </div>
+
+          {/* Phase selector + actions */}
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            {/* Phase navigation */}
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => navigatePhase(viewPhase - 1)}
+                disabled={viewPhase <= 1}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+
+              <div className={[
+                'flex items-center gap-2 rounded-lg border px-3 py-1.5',
+                isCurrentPhase
+                  ? 'bg-pink-50 border-pink-200'
+                  : 'bg-muted border-border',
+              ].join(' ')}>
+                <LayersIcon className={`h-3.5 w-3.5 ${isCurrentPhase ? 'text-pink-500' : 'text-muted-foreground'}`} />
+                <span className={`text-sm font-semibold ${isCurrentPhase ? 'text-pink-700' : 'text-muted-foreground'}`}>
+                  Phase {viewPhase}
+                </span>
+                {!isCurrentPhase && (
+                  <Lock className="h-3 w-3 text-muted-foreground" />
+                )}
+                {isCurrentPhase && (
+                  <span className="text-xs text-pink-500 font-normal">en cours</span>
+                )}
+              </div>
+
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => navigatePhase(viewPhase + 1)}
+                disabled={viewPhase >= currentPhase}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+
+              {currentPhase > 1 && (
+                <span className="text-xs text-muted-foreground">
+                  {currentPhase} phase{currentPhase > 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center gap-2">
+              {isCurrentPhase && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleClosePhase}
+                  disabled={closingPhase}
+                  className="border-orange-200 text-orange-700 hover:bg-orange-50 hover:text-orange-700"
+                >
+                  <Lock className="h-3.5 w-3.5 mr-1.5" />
+                  {closingPhase ? 'Clôture…' : 'Clôturer la phase'}
+                </Button>
+              )}
+              <Button onClick={() => setAddDialogOpen(true)} size="sm">
+                <Plus className="h-4 w-4 mr-1.5" />
+                Ajouter un retour
+              </Button>
+            </div>
+          </div>
+
+          {/* Stats bar */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="rounded-xl border bg-white px-4 py-3 flex items-center gap-3">
+              <div className="h-8 w-8 rounded-lg bg-gray-100 flex items-center justify-center shrink-0">
+                <MessageSquare className="h-4 w-4 text-gray-500" />
+              </div>
+              <div>
+                <p className="text-lg font-bold leading-none">{stats.total}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Total</p>
+              </div>
+            </div>
+            <div className="rounded-xl border bg-white px-4 py-3 flex items-center gap-3">
+              <div className="h-8 w-8 rounded-lg bg-gray-50 flex items-center justify-center shrink-0">
+                <Clock className="h-4 w-4 text-gray-400" />
+              </div>
+              <div>
+                <p className="text-lg font-bold leading-none text-gray-500">{stats.pending}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">À traiter</p>
+              </div>
+            </div>
+            <div className="rounded-xl border bg-white px-4 py-3 flex items-center gap-3">
+              <div className="h-8 w-8 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
+                <AlertCircle className="h-4 w-4 text-blue-400" />
+              </div>
+              <div>
+                <p className="text-lg font-bold leading-none text-blue-600">{stats.in_progress}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">En cours</p>
+              </div>
+            </div>
+            <div className="rounded-xl border bg-white px-4 py-3 flex items-center gap-3">
+              <div className="h-8 w-8 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0">
+                <CheckCheck className="h-4 w-4 text-emerald-500" />
+              </div>
+              <div>
+                <p className="text-lg font-bold leading-none text-emerald-600">{stats.treated}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Traités</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Feedback list */}
+          {loadingFeedback ? (
+            <div className="space-y-3">
+              {[1, 2, 3, 4].map(i => (
+                <Skeleton key={i} className="h-24 w-full rounded-xl" />
+              ))}
+            </div>
+          ) : feedback.length === 0 ? (
+            <Card className="border-dashed">
+              <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+                <div className="h-16 w-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
+                  <MessageSquare className="h-8 w-8 text-muted-foreground" />
                 </div>
-              </button>
-            )
-          })}
-        </div>
-      )}
+                <h2 className="text-base font-semibold mb-1">
+                  {isCurrentPhase ? 'Aucun retour pour cette phase' : 'Aucun retour enregistré'}
+                </h2>
+                <p className="text-sm text-muted-foreground mb-6 max-w-xs">
+                  {isCurrentPhase
+                    ? 'Ajoutez un retour manuellement ou attendez les retours via le portail client.'
+                    : 'Cette phase ne contient aucun retour.'}
+                </p>
+                {isCurrentPhase && (
+                  <Button onClick={() => setAddDialogOpen(true)}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Ajouter un retour
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-2">
+              {feedback.map(item => (
+                <FeedbackRow
+                  key={item.id}
+                  item={item}
+                  deliverables={deliverablesMins}
+                  onStatusCycle={handleStatusCycle}
+                />
+              ))}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
 
       {/* Detail Dialog */}
       <DetailDialog
@@ -737,6 +1515,14 @@ export default function DeliverablesPage({
         milestones={milestones}
         onClose={() => setLinkDialogOpen(false)}
         onAdd={handleAddLink}
+      />
+
+      {/* Add Feedback Dialog */}
+      <AddFeedbackDialog
+        open={addDialogOpen}
+        deliverables={deliverablesMins}
+        onClose={() => setAddDialogOpen(false)}
+        onAdd={handleAddFeedback}
       />
     </div>
   )

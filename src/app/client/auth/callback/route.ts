@@ -10,9 +10,18 @@ export async function GET(request: NextRequest) {
     const supabase = await createClient()
     const { error } = await supabase.auth.exchangeCodeForSession(code)
     if (!error) {
-      if (project) {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (user?.email) {
+      const { data: { user } } = await supabase.auth.getUser()
+
+      if (user?.email) {
+        // Lier le user auth à l'enregistrement clients (clé manquante au premier login)
+        await supabase
+          .from('clients')
+          .update({ user_id: user.id })
+          .ilike('email', user.email)
+          .is('user_id', null)
+
+        // Marquer le portail comme accepté
+        if (project) {
           await supabase
             .from('client_portals')
             .update({ accepted_at: new Date().toISOString() })
@@ -21,6 +30,7 @@ export async function GET(request: NextRequest) {
             .is('accepted_at', null)
         }
       }
+
       const redirectTo = project ? `/client/projects/${project}` : '/client'
       return NextResponse.redirect(`${origin}${redirectTo}`)
     }

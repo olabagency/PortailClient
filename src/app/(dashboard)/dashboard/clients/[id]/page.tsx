@@ -7,10 +7,18 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Separator } from '@/components/ui/separator'
-import { ClientModal } from '@/components/dashboard/ClientModal'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   ArrowLeft, Pencil, Mail, Phone, Building2, FolderKanban, Plus, Calendar,
-  Globe, CreditCard, MapPin, Receipt,
+  Globe, CreditCard, MapPin, Receipt, ChevronRight, X, Check,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
@@ -34,6 +42,15 @@ const clientTypeVariants: Record<ClientType, 'default' | 'secondary' | 'outline'
   association: 'secondary',
   other: 'outline',
 }
+
+const clientTypeOptions: { value: ClientType; label: string }[] = [
+  { value: 'individual',   label: 'Particulier' },
+  { value: 'company',      label: 'Entreprise' },
+  { value: 'agency',       label: 'Agence' },
+  { value: 'startup',      label: 'Startup' },
+  { value: 'association',  label: 'Association' },
+  { value: 'other',        label: 'Autre' },
+]
 
 interface Client {
   id: string
@@ -59,27 +76,102 @@ interface Project {
   id: string
   name: string
   status: string
+  color: string | null
   public_id: string
   created_at: string
 }
 
-const statusLabels: Record<string, { label: string; variant: 'default' | 'secondary' | 'outline' | 'destructive' }> = {
-  active: { label: 'Actif', variant: 'default' },
-  paused: { label: 'En pause', variant: 'secondary' },
-  completed: { label: 'Terminé', variant: 'outline' },
-  archived: { label: 'Archivé', variant: 'secondary' },
+// Form state shapes — all strings so inputs stay controlled
+interface CoordonneesForm {
+  name: string
+  email: string
+  phone: string
+  company: string
+  website: string
+  client_type: ClientType
 }
 
-function nullToUndefined<T extends string>(v: T | null | undefined): T | undefined {
-  return v ?? undefined
+interface FacturationForm {
+  billing_name: string
+  billing_email: string
+  vat_number: string
+  address: string
+  city: string
+  zip_code: string
+  country: string
+}
+
+const statusLabels: Record<string, { label: string; variant: 'default' | 'secondary' | 'outline' | 'destructive'; dot: string }> = {
+  active:    { label: 'Actif',    variant: 'default',   dot: 'bg-emerald-500' },
+  paused:    { label: 'En pause', variant: 'secondary', dot: 'bg-amber-400' },
+  completed: { label: 'Terminé',  variant: 'outline',   dot: 'bg-gray-400' },
+  archived:  { label: 'Archivé',  variant: 'secondary', dot: 'bg-gray-300' },
+}
+
+function getInitials(name: string): string {
+  return name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
+}
+
+function getAvatarColor(name: string): string {
+  const colors = [
+    'bg-primary/15 text-primary',
+    'bg-blue-100 text-blue-700',
+    'bg-emerald-100 text-emerald-700',
+    'bg-violet-100 text-violet-700',
+    'bg-amber-100 text-amber-700',
+    'bg-rose-100 text-rose-700',
+    'bg-teal-100 text-teal-700',
+  ]
+  let hash = 0
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash)
+  return colors[Math.abs(hash) % colors.length]
+}
+
+function clientToCoordonneesForm(client: Client): CoordonneesForm {
+  return {
+    name:        client.name,
+    email:       client.email ?? '',
+    phone:       client.phone ?? '',
+    company:     client.company ?? '',
+    website:     client.website ?? '',
+    client_type: client.client_type ?? 'company',
+  }
+}
+
+function clientToFacturationForm(client: Client): FacturationForm {
+  return {
+    billing_name:  client.billing_name ?? '',
+    billing_email: client.billing_email ?? '',
+    vat_number:    client.vat_number ?? '',
+    address:       client.address ?? '',
+    city:          client.city ?? '',
+    zip_code:      client.zip_code ?? '',
+    country:       client.country ?? 'France',
+  }
 }
 
 export default function ClientDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
-  const [client, setClient] = useState<Client | null>(null)
+
+  const [client, setClient]   = useState<Client | null>(null)
   const [loading, setLoading] = useState(true)
-  const [editOpen, setEditOpen] = useState(false)
+
+  // Edit mode flags
+  const [editingCoordonnees, setEditingCoordonnees] = useState(false)
+  const [editingFacturation, setEditingFacturation] = useState(false)
+
+  // Form state
+  const [coordonneesForm, setCoordonneesForm] = useState<CoordonneesForm | null>(null)
+  const [facturationForm, setFacturationForm] = useState<FacturationForm | null>(null)
+
+  // Saving state
+  const [savingCoordonnees, setSavingCoordonnees] = useState(false)
+  const [savingFacturation, setSavingFacturation] = useState(false)
+
+  // Error state
+  const [errorCoordonnees, setErrorCoordonnees] = useState<string | null>(null)
+  const [errorFacturation, setErrorFacturation] = useState<string | null>(null)
 
   useEffect(() => {
     fetch(`/api/clients/${id}`)
@@ -88,12 +180,94 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
       .catch(() => setLoading(false))
   }, [id])
 
+  // --- Handlers: Coordonnées ---
+
+  const startEditCoordonnees = () => {
+    if (!client) return
+    setCoordonneesForm(clientToCoordonneesForm(client))
+    setErrorCoordonnees(null)
+    setEditingCoordonnees(true)
+  }
+
+  const cancelEditCoordonnees = () => {
+    setEditingCoordonnees(false)
+    setCoordonneesForm(null)
+    setErrorCoordonnees(null)
+  }
+
+  const saveCoordonnees = async () => {
+    if (!client || !coordonneesForm) return
+    setSavingCoordonnees(true)
+    setErrorCoordonnees(null)
+    try {
+      const res = await fetch(`/api/clients/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(coordonneesForm),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        setErrorCoordonnees(json.error ?? 'Une erreur est survenue.')
+        return
+      }
+      setClient(prev => prev ? { ...prev, ...json.data } : prev)
+      setEditingCoordonnees(false)
+      setCoordonneesForm(null)
+    } catch {
+      setErrorCoordonnees('Erreur réseau. Veuillez réessayer.')
+    } finally {
+      setSavingCoordonnees(false)
+    }
+  }
+
+  // --- Handlers: Facturation ---
+
+  const startEditFacturation = () => {
+    if (!client) return
+    setFacturationForm(clientToFacturationForm(client))
+    setErrorFacturation(null)
+    setEditingFacturation(true)
+  }
+
+  const cancelEditFacturation = () => {
+    setEditingFacturation(false)
+    setFacturationForm(null)
+    setErrorFacturation(null)
+  }
+
+  const saveFacturation = async () => {
+    if (!client || !facturationForm) return
+    setSavingFacturation(true)
+    setErrorFacturation(null)
+    try {
+      const res = await fetch(`/api/clients/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(facturationForm),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        setErrorFacturation(json.error ?? 'Une erreur est survenue.')
+        return
+      }
+      setClient(prev => prev ? { ...prev, ...json.data } : prev)
+      setEditingFacturation(false)
+      setFacturationForm(null)
+    } catch {
+      setErrorFacturation('Erreur réseau. Veuillez réessayer.')
+    } finally {
+      setSavingFacturation(false)
+    }
+  }
+
+  // --- Loading / Not found ---
+
   if (loading) {
     return (
-      <div className="space-y-6 max-w-3xl">
+      <div className="space-y-6 max-w-4xl">
         <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-40 rounded-lg" />
-        <Skeleton className="h-32 rounded-lg" />
+        <Skeleton className="h-40 rounded-xl" />
+        <Skeleton className="h-32 rounded-xl" />
       </div>
     )
   }
@@ -109,131 +283,355 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
     )
   }
 
+  // Derived display values (always from latest client state)
   const clientType = client.client_type ?? 'company'
-  const hasBilling = !!(client.billing_name || client.billing_email || client.vat_number || client.address || client.city)
-
   const billingAddress = [
     client.address,
     [client.zip_code, client.city].filter(Boolean).join(' '),
-    client.country !== 'France' ? client.country : null,
+    client.country && client.country !== 'France' ? client.country : null,
   ].filter(Boolean).join(', ')
 
+  const initials    = getInitials(client.name)
+  const avatarClass = getAvatarColor(client.name)
+
   return (
-    <div className="space-y-6 max-w-3xl">
-      {/* En-tête */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => router.back()}>
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-2xl font-bold">{client.name}</h1>
-              <Badge variant={clientTypeVariants[clientType]}>
-                {clientTypeLabels[clientType]}
-              </Badge>
+    <div className="space-y-5 max-w-4xl">
+      {/* Breadcrumb */}
+      <button
+        onClick={() => router.back()}
+        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Retour aux clients
+      </button>
+
+      {/* Hero */}
+      <div className="bg-white rounded-xl border border-border overflow-hidden shadow-sm">
+        <div className="h-1.5 w-full bg-primary/20" />
+        <div className="px-6 py-5 flex items-start gap-4 flex-wrap">
+          <div className={`h-14 w-14 rounded-full flex items-center justify-center text-xl font-bold shrink-0 ${avatarClass}`}>
+            {initials}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap mb-0.5">
+              <h1 className="text-2xl font-bold tracking-tight">{client.name}</h1>
+              <Badge variant={clientTypeVariants[clientType]}>{clientTypeLabels[clientType]}</Badge>
             </div>
-            {client.company && (
-              <p className="text-sm text-muted-foreground">{client.company}</p>
-            )}
+            <div className="flex items-center gap-3 flex-wrap text-sm text-muted-foreground">
+              {client.company && (
+                <span className="flex items-center gap-1">
+                  <Building2 className="h-3.5 w-3.5" />
+                  {client.company}
+                </span>
+              )}
+              {client.email && (
+                <a href={`mailto:${client.email}`} className="flex items-center gap-1 hover:text-primary transition-colors">
+                  <Mail className="h-3.5 w-3.5" />
+                  {client.email}
+                </a>
+              )}
+              <span className="flex items-center gap-1">
+                <Calendar className="h-3.5 w-3.5" />
+                Client depuis {format(new Date(client.created_at), 'MMM yyyy', { locale: fr })}
+              </span>
+            </div>
           </div>
         </div>
-        <Button variant="outline" onClick={() => setEditOpen(true)}>
-          <Pencil className="h-4 w-4 mr-2" />
-          Modifier
-        </Button>
       </div>
 
-      {/* Coordonnées */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Coordonnées</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {client.email && (
-            <div className="flex items-center gap-2 text-sm">
-              <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
-              <a href={`mailto:${client.email}`} className="hover:underline text-primary">{client.email}</a>
-            </div>
-          )}
-          {client.phone && (
-            <div className="flex items-center gap-2 text-sm">
-              <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
-              <a href={`tel:${client.phone}`} className="hover:underline">{client.phone}</a>
-            </div>
-          )}
-          {client.company && (
-            <div className="flex items-center gap-2 text-sm">
-              <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
-              <span>{client.company}</span>
-            </div>
-          )}
-          {client.website && (
-            <div className="flex items-center gap-2 text-sm">
-              <Globe className="h-4 w-4 text-muted-foreground shrink-0" />
-              <a href={client.website} target="_blank" rel="noopener noreferrer" className="hover:underline text-primary truncate">
-                {client.website.replace(/^https?:\/\//, '')}
-              </a>
-            </div>
-          )}
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Calendar className="h-4 w-4 shrink-0" />
-            <span>Client depuis le {format(new Date(client.created_at), 'd MMMM yyyy', { locale: fr })}</span>
+      {/* ── Coordonnées ── */}
+      <Card className="bg-white">
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+              Coordonnées
+            </CardTitle>
+            {!editingCoordonnees && (
+              <button
+                onClick={startEditCoordonnees}
+                className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                aria-label="Modifier les coordonnées"
+              >
+                <Pencil className="h-4 w-4" />
+              </button>
+            )}
           </div>
+        </CardHeader>
 
-          {client.notes && (
-            <>
-              <Separator />
-              <p className="text-sm text-muted-foreground whitespace-pre-wrap">{client.notes}</p>
-            </>
+        <CardContent>
+          {editingCoordonnees && coordonneesForm ? (
+            /* ── Edit mode ── */
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="coord-name">Nom *</Label>
+                  <Input
+                    id="coord-name"
+                    value={coordonneesForm.name}
+                    onChange={e => setCoordonneesForm(f => f ? { ...f, name: e.target.value } : f)}
+                    placeholder="Nom du client"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="coord-email">Email</Label>
+                  <Input
+                    id="coord-email"
+                    type="email"
+                    value={coordonneesForm.email}
+                    onChange={e => setCoordonneesForm(f => f ? { ...f, email: e.target.value } : f)}
+                    placeholder="email@exemple.com"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="coord-phone">Téléphone</Label>
+                  <Input
+                    id="coord-phone"
+                    value={coordonneesForm.phone}
+                    onChange={e => setCoordonneesForm(f => f ? { ...f, phone: e.target.value } : f)}
+                    placeholder="+33 6 00 00 00 00"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="coord-company">Société</Label>
+                  <Input
+                    id="coord-company"
+                    value={coordonneesForm.company}
+                    onChange={e => setCoordonneesForm(f => f ? { ...f, company: e.target.value } : f)}
+                    placeholder="Nom de la société"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="coord-website">Site web</Label>
+                  <Input
+                    id="coord-website"
+                    value={coordonneesForm.website}
+                    onChange={e => setCoordonneesForm(f => f ? { ...f, website: e.target.value } : f)}
+                    placeholder="https://exemple.com"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="coord-type">Type de client</Label>
+                  <Select
+                    value={coordonneesForm.client_type}
+                    onValueChange={val => setCoordonneesForm(f => f ? { ...f, client_type: val as ClientType } : f)}
+                  >
+                    <SelectTrigger id="coord-type">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clientTypeOptions.map(opt => (
+                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {errorCoordonnees && (
+                <p className="text-sm text-destructive">{errorCoordonnees}</p>
+              )}
+
+              <div className="flex items-center gap-2 pt-1">
+                <Button size="sm" onClick={saveCoordonnees} disabled={savingCoordonnees || !coordonneesForm.name.trim()}>
+                  <Check className="h-3.5 w-3.5 mr-1.5" />
+                  {savingCoordonnees ? 'Enregistrement…' : 'Sauvegarder'}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={cancelEditCoordonnees} disabled={savingCoordonnees}>
+                  <X className="h-3.5 w-3.5 mr-1" />
+                  Annuler
+                </Button>
+              </div>
+            </div>
+          ) : (
+            /* ── Read mode ── */
+            <div className="space-y-2.5">
+              {client.email ? (
+                <div className="flex items-center gap-2.5 text-sm">
+                  <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <a href={`mailto:${client.email}`} className="hover:underline text-primary">{client.email}</a>
+                </div>
+              ) : null}
+              {client.phone ? (
+                <div className="flex items-center gap-2.5 text-sm">
+                  <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <a href={`tel:${client.phone}`} className="hover:underline">{client.phone}</a>
+                </div>
+              ) : null}
+              {client.company ? (
+                <div className="flex items-center gap-2.5 text-sm">
+                  <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span>{client.company}</span>
+                </div>
+              ) : null}
+              {client.website ? (
+                <div className="flex items-center gap-2.5 text-sm">
+                  <Globe className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <a href={client.website} target="_blank" rel="noopener noreferrer" className="hover:underline text-primary truncate">
+                    {client.website.replace(/^https?:\/\//, '')}
+                  </a>
+                </div>
+              ) : null}
+              {!client.email && !client.phone && !client.company && !client.website && (
+                <p className="text-sm text-muted-foreground italic">Aucune coordonnée renseignée.</p>
+              )}
+              {client.notes && (
+                <>
+                  <Separator />
+                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">{client.notes}</p>
+                </>
+              )}
+            </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Facturation */}
-      {hasBilling && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Receipt className="h-4 w-4 text-muted-foreground" />
+      {/* ── Facturation ── */}
+      <Card className="bg-white">
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+              <Receipt className="h-4 w-4" />
               Facturation
             </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {client.billing_name && (
-              <div className="flex items-center gap-2 text-sm">
-                <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
-                <span className="font-medium">{client.billing_name}</span>
-              </div>
+            {!editingFacturation && (
+              <button
+                onClick={startEditFacturation}
+                className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                aria-label="Modifier les informations de facturation"
+              >
+                <Pencil className="h-4 w-4" />
+              </button>
             )}
-            {client.billing_email && (
-              <div className="flex items-center gap-2 text-sm">
-                <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
-                <a href={`mailto:${client.billing_email}`} className="hover:underline text-primary">
-                  {client.billing_email}
-                </a>
-              </div>
-            )}
-            {client.vat_number && (
-              <div className="flex items-center gap-2 text-sm">
-                <CreditCard className="h-4 w-4 text-muted-foreground shrink-0" />
-                <span className="font-mono text-xs bg-muted px-2 py-0.5 rounded">{client.vat_number}</span>
-              </div>
-            )}
-            {billingAddress && (
-              <div className="flex items-start gap-2 text-sm">
-                <MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                <span className="text-muted-foreground">{billingAddress}</span>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
+          </div>
+        </CardHeader>
 
-      {/* Projets */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">
+        <CardContent>
+          {editingFacturation && facturationForm ? (
+            /* ── Edit mode ── */
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="fact-billing-name">Nom de facturation</Label>
+                  <Input
+                    id="fact-billing-name"
+                    value={facturationForm.billing_name}
+                    onChange={e => setFacturationForm(f => f ? { ...f, billing_name: e.target.value } : f)}
+                    placeholder="Raison sociale ou nom complet"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="fact-billing-email">Email de facturation</Label>
+                  <Input
+                    id="fact-billing-email"
+                    type="email"
+                    value={facturationForm.billing_email}
+                    onChange={e => setFacturationForm(f => f ? { ...f, billing_email: e.target.value } : f)}
+                    placeholder="facturation@exemple.com"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="fact-vat">Numéro de TVA</Label>
+                  <Input
+                    id="fact-vat"
+                    value={facturationForm.vat_number}
+                    onChange={e => setFacturationForm(f => f ? { ...f, vat_number: e.target.value } : f)}
+                    placeholder="FR00000000000"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="fact-address">Adresse</Label>
+                  <Input
+                    id="fact-address"
+                    value={facturationForm.address}
+                    onChange={e => setFacturationForm(f => f ? { ...f, address: e.target.value } : f)}
+                    placeholder="1 rue de la Paix"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="fact-city">Ville</Label>
+                  <Input
+                    id="fact-city"
+                    value={facturationForm.city}
+                    onChange={e => setFacturationForm(f => f ? { ...f, city: e.target.value } : f)}
+                    placeholder="Paris"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="fact-zip">Code postal</Label>
+                  <Input
+                    id="fact-zip"
+                    value={facturationForm.zip_code}
+                    onChange={e => setFacturationForm(f => f ? { ...f, zip_code: e.target.value } : f)}
+                    placeholder="75001"
+                  />
+                </div>
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label htmlFor="fact-country">Pays</Label>
+                  <Input
+                    id="fact-country"
+                    value={facturationForm.country}
+                    onChange={e => setFacturationForm(f => f ? { ...f, country: e.target.value } : f)}
+                    placeholder="France"
+                  />
+                </div>
+              </div>
+
+              {errorFacturation && (
+                <p className="text-sm text-destructive">{errorFacturation}</p>
+              )}
+
+              <div className="flex items-center gap-2 pt-1">
+                <Button size="sm" onClick={saveFacturation} disabled={savingFacturation}>
+                  <Check className="h-3.5 w-3.5 mr-1.5" />
+                  {savingFacturation ? 'Enregistrement…' : 'Sauvegarder'}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={cancelEditFacturation} disabled={savingFacturation}>
+                  <X className="h-3.5 w-3.5 mr-1" />
+                  Annuler
+                </Button>
+              </div>
+            </div>
+          ) : (
+            /* ── Read mode ── */
+            <div className="space-y-2.5">
+              {client.billing_name ? (
+                <div className="flex items-center gap-2.5 text-sm">
+                  <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span className="font-medium">{client.billing_name}</span>
+                </div>
+              ) : null}
+              {client.billing_email ? (
+                <div className="flex items-center gap-2.5 text-sm">
+                  <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <a href={`mailto:${client.billing_email}`} className="hover:underline text-primary">
+                    {client.billing_email}
+                  </a>
+                </div>
+              ) : null}
+              {client.vat_number ? (
+                <div className="flex items-center gap-2.5 text-sm">
+                  <CreditCard className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span className="font-mono text-xs bg-muted px-2 py-0.5 rounded">{client.vat_number}</span>
+                </div>
+              ) : null}
+              {billingAddress ? (
+                <div className="flex items-start gap-2.5 text-sm">
+                  <MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                  <span className="text-muted-foreground">{billingAddress}</span>
+                </div>
+              ) : null}
+              {!client.billing_name && !client.billing_email && !client.vat_number && !billingAddress && (
+                <p className="text-sm text-muted-foreground italic">Aucune information de facturation renseignée.</p>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── Projets (read-only) ── */}
+      <Card className="bg-white">
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
             Projets ({client.projects?.length ?? 0})
           </CardTitle>
           <Button
@@ -241,30 +639,46 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
             variant="outline"
             onClick={() => router.push(`/dashboard/projects/new?client=${client.id}`)}
           >
-            <Plus className="h-4 w-4 mr-1" />
+            <Plus className="h-3.5 w-3.5 mr-1" />
             Nouveau projet
           </Button>
         </CardHeader>
         <CardContent>
           {!client.projects?.length ? (
-            <p className="text-sm text-muted-foreground text-center py-6">
-              Aucun projet pour ce client.
-            </p>
+            <div className="flex flex-col items-center justify-center py-10 text-center">
+              <FolderKanban className="h-8 w-8 text-muted-foreground/40 mb-2" />
+              <p className="text-sm text-muted-foreground">Aucun projet pour ce client.</p>
+              <Button
+                size="sm"
+                variant="link"
+                className="mt-1"
+                onClick={() => router.push(`/dashboard/projects/new?client=${client.id}`)}
+              >
+                Créer un projet
+              </Button>
+            </div>
           ) : (
             <div className="space-y-2">
               {client.projects.map((project) => {
-                const status = statusLabels[project.status] ?? { label: project.status, variant: 'secondary' as const }
+                const status = statusLabels[project.status] ?? { label: project.status, variant: 'secondary' as const, dot: 'bg-gray-400' }
                 return (
                   <div
                     key={project.id}
-                    className="flex items-center justify-between p-3 rounded-md border hover:bg-accent cursor-pointer transition-colors"
+                    className="group flex items-center gap-3 p-3 rounded-lg border border-border hover:border-primary/20 hover:bg-accent/30 cursor-pointer transition-all overflow-hidden"
                     onClick={() => router.push(`/dashboard/projects/${project.id}`)}
                   >
-                    <div className="flex items-center gap-2">
-                      <FolderKanban className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm font-medium">{project.name}</span>
+                    <div
+                      className="w-1 h-8 rounded-full shrink-0"
+                      style={{ backgroundColor: project.color ?? '#E8553A' }}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium group-hover:text-primary transition-colors truncate">{project.name}</p>
                     </div>
-                    <Badge variant={status.variant}>{status.label}</Badge>
+                    <Badge variant={status.variant} className="flex items-center gap-1 text-xs shrink-0">
+                      <span className={`h-1.5 w-1.5 rounded-full ${status.dot}`} />
+                      {status.label}
+                    </Badge>
+                    <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                   </div>
                 )
               })}
@@ -272,32 +686,6 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
           )}
         </CardContent>
       </Card>
-
-      <ClientModal
-        open={editOpen}
-        onClose={() => setEditOpen(false)}
-        onSuccess={(updated) => {
-          setClient(prev => prev ? { ...prev, ...updated } : prev)
-          setEditOpen(false)
-        }}
-        initialData={client ? {
-          ...client,
-          email: nullToUndefined(client.email),
-          phone: nullToUndefined(client.phone),
-          company: nullToUndefined(client.company),
-          notes: nullToUndefined(client.notes),
-          website: nullToUndefined(client.website),
-          client_type: client.client_type ?? 'company',
-          billing_name: nullToUndefined(client.billing_name),
-          billing_email: nullToUndefined(client.billing_email),
-          vat_number: nullToUndefined(client.vat_number),
-          address: nullToUndefined(client.address),
-          city: nullToUndefined(client.city),
-          zip_code: nullToUndefined(client.zip_code),
-          country: client.country ?? 'France',
-        } : undefined}
-        mode="edit"
-      />
     </div>
   )
 }

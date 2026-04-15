@@ -41,11 +41,28 @@ export default async function ClientDashboardPage() {
   const { data: { user } } = await supabase.auth.getUser()
 
   // Chercher le client lié à cet user
-  const { data: client } = await supabase
+  let { data: client } = await supabase
     .from('clients')
     .select('id, name')
     .eq('user_id', user!.id)
     .single()
+
+  // Fallback : si pas trouvé par user_id, chercher par email et lier
+  if (!client && user!.email) {
+    const { data: clientByEmail } = await supabase
+      .from('clients')
+      .select('id, name')
+      .ilike('email', user!.email)
+      .single()
+
+    if (clientByEmail) {
+      await supabase
+        .from('clients')
+        .update({ user_id: user!.id })
+        .eq('id', clientByEmail.id)
+      client = clientByEmail
+    }
+  }
 
   if (!client) {
     return (
@@ -93,40 +110,44 @@ export default async function ClientDashboardPage() {
 
             return (
               <Link key={project.id} href={`/client/projects/${project.id}`}>
-                <Card className="hover:shadow-md transition-shadow cursor-pointer">
-                  <CardContent className="p-5">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          {project.color && (
-                            <div
-                              className="h-2.5 w-2.5 rounded-full shrink-0"
-                              style={{ backgroundColor: project.color }}
-                            />
+                <Card className="hover:shadow-md transition-all group overflow-hidden">
+                  <CardContent className="p-0 flex items-stretch">
+                    {/* Left color accent */}
+                    <div
+                      className="w-1.5 shrink-0 rounded-l-lg"
+                      style={{ backgroundColor: project.color ?? '#E8553A' }}
+                    />
+                    <div className="flex-1 p-5">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h2 className="font-semibold text-gray-900 truncate group-hover:text-primary transition-colors">{project.name}</h2>
+                            <Badge variant={statusInfo.variant} className="shrink-0 text-xs">
+                              {statusInfo.label}
+                            </Badge>
+                          </div>
+                          {project.description && (
+                            <p className="text-sm text-gray-500 truncate mb-3">{project.description}</p>
                           )}
-                          <h2 className="font-semibold text-gray-900 truncate">{project.name}</h2>
-                          <Badge variant={statusInfo.variant} className="shrink-0 text-xs">
-                            {statusInfo.label}
-                          </Badge>
-                        </div>
-                        {project.description && (
-                          <p className="text-sm text-gray-500 truncate">{project.description}</p>
-                        )}
-                        {/* Barre de progression */}
-                        <div className="mt-3">
-                          <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
-                            <span>Progression</span>
-                            <span>{progress}%</span>
-                          </div>
-                          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-primary rounded-full transition-all"
-                              style={{ width: `${progress}%` }}
-                            />
+                          {/* Progress bar */}
+                          <div>
+                            <div className="flex items-center justify-between text-xs text-gray-400 mb-1.5">
+                              <span>Progression</span>
+                              <span className="font-medium text-gray-600">{progress}%</span>
+                            </div>
+                            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                              <div
+                                className="h-full rounded-full transition-all"
+                                style={{
+                                  width: `${progress}%`,
+                                  background: progress === 100 ? '#22c55e' : 'linear-gradient(to right, #E8553A, #f97316)',
+                                }}
+                              />
+                            </div>
                           </div>
                         </div>
+                        <ArrowRight className="h-4 w-4 text-gray-300 shrink-0 mt-1 group-hover:text-primary transition-colors" />
                       </div>
-                      <ArrowRight className="h-5 w-5 text-gray-300 shrink-0 mt-0.5" />
                     </div>
                   </CardContent>
                 </Card>

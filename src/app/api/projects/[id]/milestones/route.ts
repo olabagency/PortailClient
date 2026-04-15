@@ -7,8 +7,13 @@ const milestoneCreateSchema = z.object({
   description: z.string().max(1000).optional().nullable(),
   status: z.enum(['pending', 'in_progress', 'completed']).optional().default('pending'),
   due_date: z.string().optional().nullable(),
+  start_date: z.string().optional().nullable(),
   order_index: z.number().int().min(0).optional(),
   visible_to_client: z.boolean().optional().default(true),
+  priority: z.enum(['normal', 'high', 'urgent']).optional().default('normal'),
+  tags: z.array(z.string().max(50)).optional().default([]),
+  assigned_to: z.string().max(100).optional().nullable(),
+  completion_note: z.string().max(500).optional().nullable(),
 })
 
 // GET /api/projects/[id]/milestones
@@ -22,7 +27,6 @@ export async function GET(
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
 
-    // Vérifier ownership
     const { data: project } = await supabase
       .from('projects')
       .select('id')
@@ -57,7 +61,6 @@ export async function POST(
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
 
-    // Vérifier ownership
     const { data: project } = await supabase
       .from('projects')
       .select('id')
@@ -73,7 +76,6 @@ export async function POST(
       return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
     }
 
-    // Si pas d'order_index fourni, calculer le prochain
     let orderIndex = parsed.data.order_index
     if (orderIndex === undefined) {
       const { data: last } = await supabase
@@ -94,8 +96,13 @@ export async function POST(
         description: parsed.data.description ?? null,
         status: parsed.data.status,
         due_date: parsed.data.due_date ?? null,
+        start_date: parsed.data.start_date ?? null,
         order_index: orderIndex,
         visible_to_client: parsed.data.visible_to_client,
+        priority: parsed.data.priority,
+        tags: parsed.data.tags ?? [],
+        assigned_to: parsed.data.assigned_to ?? null,
+        completion_note: parsed.data.completion_note ?? null,
       })
       .select()
       .single()

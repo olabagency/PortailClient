@@ -1,0 +1,94 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import { z } from 'zod'
+
+const meetingUpdateSchema = z.object({
+  title: z.string().min(1).max(200).optional(),
+  scheduled_at: z.string().optional(),
+  duration_min: z.number().int().min(1).optional(),
+  location: z.string().max(300).optional().nullable(),
+  meeting_link: z.string().url('Lien invalide').optional().nullable().or(z.literal('')),
+  notes: z.string().optional().nullable(),
+  summary: z.string().optional().nullable(),
+  attendees: z.array(z.string()).optional(),
+})
+
+async function checkOwnership(supabase: Awaited<ReturnType<typeof createClient>>, projectId: string, userId: string) {
+  const { data, error } = await supabase
+    .from('projects')
+    .select('id')
+    .eq('id', projectId)
+    .eq('user_id', userId)
+    .single()
+  return !error && !!data
+}
+
+// PUT /api/projects/[id]/meetings/[meetingId]
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string; meetingId: string }> },
+) {
+  try {
+    const { id, meetingId } = await params
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+
+    const owned = await checkOwnership(supabase, id, user.id)
+    if (!owned) return NextResponse.json({ error: 'Projet introuvable' }, { status: 404 })
+
+    const body = await request.json()
+    const parsed = meetingUpdateSchema.safeParse(body)
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
+    }
+
+    const updatePayload: Record<string, unknown> = { ...parsed.data, updated_at: new Date().toISOString() }
+    if ('meeting_link' in updatePayload && updatePayload.meeting_link === '') {
+      updatePayload.meeting_link = null
+    }
+
+    const { data, error } = await supabase
+      .from('project_meetings')
+      .update(updatePayload)
+      .eq('id', meetingId)
+      .eq('project_id', id)
+      .select('*')
+      .single()
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if (!data) return NextResponse.json({ error: 'Réunion introuvable' }, { status: 404 })
+
+    return NextResponse.json({ data })
+  } catch {
+    return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
+  }
+}
+
+// DELETE /api/projects/[id]/meetings/[meetingId]
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string; meetingId: string }> },
+) {
+  try {
+    const { id, meetingId } = await params
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+
+    const owned = await checkOwnership(supabase, id, user.id)
+    if (!owned) return NextResponse.json({ error: 'Projet introuvable' }, { status: 404 })
+
+    const { error } = await supabase
+      .from('project_meetings')
+      .delete()
+      .eq('id', meetingId)
+      .eq('project_id', id)
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    return NextResponse.json({ data: { success: true } })
+  } catch {
+    return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
+  }
+}

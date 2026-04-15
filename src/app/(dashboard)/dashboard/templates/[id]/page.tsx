@@ -33,11 +33,6 @@ import type { FormFieldType } from '@/config/app.config'
 
 // ---- Types ----
 
-interface KanbanColumn {
-  name: string
-  color: string
-}
-
 interface FormField {
   type: FormFieldType
   label: string
@@ -56,7 +51,6 @@ interface Template {
   name: string
   description: string | null
   is_default: boolean
-  kanban_config: KanbanColumn[]
   form_config: FormField[]
 }
 
@@ -75,67 +69,6 @@ const defaultFormField = (): Omit<FormFieldWithId, '_id'> => ({
   required: false,
   options: null,
 })
-
-// ---- SortableKanbanColumn ----
-
-function SortableKanbanColumn({
-  column,
-  index,
-  onChange,
-  onDelete,
-  readOnly,
-}: {
-  column: KanbanColumn
-  index: number
-  onChange: (index: number, updated: KanbanColumn) => void
-  onDelete: (index: number) => void
-  readOnly: boolean
-}) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: `col-${index}-${column.name}` })
-  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }
-
-  return (
-    <div ref={setNodeRef} style={style} className="flex items-center gap-3 bg-white border rounded-lg p-3 group">
-      {!readOnly && (
-        <button {...attributes} {...listeners} className="cursor-grab text-muted-foreground hover:text-foreground shrink-0">
-          <GripVertical className="h-4 w-4" />
-        </button>
-      )}
-      <div
-        className="w-4 h-4 rounded-full shrink-0 border border-white/20 shadow-sm"
-        style={{ backgroundColor: column.color }}
-      />
-      <Input
-        value={column.name}
-        onChange={(e) => onChange(index, { ...column, name: e.target.value })}
-        className="flex-1 h-8 text-sm"
-        placeholder="Nom de la colonne"
-        disabled={readOnly}
-      />
-      <div className="flex items-center gap-2">
-        <input
-          type="color"
-          value={column.color}
-          onChange={(e) => onChange(index, { ...column, color: e.target.value })}
-          className="w-7 h-7 rounded border cursor-pointer p-0.5 disabled:cursor-not-allowed"
-          disabled={readOnly}
-          title="Choisir une couleur"
-        />
-        {!readOnly && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 text-destructive hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
-            onClick={() => onDelete(index)}
-          >
-            <Trash2 className="h-3 w-3" />
-          </Button>
-        )}
-      </div>
-    </div>
-  )
-}
 
 // ---- SortableFormField ----
 
@@ -200,7 +133,6 @@ export default function TemplateEditorPage({ params }: { params: Promise<{ id: s
   // Champs éditables
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
-  const [kanbanColumns, setKanbanColumns] = useState<KanbanColumn[]>([])
   const [formFields, setFormFields] = useState<FormFieldWithId[]>([])
 
   const [saving, setSaving] = useState(false)
@@ -230,7 +162,6 @@ export default function TemplateEditorPage({ params }: { params: Promise<{ id: s
         setTemplate(data)
         setName(data.name)
         setDescription(data.description ?? '')
-        setKanbanColumns(data.kanban_config ?? [])
         setFormFields(
           (data.form_config ?? []).map((f: FormField) => ({ ...f, _id: genId() }))
         )
@@ -241,34 +172,6 @@ export default function TemplateEditorPage({ params }: { params: Promise<{ id: s
   // Marquer dirty dès modification
   function markDirty() {
     setDirty(true)
-  }
-
-  // ---- Kanban handlers ----
-
-  const kanbanSortableIds = kanbanColumns.map((col, i) => `col-${i}-${col.name}`)
-
-  function handleKanbanDragEnd(event: DragEndEvent) {
-    const { active, over } = event
-    if (!over || active.id === over.id) return
-    const oldIndex = kanbanSortableIds.indexOf(active.id as string)
-    const newIndex = kanbanSortableIds.indexOf(over.id as string)
-    setKanbanColumns(prev => arrayMove(prev, oldIndex, newIndex))
-    markDirty()
-  }
-
-  function handleColumnChange(index: number, updated: KanbanColumn) {
-    setKanbanColumns(prev => prev.map((col, i) => i === index ? updated : col))
-    markDirty()
-  }
-
-  function handleColumnDelete(index: number) {
-    setKanbanColumns(prev => prev.filter((_, i) => i !== index))
-    markDirty()
-  }
-
-  function handleAddColumn() {
-    setKanbanColumns(prev => [...prev, { name: 'Nouvelle colonne', color: '#6B7280' }])
-    markDirty()
   }
 
   // ---- FormField handlers ----
@@ -343,7 +246,6 @@ export default function TemplateEditorPage({ params }: { params: Promise<{ id: s
         body: JSON.stringify({
           name: name.trim() || template.name,
           description: description.trim() || null,
-          kanban_config: kanbanColumns,
           form_config: formFields.map(({ _id: _, ...rest }) => rest),
         }),
       })
@@ -367,7 +269,7 @@ export default function TemplateEditorPage({ params }: { params: Promise<{ id: s
 
   if (loading) {
     return (
-      <div className="space-y-6 max-w-2xl">
+      <div className="space-y-6">
         <Card>
           <CardContent className="py-12 text-center">
             <p className="text-sm text-muted-foreground">Chargement...</p>
@@ -378,7 +280,7 @@ export default function TemplateEditorPage({ params }: { params: Promise<{ id: s
   }
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-6">
       {/* En-tête */}
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3 min-w-0">
@@ -443,55 +345,6 @@ export default function TemplateEditorPage({ params }: { params: Promise<{ id: s
         </CardContent>
       </Card>
 
-      {/* Section Kanban */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base">Colonnes Kanban</CardTitle>
-            {!isReadOnly && (
-              <Button variant="outline" size="sm" onClick={handleAddColumn}>
-                <Plus className="h-4 w-4 mr-1.5" />
-                Ajouter une colonne
-              </Button>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent>
-          {kanbanColumns.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-sm text-muted-foreground mb-3">Aucune colonne kanban définie.</p>
-              {!isReadOnly && (
-                <Button variant="outline" size="sm" onClick={handleAddColumn}>
-                  <Plus className="h-4 w-4 mr-1.5" />
-                  Ajouter une colonne
-                </Button>
-              )}
-            </div>
-          ) : (
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={handleKanbanDragEnd}
-            >
-              <SortableContext items={kanbanSortableIds} strategy={verticalListSortingStrategy}>
-                <div className="space-y-2">
-                  {kanbanColumns.map((col, i) => (
-                    <SortableKanbanColumn
-                      key={`${i}-${col.name}`}
-                      column={col}
-                      index={i}
-                      onChange={handleColumnChange}
-                      onDelete={handleColumnDelete}
-                      readOnly={isReadOnly}
-                    />
-                  ))}
-                </div>
-              </SortableContext>
-            </DndContext>
-          )}
-        </CardContent>
-      </Card>
-
       {/* Section Formulaire d'onboarding */}
       <Card>
         <CardHeader>
@@ -541,12 +394,10 @@ export default function TemplateEditorPage({ params }: { params: Promise<{ id: s
       </Card>
 
       {/* Statistiques */}
-      {(kanbanColumns.length > 0 || formFields.length > 0) && (
+      {formFields.length > 0 && (
         <Card>
           <CardContent className="py-3">
             <div className="flex gap-4 text-sm text-muted-foreground">
-              <span><strong className="text-foreground">{kanbanColumns.length}</strong> colonne{kanbanColumns.length > 1 ? 's' : ''}</span>
-              <Separator orientation="vertical" className="h-4" />
               <span><strong className="text-foreground">{formFields.length}</strong> champ{formFields.length > 1 ? 's' : ''}</span>
               <Separator orientation="vertical" className="h-4" />
               <span><strong className="text-foreground">{formFields.filter(f => f.required).length}</strong> obligatoire{formFields.filter(f => f.required).length > 1 ? 's' : ''}</span>

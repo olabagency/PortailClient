@@ -9,8 +9,15 @@ const milestoneUpdateSchema = z.object({
   description: z.string().max(1000).optional().nullable(),
   status: z.enum(['pending', 'in_progress', 'completed']).optional(),
   due_date: z.string().optional().nullable(),
+  start_date: z.string().optional().nullable(),
   order_index: z.number().int().min(0).optional(),
   visible_to_client: z.boolean().optional(),
+  reference_type: z.enum(['deliverable', 'document', 'onboarding']).optional().nullable(),
+  reference_id: z.string().max(200).optional().nullable(),
+  priority: z.enum(['normal', 'high', 'urgent']).optional(),
+  tags: z.array(z.string().max(50)).optional(),
+  assigned_to: z.string().max(100).optional().nullable(),
+  completion_note: z.string().max(500).optional().nullable(),
 })
 
 // PUT /api/projects/[id]/milestones/[milestoneId]
@@ -24,7 +31,6 @@ export async function PUT(
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
 
-    // Vérifier ownership
     const { data: project } = await supabase
       .from('projects')
       .select('id, name')
@@ -40,7 +46,6 @@ export async function PUT(
       return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
     }
 
-    // Récupérer le milestone actuel pour détecter changement de statut
     const { data: currentMilestone } = await supabase
       .from('project_milestones')
       .select('status, title, visible_to_client')
@@ -57,7 +62,6 @@ export async function PUT(
 
     if (error || !data) return NextResponse.json({ error: 'Jalon introuvable' }, { status: 404 })
 
-    // Notifier le client si étape terminée et visible
     const wasCompleted = currentMilestone?.status !== 'completed' && parsed.data.status === 'completed'
     const isVisibleToClient = parsed.data.visible_to_client ?? currentMilestone?.visible_to_client ?? false
 
@@ -102,7 +106,6 @@ export async function DELETE(
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
 
-    // Vérifier ownership
     const { data: project } = await supabase
       .from('projects')
       .select('id')

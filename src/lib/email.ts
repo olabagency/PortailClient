@@ -92,3 +92,60 @@ export function milestoneCompletedEmail({
     </a>
   `)
 }
+
+export function revisionRequestEmail({
+  projectName,
+  message,
+  formUrl,
+  respondentName,
+}: {
+  projectName: string
+  message: string
+  formUrl: string
+  respondentName?: string
+}): string {
+  const greeting = respondentName ? `Bonjour ${respondentName},` : 'Bonjour,'
+  return emailWrapper(`
+    <h2 style="margin:0 0 8px;font-size:20px">📝 Modifications demandées</h2>
+    <p style="color:#555;margin:0 0 8px">${greeting}</p>
+    <p style="color:#555;margin:0 0 16px">
+      Votre questionnaire pour le projet <strong>${projectName}</strong> a été examiné.
+      Quelques modifications sont nécessaires avant de pouvoir continuer.
+    </p>
+    <div style="background:#fafafa;border:1px solid #eee;border-radius:8px;padding:16px;margin:0 0 20px">
+      <p style="margin:0;color:#333;font-size:15px;white-space:pre-wrap">${message}</p>
+    </div>
+    <a href="${formUrl}" style="display:inline-block;background:#E8553A;color:white;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;font-size:15px">
+      Modifier mon questionnaire →
+    </a>
+    <p style="color:#999;font-size:12px;margin-top:20px">
+      Cliquez sur ce bouton pour accéder à nouveau au formulaire et apporter les modifications demandées.
+    </p>
+  `)
+}
+
+export function clientPortalInviteEmail({
+  projectName,
+  magicLink,
+  respondentName,
+}: {
+  projectName: string
+  magicLink: string
+  respondentName?: string
+}): string {
+  const greeting = respondentName ? `Bonjour ${respondentName},` : 'Bonjour,'
+  return emailWrapper(`
+    <h2 style="margin:0 0 8px;font-size:20px">🎉 Votre onboarding est complété !</h2>
+    <p style="color:#555;margin:0 0 8px">${greeting}</p>
+    <p style="color:#555;margin:0 0 20px">
+      Merci pour votre onboarding sur le projet <strong>${projectName}</strong>.
+      Votre espace client est maintenant accessible — suivez l'avancement de votre projet, consultez les livrables et accédez à vos documents.
+    </p>
+    <a href="${magicLink}" style="display:inline-block;background:#E8553A;color:white;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;font-size:15px">
+      Accéder à mon espace client →
+    </a>
+    <p style="color:#999;font-size:12px;margin-top:20px">
+      Ce lien est à usage unique et expire dans 24 heures.
+    </p>
+  `)
+}

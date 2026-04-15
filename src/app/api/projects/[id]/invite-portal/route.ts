@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/admin'
 import { z } from 'zod'
 import { APP_CONFIG } from '@/config/app.config'
 
@@ -26,6 +25,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       .single()
     if (!project) return NextResponse.json({ error: 'Projet introuvable' }, { status: 404 })
 
+    // Récupérer le profil du freelancer (pour personnaliser l'email)
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('full_name, company_name')
+      .eq('id', user.id)
+      .single()
+
     const body = await request.json()
     const parsed = schema.safeParse(body)
     if (!parsed.success) {
@@ -49,67 +55,80 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: 'Erreur lors de la création du portail.' }, { status: 500 })
     }
 
-    // Générer le magic link via admin client
-    const adminSupabase = createAdminClient()
-    const { data: linkData, error: linkError } = await adminSupabase.auth.admin.generateLink({
-      type: 'magiclink',
-      email: parsed.data.email,
-      options: {
-        redirectTo: `${APP_CONFIG.url}/client/auth/callback?project=${id}`,
-      },
-    })
-
-    if (linkError) {
-      console.error('[invite-portal] generateLink error:', linkError)
-      // On continue : l'entrée client_portals a été créée
-      return NextResponse.json({ data: { success: true } })
-    }
-
-    const actionLink = linkData?.properties?.action_link
+    // Lien vers la page de création de compte (email pré-rempli)
+    const signupUrl = `${APP_CONFIG.url}/client/signup?email=${encodeURIComponent(parsed.data.email)}&project=${id}`
+    const senderName = profile?.company_name ?? profile?.full_name ?? 'Votre prestataire'
 
     // Envoyer l'email via Resend
-    if (process.env.RESEND_API_KEY && actionLink) {
+    if (process.env.RESEND_API_KEY) {
       try {
         const { Resend } = await import('resend')
         const resend = new Resend(process.env.RESEND_API_KEY)
 
         await resend.emails.send({
-          from: process.env.RESEND_FROM_EMAIL ?? `noreply@${APP_CONFIG.url.replace(/https?:\/\//, '')}`,
+          from: `${senderName} <${process.env.RESEND_FROM_EMAIL ?? `noreply@${APP_CONFIG.url.replace(/https?:\/\//, '')}`}>`,
           to: parsed.data.email,
-          subject: `Accès à votre portail projet — ${project.name}`,
+          subject: `${senderName} vous invite à suivre votre projet — ${project.name}`,
           html: `
-            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">
-              <h2 style="color: #111; margin-bottom: 8px;">${APP_CONFIG.name}</h2>
-              <p style="color: #444; font-size: 16px; margin-bottom: 16px;">
-                Vous avez été invité à suivre l'avancement du projet <strong>${project.name}</strong>.
-              </p>
-              <p style="color: #444; font-size: 16px; margin-bottom: 24px;">
-                Suivez l'avancement de votre projet, consultez les livrables et échangez directement avec votre prestataire.
-              </p>
-              <p>
-                <a
-                  href="${actionLink}"
-                  style="display: inline-block; background: #3B82F6; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 16px;"
-                >
-                  Accéder à mon portail
-                </a>
-              </p>
-              <p style="color: #888; font-size: 13px; margin-top: 24px;">
-                Ce lien est à usage unique et expire dans 24 heures. Si vous n'avez pas demandé cet accès, ignorez cet email.
-              </p>
-              <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;" />
-              <p style="color: #bbb; font-size: 12px;">Envoyé via ${APP_CONFIG.name}</p>
-            </div>
+            <!DOCTYPE html>
+            <html>
+            <body style="margin:0;padding:0;background:#f4f4f4;font-family:sans-serif;">
+              <div style="max-width:560px;margin:40px auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
+
+                <!-- Header -->
+                <div style="background:#E8553A;padding:32px 40px;">
+                  <p style="margin:0;color:rgba(255,255,255,0.85);font-size:14px;">${senderName}</p>
+                  <h1 style="margin:8px 0 0;color:#ffffff;font-size:22px;font-weight:700;">
+                    Accédez à votre espace projet
+                  </h1>
+                </div>
+
+                <!-- Body -->
+                <div style="padding:32px 40px;">
+                  <p style="margin:0 0 16px;color:#374151;font-size:16px;line-height:1.6;">
+                    Bonjour,
+                  </p>
+                  <p style="margin:0 0 16px;color:#374151;font-size:16px;line-height:1.6;">
+                    <strong>${senderName}</strong> vous invite à rejoindre votre espace client pour suivre l'avancement du projet <strong>${project.name}</strong>.
+                  </p>
+                  <p style="margin:0 0 28px;color:#6B7280;font-size:14px;line-height:1.6;">
+                    Depuis votre espace, vous pouvez consulter les étapes du projet, les livrables partagés et les documents.
+                  </p>
+
+                  <!-- CTA -->
+                  <div style="text-align:center;margin-bottom:28px;">
+                    <a href="${signupUrl}"
+                       style="display:inline-block;background:#E8553A;color:#ffffff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:16px;letter-spacing:0.01em;">
+                      Créer mon espace client →
+                    </a>
+                  </div>
+
+                  <p style="margin:0 0 4px;color:#9CA3AF;font-size:12px;text-align:center;">
+                    Votre adresse email <strong>${parsed.data.email}</strong> sera pré-remplie.
+                  </p>
+                  <p style="margin:0;color:#9CA3AF;font-size:12px;text-align:center;">
+                    Aucun mot de passe requis — connexion sécurisée par lien email.
+                  </p>
+                </div>
+
+                <!-- Footer -->
+                <div style="background:#F9FAFB;padding:20px 40px;border-top:1px solid #E5E7EB;">
+                  <p style="margin:0;color:#9CA3AF;font-size:12px;text-align:center;">
+                    Si vous pensez avoir reçu cet email par erreur, vous pouvez l'ignorer.
+                  </p>
+                </div>
+
+              </div>
+            </body>
+            </html>
           `,
         })
       } catch (err) {
         console.error('[invite-portal] Resend error:', err)
         // On ne bloque pas : l'entrée portail est créée
       }
-    } else if (!actionLink) {
-      console.log(`[invite-portal] Pas de lien généré pour ${parsed.data.email}`)
     } else {
-      console.log(`[invite-portal] Resend non configuré. Lien pour ${parsed.data.email}: ${actionLink}`)
+      console.log(`[invite-portal] Resend non configuré. Lien signup pour ${parsed.data.email}: ${signupUrl}`)
     }
 
     return NextResponse.json({ data: { success: true } })

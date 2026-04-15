@@ -141,9 +141,11 @@ export async function DELETE(
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-    // Supprimer le fichier S3 si présent
+    // Supprimer le fichier S3 si présent (non-bloquant)
     if (doc.s3_key) {
-      await deleteS3Object(doc.s3_key)
+      deleteS3Object(doc.s3_key).catch(err =>
+        console.error('[documents/delete] S3 delete failed:', err)
+      )
     }
 
     return NextResponse.json({ data: { success: true } })

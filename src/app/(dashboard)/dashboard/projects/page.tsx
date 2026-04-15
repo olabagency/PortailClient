@@ -18,7 +18,10 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Plus, Search, MoreHorizontal, Pencil, Trash2, Copy, FolderKanban, Eye } from 'lucide-react'
+import {
+  Plus, Search, MoreHorizontal, Pencil, Trash2, Copy,
+  FolderKanban, Eye, LayoutGrid, List,
+} from 'lucide-react'
 import { useDebounce } from '@/hooks/useDebounce'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
@@ -30,14 +33,15 @@ interface Project {
   status: string
   public_id: string
   created_at: string
+  color: string | null
   clients: { id: string; name: string; company: string | null } | null
 }
 
-const statusConfig: Record<string, { label: string; variant: 'default' | 'secondary' | 'outline' | 'destructive' }> = {
-  active: { label: 'Actif', variant: 'default' },
-  paused: { label: 'En pause', variant: 'secondary' },
-  completed: { label: 'Terminé', variant: 'outline' },
-  archived: { label: 'Archivé', variant: 'secondary' },
+const statusConfig: Record<string, { label: string; variant: 'default' | 'secondary' | 'outline' | 'destructive'; dot: string }> = {
+  active:    { label: 'Actif',     variant: 'default',     dot: 'bg-emerald-500' },
+  paused:    { label: 'En pause',  variant: 'secondary',   dot: 'bg-amber-400' },
+  completed: { label: 'Terminé',   variant: 'outline',     dot: 'bg-gray-400' },
+  archived:  { label: 'Archivé',   variant: 'secondary',   dot: 'bg-gray-300' },
 }
 
 export default function ProjectsPage() {
@@ -46,6 +50,7 @@ export default function ProjectsPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list')
   const debouncedSearch = useDebounce(search, 300)
   const [deleteProject, setDeleteProject] = useState<Project | null>(null)
   const [deleting, setDeleting] = useState(false)
@@ -79,30 +84,33 @@ export default function ProjectsPage() {
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Projets</h1>
-          <p className="text-sm text-muted-foreground mt-1">{projects.length} projet{projects.length !== 1 ? 's' : ''}</p>
+          <h1 className="text-2xl font-bold tracking-tight">Projets</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            {projects.length} projet{projects.length !== 1 ? 's' : ''}
+          </p>
         </div>
         <Button onClick={() => router.push('/dashboard/projects/new')}>
-          <Plus className="h-4 w-4 mr-2" />
+          <Plus className="h-4 w-4 mr-1.5" />
           Nouveau projet
         </Button>
       </div>
 
-      {/* Filtres */}
-      <div className="flex gap-3 flex-wrap">
-        <div className="relative flex-1 min-w-48 max-w-sm">
+      {/* Filtres + toggle vue */}
+      <div className="flex gap-3 flex-wrap items-center">
+        <div className="relative flex-1 min-w-44 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Rechercher un projet..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
+            className="pl-9 bg-white"
           />
         </div>
         <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v ?? 'all')}>
-          <SelectTrigger className="w-40">
+          <SelectTrigger className="w-40 bg-white">
             <SelectValue placeholder="Statut" />
           </SelectTrigger>
           <SelectContent>
@@ -113,80 +121,171 @@ export default function ProjectsPage() {
             <SelectItem value="archived">Archivé</SelectItem>
           </SelectContent>
         </Select>
+        {/* Toggle vue liste/grille */}
+        <div className="flex items-center gap-1 border border-border rounded-lg bg-white p-1 ml-auto">
+          <button
+            onClick={() => setViewMode('list')}
+            className={`p-1.5 rounded-md transition-colors ${viewMode === 'list' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+          >
+            <List className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={() => setViewMode('grid')}
+            className={`p-1.5 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+          >
+            <LayoutGrid className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
 
-      {/* Liste */}
+      {/* Liste / Grille */}
       {loading ? (
-        <div className="space-y-3">
-          {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-lg" />)}
+        <div className={viewMode === 'grid' ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4' : 'space-y-2'}>
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className={viewMode === 'grid' ? 'h-40 rounded-xl' : 'h-20 rounded-xl'} />
+          ))}
         </div>
       ) : projects.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-            <FolderKanban className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="font-semibold text-lg">Aucun projet</h3>
-            <p className="text-muted-foreground text-sm mt-1 mb-4">
-              {search || statusFilter !== 'all' ? 'Aucun résultat pour ces filtres.' : 'Créez votre premier projet.'}
-            </p>
-            {!search && statusFilter === 'all' && (
-              <Button onClick={() => router.push('/dashboard/projects/new')}>
-                <Plus className="h-4 w-4 mr-2" />
-                Créer un projet
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-3">
+        <div className="flex flex-col items-center justify-center py-20 rounded-xl border-2 border-dashed border-border bg-white text-center">
+          <div className="h-14 w-14 rounded-full bg-primary/8 flex items-center justify-center mb-4">
+            <FolderKanban className="h-7 w-7 text-primary" />
+          </div>
+          <h3 className="font-semibold text-base mb-1">Aucun projet</h3>
+          <p className="text-muted-foreground text-sm mb-5">
+            {search || statusFilter !== 'all'
+              ? 'Aucun résultat pour ces filtres.'
+              : 'Créez votre premier projet pour démarrer.'}
+          </p>
+          {!search && statusFilter === 'all' && (
+            <Button onClick={() => router.push('/dashboard/projects/new')}>
+              <Plus className="h-4 w-4 mr-1.5" />
+              Créer un projet
+            </Button>
+          )}
+        </div>
+      ) : viewMode === 'list' ? (
+        /* ── Vue liste ── */
+        <div className="space-y-2">
           {projects.map((project) => {
-            const status = statusConfig[project.status] ?? { label: project.status, variant: 'secondary' as const }
+            const status = statusConfig[project.status] ?? { label: project.status, variant: 'secondary' as const, dot: 'bg-gray-400' }
             return (
-              <Card key={project.id} className="hover:shadow-sm transition-shadow">
-                <CardContent className="flex items-center justify-between p-4">
+              <Card key={project.id} className="overflow-hidden hover:shadow-sm hover:border-primary/20 transition-all group bg-white">
+                <CardContent className="flex items-stretch gap-0 p-0">
+                  <div className="w-1 shrink-0" style={{ backgroundColor: project.color ?? '#E8553A' }} />
                   <div
-                    className="flex-1 min-w-0 cursor-pointer"
+                    className="flex-1 flex items-center justify-between gap-3 px-4 py-3.5 cursor-pointer"
                     onClick={() => router.push(`/dashboard/projects/${project.id}`)}
                   >
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-medium">{project.name}</p>
-                      <Badge variant={status.variant} className="text-xs">{status.label}</Badge>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-semibold group-hover:text-primary transition-colors">{project.name}</p>
+                        <Badge variant={status.variant} className="text-xs">{status.label}</Badge>
+                      </div>
+                      <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+                        {project.clients && (
+                          <p className="text-sm text-muted-foreground">{project.clients.name}
+                            {project.clients.company ? ` · ${project.clients.company}` : ''}
+                          </p>
+                        )}
+                        <p className="text-xs text-muted-foreground">
+                          {format(new Date(project.created_at), 'd MMM yyyy', { locale: fr })}
+                        </p>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-3 mt-1 flex-wrap">
-                      {project.clients && (
-                        <p className="text-sm text-muted-foreground">{project.clients.name}</p>
-                      )}
-                      {project.description && (
-                        <p className="text-sm text-muted-foreground truncate max-w-xs">{project.description}</p>
-                      )}
-                      <p className="text-xs text-muted-foreground">
-                        {format(new Date(project.created_at), 'd MMM yyyy', { locale: fr })}
-                      </p>
-                    </div>
-                  </div>
-
-                  <DropdownMenu>
-                    <DropdownMenuTrigger className="inline-flex items-center justify-center rounded-md h-9 w-9 hover:bg-accent text-muted-foreground hover:text-foreground shrink-0 transition-colors">
-                      <MoreHorizontal className="h-4 w-4" />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => router.push(`/dashboard/projects/${project.id}`)}>
-                        <Eye className="mr-2 h-4 w-4" /> Ouvrir
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => router.push(`/dashboard/projects/${project.id}/edit`)}>
-                        <Pencil className="mr-2 h-4 w-4" /> Modifier
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleDuplicate(project)}>
-                        <Copy className="mr-2 h-4 w-4" /> Dupliquer
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        className="text-destructive focus:text-destructive"
-                        onClick={() => setDeleteProject(project)}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        className="inline-flex items-center justify-center rounded-lg h-8 w-8 hover:bg-accent text-muted-foreground hover:text-foreground shrink-0 transition-colors"
+                        onClick={(e) => e.stopPropagation()}
                       >
-                        <Trash2 className="mr-2 h-4 w-4" /> Supprimer
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                        <MoreHorizontal className="h-4 w-4" />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => router.push(`/dashboard/projects/${project.id}`)}>
+                          <Eye className="mr-2 h-4 w-4" /> Ouvrir
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => router.push(`/dashboard/projects/${project.id}/edit`)}>
+                          <Pencil className="mr-2 h-4 w-4" /> Modifier
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleDuplicate(project)}>
+                          <Copy className="mr-2 h-4 w-4" /> Dupliquer
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
+                          onClick={() => setDeleteProject(project)}
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" /> Supprimer
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          })}
+        </div>
+      ) : (
+        /* ── Vue grille ── */
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {projects.map((project) => {
+            const status = statusConfig[project.status] ?? { label: project.status, variant: 'secondary' as const, dot: 'bg-gray-400' }
+            return (
+              <Card
+                key={project.id}
+                className="overflow-hidden hover:shadow-md hover:border-primary/20 transition-all group bg-white cursor-pointer"
+                onClick={() => router.push(`/dashboard/projects/${project.id}`)}
+              >
+                {/* Color header */}
+                <div
+                  className="h-2 w-full"
+                  style={{ backgroundColor: project.color ?? '#E8553A' }}
+                />
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <p className="font-semibold text-sm leading-tight group-hover:text-primary transition-colors line-clamp-2">
+                      {project.name}
+                    </p>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        className="inline-flex items-center justify-center rounded-md h-7 w-7 hover:bg-accent text-muted-foreground shrink-0 transition-colors -mr-1 -mt-0.5"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <MoreHorizontal className="h-3.5 w-3.5" />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => router.push(`/dashboard/projects/${project.id}`)}>
+                          <Eye className="mr-2 h-4 w-4" /> Ouvrir
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => router.push(`/dashboard/projects/${project.id}/edit`)}>
+                          <Pencil className="mr-2 h-4 w-4" /> Modifier
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleDuplicate(project)}>
+                          <Copy className="mr-2 h-4 w-4" /> Dupliquer
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
+                          onClick={() => setDeleteProject(project)}
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" /> Supprimer
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                  {project.clients && (
+                    <p className="text-xs text-muted-foreground mb-2 truncate">
+                      {project.clients.name}{project.clients.company ? ` · ${project.clients.company}` : ''}
+                    </p>
+                  )}
+                  {project.description && (
+                    <p className="text-xs text-muted-foreground line-clamp-2 mb-3">{project.description}</p>
+                  )}
+                  <div className="flex items-center justify-between mt-auto pt-2 border-t border-border">
+                    <Badge variant={status.variant} className="text-xs">{status.label}</Badge>
+                    <p className="text-xs text-muted-foreground">
+                      {format(new Date(project.created_at), 'd MMM yyyy', { locale: fr })}
+                    </p>
+                  </div>
                 </CardContent>
               </Card>
             )

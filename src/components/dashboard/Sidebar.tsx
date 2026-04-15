@@ -1,23 +1,25 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { usePathname } from 'next/navigation'
+import { useState, useEffect } from 'react'
+import { createClient } from '@/lib/supabase/client'
 import {
   LayoutDashboard,
   Users,
   FolderKanban,
-  LayoutTemplate,
   Settings,
   Menu,
   ClipboardList,
   FolderOpen,
   ListChecks,
-  Share2,
   PackageOpen,
-  MessageSquare,
   LogOut,
   Crown,
+  CalendarDays,
+  CalendarCheck,
+  UserCircle2,
+  KeyRound,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { APP_CONFIG } from '@/config/app.config'
@@ -27,6 +29,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -38,22 +41,23 @@ const globalNavItems = [
   { href: '/dashboard', label: 'Tableau de bord', icon: LayoutDashboard, exact: true },
   { href: '/dashboard/clients', label: 'Clients', icon: Users, exact: false },
   { href: '/dashboard/projects', label: 'Projets', icon: FolderKanban, exact: false },
-  { href: '/dashboard/templates', label: 'Templates', icon: LayoutTemplate, exact: false },
+  { href: '/dashboard/calendar', label: 'Calendrier', icon: CalendarDays, exact: false },
 ]
 
 const bottomItems = [
-  { href: '/dashboard/settings', label: 'Paramètres', icon: Settings, exact: false },
+  { href: '/dashboard/account', label: 'Paramètres', icon: Settings, exact: false },
 ]
 
 function projectNavItems(projectId: string) {
   return [
     { href: `/dashboard/projects/${projectId}`, label: 'Vue d\'ensemble', icon: LayoutDashboard, exact: true },
     { href: `/dashboard/projects/${projectId}/milestones`, label: 'Timeline', icon: ListChecks, exact: false },
-    { href: `/dashboard/projects/${projectId}/deliverables`, label: 'Livrables', icon: PackageOpen, exact: false },
-    { href: `/dashboard/projects/${projectId}/feedback`, label: 'Retours clients', icon: MessageSquare, exact: false },
-    { href: `/dashboard/projects/${projectId}/onboarding`, label: 'Questionnaire', icon: ClipboardList, exact: false },
+    { href: `/dashboard/projects/${projectId}/calendar`, label: 'Calendrier', icon: CalendarDays, exact: false },
+    { href: `/dashboard/projects/${projectId}/meetings`, label: 'Réunions', icon: CalendarCheck, exact: false },
+    { href: `/dashboard/projects/${projectId}/deliverables`, label: 'Livrables & Retours', icon: PackageOpen, exact: false },
+    { href: `/dashboard/projects/${projectId}/onboarding`, label: 'Onboarding', icon: ClipboardList, exact: false },
     { href: `/dashboard/projects/${projectId}/documents`, label: 'Documents', icon: FolderOpen, exact: false },
-    { href: `/dashboard/projects/${projectId}/share`, label: 'Partage', icon: Share2, exact: false },
+    { href: `/dashboard/projects/${projectId}/vault`, label: 'Coffre-fort', icon: KeyRound, exact: false },
   ]
 }
 
@@ -86,8 +90,16 @@ function NavLink({ href, label, icon: Icon, exact, indent = false }: {
 
 function SidebarContent() {
   const pathname = usePathname()
-  const router = useRouter()
   const { user, logout } = useAuth()
+  const [plan, setPlan] = useState<string>('free')
+
+  useEffect(() => {
+    if (user) {
+      const supabase = createClient()
+      supabase.from('profiles').select('plan').eq('id', user.id).single()
+        .then(({ data }) => { if (data?.plan) setPlan(data.plan) })
+    }
+  }, [user])
 
   const initials = user?.user_metadata?.full_name
     ? user.user_metadata.full_name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
@@ -105,9 +117,14 @@ function SidebarContent() {
   return (
     <div className="flex flex-col h-full">
       {/* Logo */}
-      <div className="px-4 py-5 border-b">
-        <Link href="/dashboard" className="text-xl font-bold text-foreground">
-          {APP_CONFIG.name}
+      <div className="px-4 py-4 border-b">
+        <Link href="/dashboard" className="flex items-center gap-2.5">
+          <div className="h-7 w-7 rounded-lg bg-primary flex items-center justify-center shrink-0">
+            <span className="text-primary-foreground text-xs font-bold leading-none">
+              {APP_CONFIG.name.charAt(0)}
+            </span>
+          </div>
+          <span className="text-base font-bold text-foreground tracking-tight">{APP_CONFIG.name}</span>
         </Link>
       </div>
 
@@ -146,20 +163,33 @@ function SidebarContent() {
             </span>
           </DropdownMenuTrigger>
           <DropdownMenuContent side="top" align="start" className="w-56 mb-1">
-            <DropdownMenuLabel className="font-normal">
-              <div className="flex flex-col space-y-1">
-                <p className="text-sm font-medium leading-none">{user?.user_metadata?.full_name ?? 'Mon compte'}</p>
-                <p className="text-xs leading-none text-muted-foreground">{user?.email}</p>
-              </div>
-            </DropdownMenuLabel>
+            <DropdownMenuGroup>
+              <DropdownMenuLabel className="font-normal">
+                <div className="flex flex-col space-y-1">
+                  <p className="text-sm font-medium leading-none">{user?.user_metadata?.full_name ?? 'Mon compte'}</p>
+                  <p className="text-xs leading-none text-muted-foreground">{user?.email}</p>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold w-fit ${
+                    plan === 'pro' ? 'bg-primary/10 text-primary' :
+                    plan === 'agency' ? 'bg-purple-100 text-purple-700' :
+                    'bg-gray-100 text-gray-500'
+                  }`}>
+                    {plan === 'pro' ? 'Pro' : plan === 'agency' ? 'Agence' : 'Gratuit'}
+                  </span>
+                </div>
+              </DropdownMenuLabel>
+            </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => router.push('/dashboard/settings')} className="cursor-pointer">
-              <Settings className="mr-2 h-4 w-4" />
-              Paramètres
+            <DropdownMenuItem className="p-0 cursor-pointer font-medium">
+              <Link href="/dashboard/account" className="flex items-center w-full px-1.5 py-1 gap-1.5">
+                <UserCircle2 className="h-4 w-4" />
+                Mon compte
+              </Link>
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => router.push('/dashboard/settings/billing')} className="cursor-pointer">
-              <Crown className="mr-2 h-4 w-4" />
-              Abonnement
+            <DropdownMenuItem className="p-0 cursor-pointer">
+              <Link href="/dashboard/settings/billing" className="flex items-center w-full px-1.5 py-1 gap-1.5">
+                <Crown className="h-4 w-4" />
+                Abonnement
+              </Link>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={logout} className="cursor-pointer text-destructive focus:text-destructive">
@@ -179,7 +209,7 @@ export function Sidebar() {
   return (
     <>
       {/* Sidebar desktop */}
-      <aside className="hidden md:flex flex-col w-60 shrink-0 border-r bg-white h-screen sticky top-0">
+      <aside className="hidden md:flex flex-col w-60 shrink-0 border-r bg-white h-screen sticky top-0 shadow-[1px_0_0_0_hsl(var(--border))]">
         <SidebarContent />
       </aside>
 

@@ -22,11 +22,11 @@ export default function SuccessPage() {
           Votre formulaire a bien été envoyé. Vous serez contacté prochainement.
         </p>
         <div className="space-y-3">
-          <Link href="/login" className={buttonVariants({ variant: 'default' }) + ' w-full justify-center'}>
+          <Link href="/client" className={buttonVariants({ variant: 'default' }) + ' w-full justify-center'}>
             Accéder à mon espace client
           </Link>
           <p className="text-xs text-muted-foreground">
-            Créez un compte pour suivre l'avancement de votre projet en temps réel.
+            Vérifiez votre boîte email pour le lien d'accès à votre espace de suivi de projet.
           </p>
         </div>
         <p className="mt-8 text-xs text-muted-foreground">

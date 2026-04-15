@@ -24,7 +24,7 @@ import {
   Sheet, SheetContent, SheetHeader, SheetFooter,
 } from '@/components/ui/sheet'
 import {
-  LayoutTemplate, Plus, Trash2, Kanban, ClipboardList,
+  LayoutTemplate, Plus, Trash2, ClipboardList,
   Star, Wand2, Copy, Pencil, ChevronRight, Layers, Eye,
   CheckCircle2, X,
 } from 'lucide-react'
@@ -38,14 +38,11 @@ interface TemplateField {
   placeholder?: string | null; required?: boolean
   options?: string[] | null; section_index?: number | null; sensitive?: boolean
 }
-interface TemplateColumn { name: string; color?: string }
-
 interface Template {
   id: string
   user_id: string | null
   name: string
   description: string | null
-  kanban_config: TemplateColumn[]
   form_config: TemplateField[]
   sections_config: TemplateSection[]
   is_default: boolean
@@ -91,7 +88,6 @@ function TemplatePreviewDrawer({
   const colors = TEMPLATE_COLORS[template.name] ?? DEFAULT_COLOR
   const sections = (template.sections_config ?? []).sort((a, b) => a.order_index - b.order_index)
   const fields = template.form_config ?? []
-  const columns = template.kanban_config ?? []
 
   // Grouper les champs par section
   const fieldsBySectionIndex = new Map<number, TemplateField[]>()
@@ -137,10 +133,6 @@ function TemplatePreviewDrawer({
 
           {/* Stats badges */}
           <div className="flex gap-2 mt-4 flex-wrap">
-            <div className="flex items-center gap-1.5 bg-white/70 rounded-full px-3 py-1 text-xs font-medium text-gray-600">
-              <Kanban className="h-3.5 w-3.5" />
-              {columns.length} colonne{columns.length !== 1 ? 's' : ''}
-            </div>
             {sections.length > 0 && (
               <div className="flex items-center gap-1.5 bg-white/70 rounded-full px-3 py-1 text-xs font-medium text-gray-600">
                 <Layers className="h-3.5 w-3.5" />
@@ -157,21 +149,6 @@ function TemplatePreviewDrawer({
 
         {/* Contenu scrollable */}
         <div className="flex-1 overflow-y-auto">
-
-          {/* Kanban */}
-          <div className="px-6 py-5 border-b">
-            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-              Colonnes Kanban
-            </h3>
-            <div className="flex flex-wrap gap-2">
-              {columns.map((col, i) => (
-                <div key={i} className="flex items-center gap-2 bg-gray-50 border rounded-lg px-3 py-2">
-                  <div className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: col.color ?? '#6B7280' }} />
-                  <span className="text-sm font-medium text-gray-700">{col.name}</span>
-                </div>
-              ))}
-            </div>
-          </div>
 
           {/* Questionnaire */}
           <div className="px-6 py-5">
@@ -315,7 +292,6 @@ function TemplateCard({
   onDuplicate?: (t: Template) => void
   onDelete?: (t: Template) => void
 }) {
-  const colCount = template.kanban_config?.length ?? 0
   const fieldCount = template.form_config?.length ?? 0
   const sectionCount = template.sections_config?.length ?? 0
   const colors = TEMPLATE_COLORS[template.name] ?? DEFAULT_COLOR
@@ -342,9 +318,6 @@ function TemplateCard({
         </div>
 
         <div className="flex gap-1.5 mt-3 flex-wrap">
-          <span className="inline-flex items-center gap-1 bg-white/70 rounded-full px-2 py-0.5 text-xs text-gray-500">
-            <Kanban className="h-3 w-3" />{colCount} col.
-          </span>
           {sectionCount > 0 && (
             <span className="inline-flex items-center gap-1 bg-white/70 rounded-full px-2 py-0.5 text-xs text-gray-500">
               <Layers className="h-3 w-3" />{sectionCount} sec.
@@ -551,14 +524,14 @@ export default function TemplatesPage() {
   )
 
   return (
-    <div className="space-y-8 max-w-6xl">
+    <div className="space-y-8">
 
       {/* En-tête */}
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">Templates de projet</h1>
           <p className="text-sm text-muted-foreground mt-1 max-w-xl">
-            Démarrez chaque nouveau projet avec le bon questionnaire, les bonnes colonnes kanban et les bonnes sections d&apos;onboarding — sans tout reconfigurer à la main.
+            Démarrez chaque nouveau projet avec le bon questionnaire et les bonnes sections d&apos;onboarding — sans tout reconfigurer à la main.
           </p>
         </div>
         <Button variant="outline" onClick={openFromProjectDialog} className="shrink-0">
@@ -577,9 +550,9 @@ export default function TemplatesPage() {
       {/* Comment ça marche */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {[
-          { icon: '👁️', title: 'Prévisualisez', desc: 'Consultez le questionnaire complet et les colonnes kanban avant d\'utiliser' },
+          { icon: '👁️', title: 'Prévisualisez', desc: 'Consultez le questionnaire complet avant d\'utiliser' },
           { icon: '✏️', title: 'Personnalisez', desc: 'Dupliquez un modèle et modifiez-le à votre guise' },
-          { icon: '🚀', title: 'Créez en 1 clic', desc: 'Projet pré-configuré : kanban, sections, questions' },
+          { icon: '🚀', title: 'Créez en 1 clic', desc: 'Projet pré-configuré : sections, questions d\'onboarding' },
         ].map(item => (
           <div key={item.icon} className="flex items-start gap-3 p-4 rounded-xl bg-gray-50 border border-gray-100">
             <span className="text-xl shrink-0">{item.icon}</span>
@@ -706,7 +679,7 @@ export default function TemplatesPage() {
           <DialogHeader>
             <DialogTitle>Créer un template depuis un projet</DialogTitle>
             <DialogDescription>
-              La configuration complète sera copiée : colonnes kanban, sections et questions d&apos;onboarding.
+              La configuration complète sera copiée : sections et questions d&apos;onboarding.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSaveFromProject} className="space-y-4 mt-2">
@@ -722,17 +695,17 @@ export default function TemplatesPage() {
               <Label>Copier depuis un projet <span className="text-xs text-muted-foreground">(optionnel)</span></Label>
               <Select value={saveProjectId} onValueChange={(v) => setSaveProjectId(v ?? '')}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Colonnes par défaut" />
+                  <SelectValue placeholder="Aucun projet source" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Colonnes kanban par défaut (vierge)</SelectItem>
+                  <SelectItem value="">Vierge (sans projet source)</SelectItem>
                   {projects.map((p) => (
                     <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                {saveProjectId ? '✓ Kanban, sections et questions du projet seront copiés.' : 'Sans projet source : 4 colonnes par défaut.'}
+                {saveProjectId ? '✓ Sections et questions du projet seront copiées.' : 'Sans projet source : template vierge.'}
               </p>
             </div>
             <DialogFooter>
