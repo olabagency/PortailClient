@@ -40,17 +40,17 @@ function computeProgress(project: Project): number {
 export default async function ClientDashboardPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
+  const admin = createAdminClient()
 
-  // Chercher le client lié à cet user
-  let { data: client } = await supabase
+  // Chercher le client lié à cet user (via admin pour bypasser RLS)
+  let { data: client } = await admin
     .from('clients')
     .select('id, name')
     .eq('user_id', user!.id)
     .single()
 
-  // Fallback : si pas trouvé par user_id, chercher par email via admin (bypass RLS) et lier
+  // Fallback par email si user_id pas encore lié
   if (!client && user!.email) {
-    const admin = createAdminClient()
     const { data: clientByEmail } = await admin
       .from('clients')
       .select('id, name')
@@ -78,7 +78,7 @@ export default async function ClientDashboardPage() {
     )
   }
 
-  const { data: projects } = await supabase
+  const { data: projects } = await admin
     .from('projects')
     .select(`
       id, name, description, status, color, created_at,

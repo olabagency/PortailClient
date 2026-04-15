@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { generatePresignedDownloadUrl } from '@/lib/s3'
 
 // GET /api/client/projects/[id]/documents
-// Retourne les documents visibles par le client avec URLs presignées pour les fichiers
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
@@ -11,22 +11,27 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
 
-    const userEmail = user.email
-    if (!userEmail) return NextResponse.json({ error: 'Email utilisateur introuvable' }, { status: 401 })
+    const admin = createAdminClient()
 
-    // Vérifier l'accès via client_portals
-    const { data: portalAccess } = await supabase
-      .from('client_portals')
+    // Vérifier accès : client lié au projet
+    const { data: clientRecord } = await admin
+      .from('clients')
       .select('id')
-      .eq('project_id', id)
-      .filter('email', 'ilike', userEmail)
+      .eq('user_id', user.id)
       .single()
 
-    if (!portalAccess) {
-      return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
-    }
+    if (!clientRecord) return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
 
-    const { data: documents, error } = await supabase
+    const { data: project } = await admin
+      .from('projects')
+      .select('id')
+      .eq('id', id)
+      .eq('client_id', clientRecord.id)
+      .single()
+
+    if (!project) return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+
+    const { data: documents, error } = await admin
       .from('project_documents')
       .select('id, name, type, url, s3_key, size_bytes, mime_type, created_at')
       .eq('project_id', id)
@@ -35,7 +40,6 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-    // Générer des URLs presignées pour les fichiers
     const docsWithUrls = await Promise.all(
       (documents ?? []).map(async (doc) => {
         if (doc.type === 'file') {

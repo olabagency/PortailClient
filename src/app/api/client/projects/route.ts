@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 // GET /api/client/projects
 export async function GET() {
@@ -8,20 +9,17 @@ export async function GET() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
 
-    // Chercher le profil client lié à cet user — d'abord par user_id, sinon par email (fallback)
-    let client: { id: string } | null = null
+    const admin = createAdminClient()
 
-    const { data: byUserId } = await supabase
+    // Chercher le profil client lié à cet user
+    let { data: client } = await admin
       .from('clients')
       .select('id')
       .eq('user_id', user.id)
       .single()
 
-    if (byUserId) {
-      client = byUserId
-    } else if (user.email) {
-      // Fallback : le user_id n'a pas encore été lié (premier login avant le fix)
-      const { data: byEmail } = await supabase
+    if (!client && user.email) {
+      const { data: byEmail } = await admin
         .from('clients')
         .select('id')
         .ilike('email', user.email)
@@ -29,21 +27,13 @@ export async function GET() {
 
       if (byEmail) {
         client = byEmail
-        // Lier immédiatement pour les prochaines requêtes
-        await supabase
-          .from('clients')
-          .update({ user_id: user.id })
-          .eq('id', byEmail.id)
-          .is('user_id', null)
+        await admin.from('clients').update({ user_id: user.id }).eq('id', byEmail.id)
       }
     }
 
-    if (!client) {
-      return NextResponse.json({ data: [] })
-    }
+    if (!client) return NextResponse.json({ data: [] })
 
-    // Retourner les projets du client
-    const { data: projects, error } = await supabase
+    const { data: projects, error } = await admin
       .from('projects')
       .select('id, name, description, status, color, created_at')
       .eq('client_id', client.id)

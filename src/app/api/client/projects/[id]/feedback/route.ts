@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { z } from 'zod'
 
 const schema = z.object({
@@ -20,20 +21,25 @@ export async function POST(
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
 
-    const userEmail = user.email
-    if (!userEmail) return NextResponse.json({ error: 'Email utilisateur introuvable' }, { status: 401 })
+    const admin = createAdminClient()
 
-    // Vérifier l'accès via client_portals
-    const { data: portalAccess } = await supabase
-      .from('client_portals')
+    // Vérifier accès : le client doit être lié à ce projet
+    const { data: clientRecord } = await admin
+      .from('clients')
       .select('id')
-      .eq('project_id', id)
-      .filter('email', 'ilike', userEmail)
+      .eq('user_id', user.id)
       .single()
 
-    if (!portalAccess) {
-      return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
-    }
+    if (!clientRecord) return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+
+    const { data: project } = await admin
+      .from('projects')
+      .select('id')
+      .eq('id', id)
+      .eq('client_id', clientRecord.id)
+      .single()
+
+    if (!project) return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
 
     const body = await request.json()
     const parsed = schema.safeParse(body)
@@ -41,8 +47,8 @@ export async function POST(
       return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
     }
 
-    // Récupérer la phase courante (max phase existante pour ce projet)
-    const { data: existingFeedback } = await supabase
+    // Récupérer la phase courante
+    const { data: existingFeedback } = await admin
       .from('client_feedback')
       .select('phase')
       .eq('project_id', id)
@@ -52,7 +58,7 @@ export async function POST(
 
     const currentPhase = existingFeedback?.phase ?? 1
 
-    const { data: newFeedback, error: insertError } = await supabase
+    const { data: newFeedback, error: insertError } = await admin
       .from('client_feedback')
       .insert({
         project_id: id,
@@ -68,7 +74,6 @@ export async function POST(
       .single()
 
     if (insertError || !newFeedback) {
-      console.error('[feedback] Insert error:', insertError)
       return NextResponse.json({ error: 'Erreur lors de la création du feedback' }, { status: 500 })
     }
 
