@@ -17,6 +17,15 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -113,6 +122,8 @@ export function ProjectOverview({
   const [resetting, setResetting] = useState(false)
   const [invitingPortal, setInvitingPortal] = useState(false)
   const [portalInvited, setPortalInvited] = useState(false)
+  const [inviteDialogOpen, setInviteDialogOpen] = useState(false)
+  const [inviteEmail, setInviteEmail] = useState('')
 
   const statusInfo = statusConfig[project.status] ?? { label: project.status, bg: 'bg-gray-50', text: 'text-gray-600', border: 'border-gray-200', dot: 'bg-gray-400' }
   const progressPct = milestoneStats.total > 0
@@ -121,10 +132,11 @@ export function ProjectOverview({
   const accentColor = project.color ?? '#E8553A'
   const initials = project.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
 
-  async function handleInvitePortal() {
-    const email = project.clients?.email
-    if (!email) return
+  async function handleInvitePortal(emailOverride?: string) {
+    const email = emailOverride ?? project.clients?.email
+    if (!email) { setInviteDialogOpen(true); return }
     setInvitingPortal(true)
+    setInviteDialogOpen(false)
     try {
       const res = await fetch(`/api/projects/${project.id}/invite-portal`, {
         method: 'POST',
@@ -253,18 +265,16 @@ export function ProjectOverview({
 
             {/* Right: actions */}
             <div className="flex items-center gap-2 shrink-0 flex-wrap">
-              {project.clients?.email && (
-                portalInvited ? (
-                  <span className="inline-flex items-center gap-1.5 text-xs text-emerald-600 border border-emerald-200 bg-emerald-50 rounded-lg px-3 py-1.5 font-medium">
-                    <CheckCircle className="h-3.5 w-3.5" />
-                    Invitation envoyée
-                  </span>
-                ) : (
-                  <Button variant="outline" size="sm" className="gap-1.5" disabled={invitingPortal} onClick={handleInvitePortal}>
-                    <Share2 className="h-3.5 w-3.5" />
-                    {invitingPortal ? 'Envoi...' : 'Inviter au portail'}
-                  </Button>
-                )
+              {portalInvited ? (
+                <span className="inline-flex items-center gap-1.5 text-xs text-emerald-600 border border-emerald-200 bg-emerald-50 rounded-lg px-3 py-1.5 font-medium">
+                  <CheckCircle className="h-3.5 w-3.5" />
+                  Invitation envoyée
+                </span>
+              ) : (
+                <Button variant="outline" size="sm" className="gap-1.5" disabled={invitingPortal} onClick={() => handleInvitePortal()}>
+                  <Share2 className="h-3.5 w-3.5" />
+                  {invitingPortal ? 'Envoi...' : 'Inviter au portail'}
+                </Button>
               )}
               <a
                 href={portalUrl}
@@ -548,6 +558,36 @@ export function ProjectOverview({
           ))}
         </div>
       </div>
+
+      {/* ── Dialog invitation manuelle ── */}
+      <Dialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Inviter un client au portail</DialogTitle>
+          </DialogHeader>
+          <div className="py-2 space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="invite-email">Adresse email du client</Label>
+              <Input
+                id="invite-email"
+                type="email"
+                placeholder="client@exemple.com"
+                value={inviteEmail}
+                onChange={e => setInviteEmail(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && inviteEmail) handleInvitePortal(inviteEmail) }}
+                autoFocus
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setInviteDialogOpen(false)}>Annuler</Button>
+            <Button disabled={!inviteEmail || invitingPortal} onClick={() => handleInvitePortal(inviteEmail)}>
+              <Share2 className="h-4 w-4 mr-2" />
+              Envoyer l&apos;invitation
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Dialogs ── */}
       <AlertDialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
