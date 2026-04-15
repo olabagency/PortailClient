@@ -2,7 +2,7 @@
 
 import { Suspense, useState } from 'react'
 import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -22,6 +22,7 @@ function SignupForm() {
   const searchParams = useSearchParams()
   const project = searchParams.get('project')
   const prefillEmail = searchParams.get('email') ?? ''
+  const router = useRouter()
 
   const [email, setEmail] = useState(prefillEmail)
   const [password, setPassword] = useState('')
@@ -42,10 +43,15 @@ function SignupForm() {
     if (password !== confirmPassword) { setError('Les mots de passe ne correspondent pas.'); return }
     setState('loading')
     const redirectTo = `${APP_CONFIG.url}/client/auth/callback${project ? '?project=' + project : ''}`
-    const { error: authError } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: redirectTo } })
+    const { data, error: authError } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: redirectTo } })
     if (authError) {
       setError(authError.message === 'User already registered' ? 'Un compte existe déjà. Connectez-vous.' : 'Une erreur est survenue.')
       setState('idle')
+      return
+    }
+    // Si session immédiate (confirmation email désactivée), rediriger directement
+    if (data.session) {
+      router.push(project ? `/client/projects/${project}` : '/client')
       return
     }
     setState('done')

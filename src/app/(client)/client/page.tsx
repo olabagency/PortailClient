@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -47,16 +48,17 @@ export default async function ClientDashboardPage() {
     .eq('user_id', user!.id)
     .single()
 
-  // Fallback : si pas trouvé par user_id, chercher par email et lier
+  // Fallback : si pas trouvé par user_id, chercher par email via admin (bypass RLS) et lier
   if (!client && user!.email) {
-    const { data: clientByEmail } = await supabase
+    const admin = createAdminClient()
+    const { data: clientByEmail } = await admin
       .from('clients')
       .select('id, name')
       .ilike('email', user!.email)
       .single()
 
     if (clientByEmail) {
-      await supabase
+      await admin
         .from('clients')
         .update({ user_id: user!.id })
         .eq('id', clientByEmail.id)
