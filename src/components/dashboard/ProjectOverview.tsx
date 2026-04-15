@@ -124,6 +124,10 @@ export function ProjectOverview({
   const [portalInvited, setPortalInvited] = useState(false)
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
+  const [linkClientOpen, setLinkClientOpen] = useState(false)
+  const [clientsList, setClientsList] = useState<{ id: string; name: string; company: string | null; email: string | null }[]>([])
+  const [clientSearch, setClientSearch] = useState('')
+  const [linkingClient, setLinkingClient] = useState(false)
 
   const statusInfo = statusConfig[project.status] ?? { label: project.status, bg: 'bg-gray-50', text: 'text-gray-600', border: 'border-gray-200', dot: 'bg-gray-400' }
   const progressPct = milestoneStats.total > 0
@@ -131,6 +135,47 @@ export function ProjectOverview({
     : 0
   const accentColor = project.color ?? '#E8553A'
   const initials = project.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
+
+  async function openLinkClientDialog() {
+    setClientSearch('')
+    setLinkClientOpen(true)
+    const res = await fetch('/api/clients')
+    if (res.ok) {
+      const json = await res.json() as { data: { id: string; name: string; company: string | null; email: string | null }[] }
+      setClientsList(json.data ?? [])
+    }
+  }
+
+  async function handleLinkClient(clientId: string) {
+    setLinkingClient(true)
+    try {
+      const res = await fetch(`/api/projects/${project.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ client_id: clientId }),
+      })
+      if (res.ok) {
+        toast.success('Client lié au projet')
+        setLinkClientOpen(false)
+        router.refresh()
+      } else {
+        const json = await res.json() as { error?: string }
+        toast.error(json.error ?? 'Erreur lors de la liaison')
+      }
+    } catch { toast.error('Erreur réseau') } finally { setLinkingClient(false) }
+  }
+
+  async function handleUnlinkClient() {
+    try {
+      const res = await fetch(`/api/projects/${project.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ client_id: null }),
+      })
+      if (res.ok) { toast.success('Client délié'); router.refresh() }
+      else toast.error('Erreur lors du déliage')
+    } catch { toast.error('Erreur réseau') }
+  }
 
   async function handleInvitePortal(emailOverride?: string) {
     const email = emailOverride ?? project.clients?.email
@@ -290,6 +335,17 @@ export function ProjectOverview({
                   <MoreHorizontal className="h-4 w-4" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={openLinkClientDialog}>
+                    <Users className="mr-2 h-4 w-4" />
+                    {project.clients ? 'Changer de client' : 'Lier à un client'}
+                  </DropdownMenuItem>
+                  {project.clients && (
+                    <DropdownMenuItem onClick={handleUnlinkClient}>
+                      <Users className="mr-2 h-4 w-4 text-muted-foreground" />
+                      Délier le client
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem
                     className="text-emerald-600 focus:text-emerald-600"
                     onClick={handleClose}
@@ -558,6 +614,53 @@ export function ProjectOverview({
           ))}
         </div>
       </div>
+
+      {/* ── Dialog lier un client ── */}
+      <Dialog open={linkClientOpen} onOpenChange={setLinkClientOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{project.clients ? 'Changer de client' : 'Lier à un client'}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <Input
+              placeholder="Rechercher un client..."
+              value={clientSearch}
+              onChange={e => setClientSearch(e.target.value)}
+              autoFocus
+            />
+            <div className="max-h-64 overflow-y-auto divide-y rounded-lg border">
+              {clientsList
+                .filter(c =>
+                  c.name.toLowerCase().includes(clientSearch.toLowerCase()) ||
+                  (c.company ?? '').toLowerCase().includes(clientSearch.toLowerCase()) ||
+                  (c.email ?? '').toLowerCase().includes(clientSearch.toLowerCase())
+                )
+                .map(c => (
+                  <button
+                    key={c.id}
+                    disabled={linkingClient}
+                    onClick={() => handleLinkClient(c.id)}
+                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-accent text-left transition-colors"
+                  >
+                    <div className="h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shrink-0">
+                      {c.name.slice(0, 2).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{c.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">{c.company ?? c.email ?? ''}</p>
+                    </div>
+                    {project.clients?.id === c.id && (
+                      <span className="text-xs text-emerald-600 font-medium shrink-0">Actuel</span>
+                    )}
+                  </button>
+                ))}
+              {clientsList.length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-6">Chargement...</p>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Dialog invitation manuelle ── */}
       <Dialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen}>

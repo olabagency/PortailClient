@@ -18,10 +18,12 @@ import {
 } from '@/components/ui/select'
 import {
   ArrowLeft, Pencil, Mail, Phone, Building2, FolderKanban, Plus, Calendar,
-  Globe, CreditCard, MapPin, Receipt, ChevronRight, X, Check,
+  Globe, CreditCard, MapPin, Receipt, ChevronRight, X, Check, Link2,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { toast } from 'sonner'
 
 type ClientType = 'individual' | 'company' | 'agency' | 'startup' | 'association' | 'other'
 
@@ -172,6 +174,45 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
   // Error state
   const [errorCoordonnees, setErrorCoordonnees] = useState<string | null>(null)
   const [errorFacturation, setErrorFacturation] = useState<string | null>(null)
+
+  // Link project
+  const [linkProjectOpen, setLinkProjectOpen] = useState(false)
+  const [projectsList, setProjectsList] = useState<{ id: string; name: string; color: string | null; status: string }[]>([])
+  const [projectSearch, setProjectSearch] = useState('')
+  const [linkingProject, setLinkingProject] = useState(false)
+
+  async function openLinkProjectDialog() {
+    setProjectSearch('')
+    setLinkProjectOpen(true)
+    const res = await fetch('/api/projects')
+    if (res.ok) {
+      const json = await res.json() as { data: { id: string; name: string; color: string | null; status: string; client_id: string | null }[] }
+      // Afficher les projets sans client OU déjà liés à ce client
+      setProjectsList((json.data ?? []).filter(p => !p.client_id || p.client_id === id))
+    }
+  }
+
+  async function handleLinkProject(projectId: string) {
+    setLinkingProject(true)
+    try {
+      const res = await fetch(`/api/projects/${projectId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ client_id: id }),
+      })
+      if (res.ok) {
+        toast.success('Projet lié au client')
+        setLinkProjectOpen(false)
+        // Refresh client data
+        const r = await fetch(`/api/clients/${id}`)
+        const { data } = await r.json() as { data: Client }
+        setClient(data)
+      } else {
+        const json = await res.json() as { error?: string }
+        toast.error(json.error ?? 'Erreur lors de la liaison')
+      }
+    } catch { toast.error('Erreur réseau') } finally { setLinkingProject(false) }
+  }
 
   useEffect(() => {
     fetch(`/api/clients/${id}`)
@@ -634,14 +675,25 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
           <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
             Projets ({client.projects?.length ?? 0})
           </CardTitle>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => router.push(`/dashboard/projects/new?client=${client.id}`)}
-          >
-            <Plus className="h-3.5 w-3.5 mr-1" />
-            Nouveau projet
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-muted-foreground hover:text-foreground"
+              onClick={openLinkProjectDialog}
+            >
+              <Link2 className="h-3.5 w-3.5 mr-1" />
+              Lier un projet
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => router.push(`/dashboard/projects/new?client=${client.id}`)}
+            >
+              <Plus className="h-3.5 w-3.5 mr-1" />
+              Nouveau projet
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {!client.projects?.length ? (
@@ -686,6 +738,50 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
           )}
         </CardContent>
       </Card>
+
+      {/* ── Dialog lier un projet ── */}
+      <Dialog open={linkProjectOpen} onOpenChange={setLinkProjectOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Lier un projet existant</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <Input
+              placeholder="Rechercher un projet..."
+              value={projectSearch}
+              onChange={e => setProjectSearch(e.target.value)}
+              autoFocus
+            />
+            <div className="max-h-64 overflow-y-auto divide-y rounded-lg border">
+              {projectsList
+                .filter(p => p.name.toLowerCase().includes(projectSearch.toLowerCase()))
+                .map(p => (
+                  <button
+                    key={p.id}
+                    disabled={linkingProject}
+                    onClick={() => handleLinkProject(p.id)}
+                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-accent text-left transition-colors"
+                  >
+                    <div
+                      className="h-8 w-2 rounded-full shrink-0"
+                      style={{ backgroundColor: p.color ?? '#E8553A' }}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{p.name}</p>
+                      <p className="text-xs text-muted-foreground">{statusLabels[p.status]?.label ?? p.status}</p>
+                    </div>
+                    {client.projects?.some(cp => cp.id === p.id) && (
+                      <span className="text-xs text-emerald-600 font-medium shrink-0">Déjà lié</span>
+                    )}
+                  </button>
+                ))}
+              {projectsList.length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-6">Aucun projet disponible</p>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
