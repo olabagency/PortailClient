@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
+import { useEffect, useState } from 'react'
 import { APP_CONFIG } from '@/config/app.config'
 import {
   FolderOpen, Settings, LogOut, LayoutDashboard, ListChecks,
@@ -26,6 +27,18 @@ export default function ClientSidebar() {
   const projectId = projectMatch?.[1] ?? null
   const currentSection = searchParams.get('s') ?? 'overview'
 
+  const [projectName, setProjectName] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!projectId) { setProjectName(null); return }
+    fetch(`/api/client/projects/${projectId}`)
+      .then(r => r.json())
+      .then((json: { data?: { project?: { name?: string } } }) => {
+        setProjectName(json.data?.project?.name ?? null)
+      })
+      .catch(() => setProjectName(null))
+  }, [projectId])
+
   return (
     <aside className="hidden md:flex flex-col w-56 shrink-0 border-r bg-white h-screen sticky top-0">
       {/* Logo */}
@@ -48,10 +61,19 @@ export default function ClientSidebar() {
               Mes projets
             </Link>
 
-            {/* Project nav header */}
-            <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
-              Mon projet
-            </p>
+            {/* Project name header */}
+            <div className="px-3 pb-2">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 mb-0.5">
+                Projet
+              </p>
+              {projectName ? (
+                <p className="text-xs font-semibold text-foreground truncate" title={projectName}>
+                  {projectName}
+                </p>
+              ) : (
+                <div className="h-3 w-24 bg-gray-100 rounded animate-pulse" />
+              )}
+            </div>
 
             {/* Project sections */}
             {projectSections.map(({ key, label, icon: Icon }) => {

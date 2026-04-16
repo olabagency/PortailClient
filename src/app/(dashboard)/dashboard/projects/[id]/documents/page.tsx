@@ -74,6 +74,8 @@ interface Document {
   mime_type: string | null
   folder_id: string | null
   visible_to_client: boolean
+  source: 'freelance' | 'client'
+  client_doc_status: 'pending_review' | 'acknowledged'
   created_at: string
 }
 
@@ -385,6 +387,22 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
       toast.success(doc.visible_to_client ? 'Document masqué aux clients' : 'Document visible aux clients')
     } else {
       toast.error('Erreur lors de la mise à jour.')
+    }
+  }
+
+  async function handleAcknowledge(doc: Document) {
+    const res = await fetch(`/api/projects/${id}/documents/${doc.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ client_doc_status: 'acknowledged' }),
+    })
+    if (res.ok) {
+      setDocuments((prev) =>
+        prev.map((d) => d.id === doc.id ? { ...d, client_doc_status: 'acknowledged' } : d)
+      )
+      toast.success('Document validé — le client en sera informé')
+    } else {
+      toast.error('Erreur lors de la validation.')
     }
   }
 
@@ -726,6 +744,7 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
                     setMoveFolderOpen(true)
                   }}
                   onDelete={() => handleDeleteDocument(doc)}
+                  onAcknowledge={() => handleAcknowledge(doc)}
                 />
               ))}
             </div>
@@ -1037,11 +1056,13 @@ interface DocumentItemProps {
   onRename: () => void
   onMove: () => void
   onDelete: () => void
+  onAcknowledge: () => void
 }
 
-function DocumentItem({ doc, onOpen, onToggleVisibility, onRename, onMove, onDelete }: DocumentItemProps) {
+function DocumentItem({ doc, onOpen, onToggleVisibility, onRename, onMove, onDelete, onAcknowledge }: DocumentItemProps) {
+  const isClientPending = doc.source === 'client' && doc.client_doc_status === 'pending_review'
   return (
-    <div className="flex items-center gap-3 px-4 py-3 hover:bg-muted/40 transition-colors group">
+    <div className={`flex items-center gap-3 px-4 py-3 hover:bg-muted/40 transition-colors group ${isClientPending ? 'bg-amber-50/60' : ''}`}>
       {/* Icon + Name */}
       <button
         onClick={onOpen}
@@ -1055,15 +1076,39 @@ function DocumentItem({ doc, onOpen, onToggleVisibility, onRename, onMove, onDel
         )}
       </button>
 
-      {/* Visibility badge */}
-      <Badge
-        variant={doc.visible_to_client ? 'default' : 'secondary'}
-        className={`text-xs shrink-0 ${
-          doc.visible_to_client ? 'bg-green-100 text-green-700 hover:bg-green-100' : ''
-        }`}
-      >
-        {doc.visible_to_client ? 'Client' : 'Admin'}
-      </Badge>
+      {/* Client uploaded + pending badge */}
+      {isClientPending && (
+        <Badge className="text-xs shrink-0 bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100 gap-1">
+          Envoyé par le client
+        </Badge>
+      )}
+      {doc.source === 'client' && doc.client_doc_status === 'acknowledged' && (
+        <Badge className="text-xs shrink-0 bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-50">
+          Validé
+        </Badge>
+      )}
+
+      {/* Validate button for client docs */}
+      {isClientPending && (
+        <button
+          onClick={onAcknowledge}
+          className="text-xs font-medium text-emerald-700 border border-emerald-200 rounded-md px-2 py-1 hover:bg-emerald-50 transition-colors shrink-0"
+        >
+          Valider la réception
+        </button>
+      )}
+
+      {/* Visibility badge (only for freelance docs) */}
+      {doc.source !== 'client' && (
+        <Badge
+          variant={doc.visible_to_client ? 'default' : 'secondary'}
+          className={`text-xs shrink-0 ${
+            doc.visible_to_client ? 'bg-green-100 text-green-700 hover:bg-green-100' : ''
+          }`}
+        >
+          {doc.visible_to_client ? 'Client' : 'Admin'}
+        </Badge>
+      )}
 
       {/* Size */}
       <span className="text-xs text-muted-foreground w-16 text-right shrink-0">

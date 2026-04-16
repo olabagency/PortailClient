@@ -18,7 +18,7 @@ import {
   Circle, CheckCircle2, FileText, Link2, File, Image as ImageIcon,
   ExternalLink, Download, Wrench, HelpCircle, Plus, X,
   CalendarDays, ShieldCheck, Clock, MapPin, Video, ChevronDown,
-  ChevronUp, Users, Paperclip, Trash2,
+  ChevronUp, Users, Paperclip, Trash2, UploadCloud, Hourglass,
 } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
@@ -71,6 +71,8 @@ interface Document {
   download_url: string | null
   size_bytes: number | null
   mime_type: string | null
+  source: 'freelance' | 'client'
+  client_doc_status: 'pending_review' | 'acknowledged'
   created_at: string
 }
 
@@ -236,6 +238,10 @@ export default function ClientProjectPage({ params }: { params: Promise<{ id: st
 
   // Meeting summary expand state
   const [expandedMeetings, setExpandedMeetings] = useState<Record<string, boolean>>({})
+
+  // Document upload state
+  const [docUploading, setDocUploading] = useState(false)
+  const docFileInputRef = useRef<HTMLInputElement>(null)
 
   // ---------------------------------------------------------------------------
   // Fetch
@@ -413,6 +419,51 @@ export default function ClientProjectPage({ params }: { params: Promise<{ id: st
       toast.error('Erreur lors de l\'envoi')
     } finally {
       setSubmittingFeedback(false)
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Document upload
+  // ---------------------------------------------------------------------------
+
+  async function handleDocUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!e.target.files) return
+    if (!file) return
+    if (docFileInputRef.current) docFileInputRef.current.value = ''
+
+    setDocUploading(true)
+    try {
+      // 1. Get presigned URL
+      const presignRes = await fetch(`/api/client/projects/${projectId}/documents/presign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: file.name, contentType: file.type, sizeBytes: file.size }),
+      })
+      if (!presignRes.ok) throw new Error('Erreur presign')
+      const { data: { uploadUrl, key } } = await presignRes.json() as { data: { uploadUrl: string; key: string } }
+
+      // 2. Upload to S3
+      await fetch(uploadUrl, { method: 'PUT', body: file, headers: { 'Content-Type': file.type } })
+
+      // 3. Save record
+      const saveRes = await fetch(`/api/client/projects/${projectId}/documents/client-upload`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: file.name, s3Key: key, sizeBytes: file.size, mimeType: file.type }),
+      })
+      if (!saveRes.ok) throw new Error('Erreur save')
+      const { data: doc } = await saveRes.json() as { data: Document }
+
+      setData(prev => prev ? {
+        ...prev,
+        documents: [{ ...doc, download_url: null }, ...prev.documents],
+      } : prev)
+      toast.success('Document envoyé — en attente de validation')
+    } catch {
+      toast.error('Erreur lors de l\'envoi du document')
+    } finally {
+      setDocUploading(false)
     }
   }
 
@@ -1080,41 +1131,84 @@ export default function ClientProjectPage({ params }: { params: Promise<{ id: st
       {/* ── DOCUMENTS ── */}
       {section === 'documents' && (
         <div className="space-y-0">
-          <SectionHeader
-            title="Documents partagés"
-            description="Accédez aux documents importants de votre projet : devis, contrats, livrables PDF et toutes les ressources partagées par votre prestataire."
-          />
+          <div className="flex items-start justify-between mb-5">
+            <div>
+              <h2 className="text-base font-semibold text-gray-900">Documents partagés</h2>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                Accédez aux documents de votre projet et envoyez vos propres fichiers à votre prestataire.
+              </p>
+            </div>
+            <div>
+              <input
+                ref={docFileInputRef}
+                type="file"
+                className="hidden"
+                onChange={handleDocUpload}
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-2 shrink-0"
+                disabled={docUploading}
+                onClick={() => docFileInputRef.current?.click()}
+              >
+                {docUploading
+                  ? <><div className="h-3.5 w-3.5 border-2 border-primary border-t-transparent rounded-full animate-spin" />Envoi…</>
+                  : <><UploadCloud className="h-3.5 w-3.5" />Envoyer un document</>
+                }
+              </Button>
+            </div>
+          </div>
+
           {documents.length === 0 ? (
-            <div className="rounded-2xl border bg-white shadow-sm">
-              <div className="py-14 text-center">
-                <FolderOpen className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
-                <p className="text-muted-foreground text-sm">Aucun document partagé pour le moment.</p>
-              </div>
+            <div className="rounded-2xl border border-dashed bg-gray-50 py-14 text-center">
+              <FolderOpen className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+              <p className="text-muted-foreground text-sm">Aucun document pour le moment.</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Votre prestataire partagera les documents ici. Vous pouvez aussi en envoyer.
+              </p>
             </div>
           ) : (
             <div className="space-y-2">
-              {documents.map(doc => (
-                <div key={doc.id} className="flex items-center gap-3 bg-white border rounded-xl px-4 py-3">
-                  <DocIcon doc={doc} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{doc.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {format(new Date(doc.created_at), 'd MMM yyyy', { locale: fr })}
-                      {doc.size_bytes ? ` · ${formatBytes(doc.size_bytes)}` : ''}
-                    </p>
+              {documents.map(doc => {
+                const isPendingReview = doc.source === 'client' && doc.client_doc_status === 'pending_review'
+                return (
+                  <div key={doc.id} className={`flex items-center gap-3 border rounded-xl px-4 py-3 ${isPendingReview ? 'bg-amber-50 border-amber-200' : 'bg-white'}`}>
+                    <DocIcon doc={doc} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-medium truncate">{doc.name}</p>
+                        {isPendingReview && (
+                          <Badge className="text-xs bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100 gap-1">
+                            <Hourglass className="h-3 w-3" />
+                            En attente de validation
+                          </Badge>
+                        )}
+                        {doc.source === 'client' && doc.client_doc_status === 'acknowledged' && (
+                          <Badge className="text-xs bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100">
+                            Reçu par le prestataire
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {doc.source === 'client' ? 'Envoyé par vous · ' : ''}
+                        {format(new Date(doc.created_at), 'd MMM yyyy', { locale: fr })}
+                        {doc.size_bytes ? ` · ${formatBytes(doc.size_bytes)}` : ''}
+                      </p>
+                    </div>
+                    {(doc.download_url ?? doc.url) && !isPendingReview && (
+                      <a href={doc.download_url ?? doc.url} target="_blank" rel="noopener noreferrer" className="shrink-0">
+                        <Button variant="ghost" size="sm" className="gap-1.5">
+                          {doc.type === 'file'
+                            ? <><Download className="h-3.5 w-3.5" />Télécharger</>
+                            : <><ExternalLink className="h-3.5 w-3.5" />Ouvrir</>
+                          }
+                        </Button>
+                      </a>
+                    )}
                   </div>
-                  {(doc.download_url ?? doc.url) && (
-                    <a href={doc.download_url ?? doc.url} target="_blank" rel="noopener noreferrer" className="shrink-0">
-                      <Button variant="ghost" size="sm" className="gap-1.5">
-                        {doc.type === 'file'
-                          ? <><Download className="h-3.5 w-3.5" />Télécharger</>
-                          : <><ExternalLink className="h-3.5 w-3.5" />Ouvrir</>
-                        }
-                      </Button>
-                    </a>
-                  )}
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>

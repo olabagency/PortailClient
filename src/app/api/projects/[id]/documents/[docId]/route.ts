@@ -57,6 +57,7 @@ const documentUpdateSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   folder_id: z.string().uuid().optional().nullable(),
   visible_to_client: z.boolean().optional(),
+  client_doc_status: z.enum(['pending_review', 'acknowledged']).optional(),
 })
 
 // PUT /api/projects/[id]/documents/[docId]

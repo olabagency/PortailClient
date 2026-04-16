@@ -33,7 +33,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
     const { data: documents, error } = await admin
       .from('project_documents')
-      .select('id, name, type, url, s3_key, size_bytes, mime_type, created_at')
+      .select('id, name, type, url, s3_key, size_bytes, mime_type, source, client_doc_status, created_at')
       .eq('project_id', id)
       .eq('visible_to_client', true)
       .order('created_at', { ascending: false })

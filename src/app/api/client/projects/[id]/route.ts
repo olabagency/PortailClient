@@ -97,6 +97,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
         deliverables: deliverables ?? [],
         documents: documents ?? [],
         feedback: feedback ?? [],
+        meetings: meetings ?? [],
         portal: portalAccess ?? { require_account: false, accepted_at: null },
       },
     })
