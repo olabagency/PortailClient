@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react'
 import { APP_CONFIG } from '@/config/app.config'
 import {
   FolderOpen, Settings, LogOut, LayoutDashboard, ListChecks,
-  PackageOpen, MessageSquare, ChevronLeft, FileText, CalendarDays,
+  PackageOpen, MessageSquare, ChevronLeft, FileText, CalendarDays, UserCircle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -52,7 +52,6 @@ export default function ClientSidebar() {
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         {projectId ? (
           <>
-            {/* Back to projects */}
             <Link
               href="/client"
               className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors mb-2"
@@ -61,7 +60,6 @@ export default function ClientSidebar() {
               Mes projets
             </Link>
 
-            {/* Project name header */}
             <div className="px-3 pb-2">
               <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 mb-0.5">
                 Projet
@@ -75,7 +73,6 @@ export default function ClientSidebar() {
               )}
             </div>
 
-            {/* Project sections */}
             {projectSections.map(({ key, label, icon: Icon }) => {
               const isActive = currentSection === key
               return (
@@ -114,8 +111,25 @@ export default function ClientSidebar() {
       {/* Bottom actions */}
       <div className="px-3 py-3 border-t space-y-1">
         <Link
+          href="/client/infos"
+          className={cn(
+            'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors',
+            pathname === '/client/infos'
+              ? 'bg-primary/10 text-primary'
+              : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+          )}
+        >
+          <UserCircle className="h-4 w-4 shrink-0" />
+          Mes infos
+        </Link>
+        <Link
           href="/client/settings"
-          className="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+          className={cn(
+            'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors',
+            pathname === '/client/settings'
+              ? 'bg-primary/10 text-primary'
+              : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+          )}
         >
           <Settings className="h-4 w-4 shrink-0" />
           Paramètres

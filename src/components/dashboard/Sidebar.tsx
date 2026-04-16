@@ -20,6 +20,7 @@ import {
   CalendarCheck,
   UserCircle2,
   KeyRound,
+  History,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { APP_CONFIG } from '@/config/app.config'
@@ -45,6 +46,7 @@ const globalNavItems = [
 ]
 
 const bottomItems = [
+  { href: '/dashboard/history', label: 'Historique', icon: History, exact: false },
   { href: '/dashboard/account', label: 'Paramètres', icon: Settings, exact: false },
 ]
 

@@ -19,6 +19,7 @@ import {
   ExternalLink, Download, Wrench, HelpCircle, Plus, X,
   CalendarDays, ShieldCheck, Clock, MapPin, Video, ChevronDown,
   ChevronUp, Users, Paperclip, Trash2, UploadCloud, Hourglass,
+  Send, Quote, Eye,
 } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
@@ -99,6 +100,15 @@ interface Meeting {
   notes: string | null
   summary: string | null
   attendees: string[] | null
+}
+
+interface MeetingComment {
+  id: string
+  meeting_id: string
+  content: string
+  source: 'client' | 'freelance'
+  quoted_text: string | null
+  created_at: string
 }
 
 interface PortalData {
@@ -242,6 +252,14 @@ export default function ClientProjectPage({ params }: { params: Promise<{ id: st
   // Document upload state
   const [docUploading, setDocUploading] = useState(false)
   const docFileInputRef = useRef<HTMLInputElement>(null)
+
+  // Meeting comments state
+  const [meetingComments, setMeetingComments] = useState<Record<string, MeetingComment[]>>({})
+  const [loadingComments, setLoadingComments] = useState<Record<string, boolean>>({})
+  const [commentContent, setCommentContent] = useState<Record<string, string>>({})
+  const [commentQuote, setCommentQuote] = useState<Record<string, string>>({})
+  const [submittingComment, setSubmittingComment] = useState<Record<string, boolean>>({})
+  const [commentFormOpen, setCommentFormOpen] = useState<Record<string, boolean>>({})
 
   // ---------------------------------------------------------------------------
   // Fetch
@@ -419,6 +437,63 @@ export default function ClientProjectPage({ params }: { params: Promise<{ id: st
       toast.error('Erreur lors de l\'envoi')
     } finally {
       setSubmittingFeedback(false)
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Meeting comments
+  // ---------------------------------------------------------------------------
+
+  async function fetchComments(meetingId: string) {
+    if (meetingComments[meetingId] !== undefined) return // already loaded
+    setLoadingComments(prev => ({ ...prev, [meetingId]: true }))
+    try {
+      const res = await fetch(`/api/client/projects/${projectId}/meetings/${meetingId}/comments`)
+      if (res.ok) {
+        const json = await res.json() as { data: MeetingComment[] }
+        setMeetingComments(prev => ({ ...prev, [meetingId]: json.data ?? [] }))
+      }
+    } finally {
+      setLoadingComments(prev => ({ ...prev, [meetingId]: false }))
+    }
+  }
+
+  async function handleCommentSubmit(meetingId: string) {
+    const content = commentContent[meetingId]?.trim()
+    if (!content) return
+    setSubmittingComment(prev => ({ ...prev, [meetingId]: true }))
+    try {
+      const res = await fetch(`/api/client/projects/${projectId}/meetings/${meetingId}/comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content,
+          quoted_text: commentQuote[meetingId]?.trim() || null,
+        }),
+      })
+      if (!res.ok) throw new Error()
+      const json = await res.json() as { data: MeetingComment }
+      setMeetingComments(prev => ({
+        ...prev,
+        [meetingId]: [...(prev[meetingId] ?? []), json.data],
+      }))
+      setCommentContent(prev => ({ ...prev, [meetingId]: '' }))
+      setCommentQuote(prev => ({ ...prev, [meetingId]: '' }))
+      setCommentFormOpen(prev => ({ ...prev, [meetingId]: false }))
+      toast.success('Commentaire ajouté')
+    } catch {
+      toast.error('Erreur lors de l\'envoi')
+    } finally {
+      setSubmittingComment(prev => ({ ...prev, [meetingId]: false }))
+    }
+  }
+
+  function handleSummaryMouseUp(meetingId: string) {
+    const selection = window.getSelection()
+    const text = selection?.toString().trim()
+    if (text && text.length > 3) {
+      setCommentQuote(prev => ({ ...prev, [meetingId]: text }))
+      setCommentFormOpen(prev => ({ ...prev, [meetingId]: true }))
     }
   }
 
@@ -1197,14 +1272,33 @@ export default function ClientProjectPage({ params }: { params: Promise<{ id: st
                       </p>
                     </div>
                     {(doc.download_url ?? doc.url) && !isPendingReview && (
-                      <a href={doc.download_url ?? doc.url} target="_blank" rel="noopener noreferrer" className="shrink-0">
-                        <Button variant="ghost" size="sm" className="gap-1.5">
-                          {doc.type === 'file'
-                            ? <><Download className="h-3.5 w-3.5" />Télécharger</>
-                            : <><ExternalLink className="h-3.5 w-3.5" />Ouvrir</>
-                          }
-                        </Button>
-                      </a>
+                      <div className="shrink-0 flex items-center gap-1">
+                        {doc.type === 'file' ? (
+                          <>
+                            <a href={doc.download_url ?? doc.url} target="_blank" rel="noopener noreferrer">
+                              <Button variant="ghost" size="sm" className="gap-1.5">
+                                <Eye className="h-3.5 w-3.5" />Ouvrir
+                              </Button>
+                            </a>
+                            <a
+                              href={doc.download_url ?? doc.url}
+                              download={doc.name}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              <Button variant="ghost" size="sm" className="gap-1.5">
+                                <Download className="h-3.5 w-3.5" />Télécharger
+                              </Button>
+                            </a>
+                          </>
+                        ) : (
+                          <a href={doc.url} target="_blank" rel="noopener noreferrer">
+                            <Button variant="ghost" size="sm" className="gap-1.5">
+                              <ExternalLink className="h-3.5 w-3.5" />Ouvrir
+                            </Button>
+                          </a>
+                        )}
+                      </div>
                     )}
                   </div>
                 )
@@ -1223,38 +1317,25 @@ export default function ClientProjectPage({ params }: { params: Promise<{ id: st
           />
 
           {meetings.length === 0 ? (
-            <div className="rounded-2xl border bg-white shadow-sm">
-              <div className="py-14 text-center">
-                <CalendarDays className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
-                <p className="text-muted-foreground text-sm">Aucune réunion planifiée pour le moment.</p>
-                <p className="text-xs text-muted-foreground mt-1">Votre prestataire ajoutera ici les réunions de suivi.</p>
-              </div>
+            <div className="rounded-2xl border bg-white py-14 text-center">
+              <CalendarDays className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+              <p className="text-muted-foreground text-sm">Aucune réunion planifiée pour le moment.</p>
+              <p className="text-xs text-muted-foreground mt-1">Votre prestataire ajoutera ici les réunions de suivi.</p>
             </div>
           ) : (
             <div className="space-y-6">
-              {/* Upcoming meetings */}
+              {/* Upcoming */}
               {upcomingMeetings.length > 0 && (
                 <div>
-                  <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">
-                    À venir
-                  </h3>
+                  <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">À venir</h3>
                   <div className="space-y-3">
                     {upcomingMeetings.map(m => (
                       <div key={m.id} className="rounded-2xl border bg-white shadow-sm overflow-hidden">
                         <div className="p-5 flex items-start gap-4">
-                          {/* Date badge */}
-                          <div
-                            className="h-14 w-14 rounded-xl flex flex-col items-center justify-center shrink-0 text-white"
-                            style={{ backgroundColor: accentColor }}
-                          >
-                            <span className="text-lg font-bold leading-none">
-                              {format(new Date(m.scheduled_at), 'dd')}
-                            </span>
-                            <span className="text-[11px] uppercase leading-none mt-0.5">
-                              {format(new Date(m.scheduled_at), 'MMM', { locale: fr })}
-                            </span>
+                          <div className="h-14 w-14 rounded-xl flex flex-col items-center justify-center shrink-0 text-white" style={{ backgroundColor: accentColor }}>
+                            <span className="text-lg font-bold leading-none">{format(new Date(m.scheduled_at), 'dd')}</span>
+                            <span className="text-[11px] uppercase leading-none mt-0.5">{format(new Date(m.scheduled_at), 'MMM', { locale: fr })}</span>
                           </div>
-
                           <div className="flex-1 min-w-0">
                             <p className="font-semibold text-sm">{m.title}</p>
                             <div className="mt-1.5 space-y-1">
@@ -1263,29 +1344,16 @@ export default function ClientProjectPage({ params }: { params: Promise<{ id: st
                                 {format(new Date(m.scheduled_at), "EEEE d MMMM 'à' HH'h'mm", { locale: fr })}
                                 {m.duration_min ? ` · ${m.duration_min} min` : ''}
                               </p>
-                              {m.location && (
-                                <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                                  <MapPin className="h-3.5 w-3.5 shrink-0" />{m.location}
-                                </p>
-                              )}
+                              {m.location && <p className="text-xs text-muted-foreground flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5 shrink-0" />{m.location}</p>}
                               {m.attendees && m.attendees.length > 0 && (
-                                <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                                  <Users className="h-3.5 w-3.5 shrink-0" />
-                                  {m.attendees.join(', ')}
-                                </p>
+                                <p className="text-xs text-muted-foreground flex items-center gap-1.5"><Users className="h-3.5 w-3.5 shrink-0" />{m.attendees.join(', ')}</p>
                               )}
                             </div>
-                            {m.notes && (
-                              <p className="text-xs text-muted-foreground mt-2 italic border-t pt-2">{m.notes}</p>
-                            )}
+                            {m.notes && <p className="text-xs text-muted-foreground mt-2 italic border-t pt-2">{m.notes}</p>}
                           </div>
-
                           {m.meeting_link && (
                             <a href={m.meeting_link} target="_blank" rel="noopener noreferrer">
-                              <Button size="sm" className="shrink-0 gap-1.5">
-                                <Video className="h-3.5 w-3.5" />
-                                Rejoindre
-                              </Button>
+                              <Button size="sm" className="shrink-0 gap-1.5"><Video className="h-3.5 w-3.5" />Rejoindre</Button>
                             </a>
                           )}
                         </div>
@@ -1298,25 +1366,26 @@ export default function ClientProjectPage({ params }: { params: Promise<{ id: st
               {/* Past meetings */}
               {pastMeetings.length > 0 && (
                 <div>
-                  <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">
-                    Réunions passées
-                  </h3>
+                  <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Réunions passées</h3>
                   <div className="space-y-2">
                     {[...pastMeetings].reverse().map(m => {
                       const isExpanded = expandedMeetings[m.id] ?? false
+                      const comments = meetingComments[m.id] ?? []
+                      const isFormOpen = commentFormOpen[m.id] ?? false
+
                       return (
                         <div key={m.id} className="rounded-xl border bg-white shadow-sm overflow-hidden">
                           <button
                             className="w-full p-4 flex items-center gap-3 text-left hover:bg-gray-50 transition-colors"
-                            onClick={() => setExpandedMeetings(prev => ({ ...prev, [m.id]: !isExpanded }))}
+                            onClick={() => {
+                              const next = !isExpanded
+                              setExpandedMeetings(prev => ({ ...prev, [m.id]: next }))
+                              if (next) void fetchComments(m.id)
+                            }}
                           >
                             <div className="h-9 w-9 rounded-lg bg-gray-100 flex flex-col items-center justify-center shrink-0">
-                              <span className="text-xs font-bold leading-none text-gray-600">
-                                {format(new Date(m.scheduled_at), 'dd')}
-                              </span>
-                              <span className="text-[9px] uppercase leading-none text-gray-400 mt-0.5">
-                                {format(new Date(m.scheduled_at), 'MMM', { locale: fr })}
-                              </span>
+                              <span className="text-xs font-bold leading-none text-gray-600">{format(new Date(m.scheduled_at), 'dd')}</span>
+                              <span className="text-[9px] uppercase leading-none text-gray-400 mt-0.5">{format(new Date(m.scheduled_at), 'MMM', { locale: fr })}</span>
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium text-gray-700 truncate">{m.title}</p>
@@ -1325,53 +1394,124 @@ export default function ClientProjectPage({ params }: { params: Promise<{ id: st
                                 {m.duration_min ? ` · ${m.duration_min} min` : ''}
                               </p>
                             </div>
-                            {m.summary ? (
-                              <Badge className="text-xs bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100 shrink-0">
-                                Compte-rendu disponible
-                              </Badge>
-                            ) : (
-                              <Badge variant="outline" className="text-xs shrink-0">Sans compte-rendu</Badge>
-                            )}
-                            {isExpanded
-                              ? <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" />
-                              : <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+                            {m.summary
+                              ? <Badge className="text-xs bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100 shrink-0">Compte-rendu disponible</Badge>
+                              : <Badge variant="outline" className="text-xs shrink-0">Sans compte-rendu</Badge>
                             }
+                            {isExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" /> : <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />}
                           </button>
 
                           {isExpanded && (
-                            <div className="px-4 pb-4 border-t">
-                              <div className="pt-3 space-y-3">
-                                {m.location && (
-                                  <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                                    <MapPin className="h-3.5 w-3.5 shrink-0" />{m.location}
-                                  </p>
-                                )}
-                                {m.attendees && m.attendees.length > 0 && (
-                                  <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                                    <Users className="h-3.5 w-3.5 shrink-0" />
-                                    {m.attendees.join(', ')}
-                                  </p>
-                                )}
+                            <div className="border-t">
+                              <div className="p-4 space-y-4">
+                                {/* Meta */}
+                                <div className="flex flex-wrap gap-3">
+                                  {m.location && <p className="text-xs text-muted-foreground flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5 shrink-0" />{m.location}</p>}
+                                  {m.attendees && m.attendees.length > 0 && <p className="text-xs text-muted-foreground flex items-center gap-1.5"><Users className="h-3.5 w-3.5 shrink-0" />{m.attendees.join(', ')}</p>}
+                                </div>
+
                                 {m.notes && (
                                   <div>
                                     <p className="text-xs font-semibold text-gray-700 mb-1">Notes</p>
                                     <p className="text-xs text-muted-foreground whitespace-pre-line">{m.notes}</p>
                                   </div>
                                 )}
+
+                                {/* Summary — HTML rendered */}
                                 {m.summary ? (
-                                  <div className="rounded-lg bg-emerald-50 border border-emerald-100 p-3">
-                                    <p className="text-xs font-semibold text-emerald-800 mb-1.5">
-                                      Compte-rendu
-                                    </p>
-                                    <p className="text-xs text-emerald-700 whitespace-pre-line leading-relaxed">
-                                      {m.summary}
-                                    </p>
+                                  <div className="rounded-xl bg-emerald-50 border border-emerald-100 overflow-hidden">
+                                    <div className="px-4 py-2.5 border-b border-emerald-100 flex items-center justify-between">
+                                      <p className="text-xs font-semibold text-emerald-800">Compte-rendu</p>
+                                      <p className="text-[11px] text-emerald-600 italic">Sélectionnez du texte pour le citer dans un commentaire</p>
+                                    </div>
+                                    <div
+                                      className="p-4 prose prose-sm prose-emerald max-w-none text-emerald-900 [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+                                      style={{ fontSize: '0.8125rem', lineHeight: '1.6' }}
+                                      // eslint-disable-next-line react/no-danger
+                                      dangerouslySetInnerHTML={{ __html: m.summary }}
+                                      onMouseUp={() => handleSummaryMouseUp(m.id)}
+                                    />
                                   </div>
                                 ) : (
-                                  <p className="text-xs text-muted-foreground italic">
-                                    Aucun compte-rendu rédigé pour cette réunion.
-                                  </p>
+                                  <p className="text-xs text-muted-foreground italic">Aucun compte-rendu rédigé pour cette réunion.</p>
                                 )}
+
+                                {/* Comments */}
+                                <div className="space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <p className="text-xs font-semibold text-gray-700">
+                                      Commentaires {comments.length > 0 ? `(${comments.length})` : ''}
+                                    </p>
+                                    {!isFormOpen && (
+                                      <button
+                                        onClick={() => setCommentFormOpen(prev => ({ ...prev, [m.id]: true }))}
+                                        className="text-xs text-primary hover:underline flex items-center gap-1"
+                                      >
+                                        <Plus className="h-3 w-3" />Ajouter un commentaire
+                                      </button>
+                                    )}
+                                  </div>
+
+                                  {loadingComments[m.id] ? (
+                                    <div className="py-4 text-center"><div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" /></div>
+                                  ) : comments.length > 0 ? (
+                                    <div className="space-y-2">
+                                      {comments.map(c => (
+                                        <div key={c.id} className={`rounded-lg p-3 text-sm ${c.source === 'client' ? 'bg-blue-50 border border-blue-100' : 'bg-gray-50 border border-gray-100'}`}>
+                                          {c.quoted_text && (
+                                            <blockquote className="border-l-2 border-current opacity-60 pl-2 mb-2 text-xs italic line-clamp-2">
+                                              <Quote className="h-3 w-3 inline mr-1" />
+                                              {c.quoted_text}
+                                            </blockquote>
+                                          )}
+                                          <p className="text-sm">{c.content}</p>
+                                          <p className="text-[11px] text-muted-foreground mt-1">
+                                            {c.source === 'client' ? 'Vous' : 'Prestataire'} · {format(new Date(c.created_at), "d MMM 'à' HH'h'mm", { locale: fr })}
+                                          </p>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : null}
+
+                                  {/* Comment form */}
+                                  {isFormOpen && (
+                                    <div className="rounded-xl border bg-white p-3 space-y-2">
+                                      {commentQuote[m.id] && (
+                                        <div className="flex items-start gap-2 bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2">
+                                          <Quote className="h-3.5 w-3.5 text-yellow-600 shrink-0 mt-0.5" />
+                                          <p className="text-xs text-yellow-800 flex-1 line-clamp-2 italic">{commentQuote[m.id]}</p>
+                                          <button onClick={() => setCommentQuote(prev => ({ ...prev, [m.id]: '' }))} className="text-yellow-500 hover:text-yellow-700">
+                                            <X className="h-3 w-3" />
+                                          </button>
+                                        </div>
+                                      )}
+                                      <Textarea
+                                        placeholder="Votre commentaire sur ce compte-rendu…"
+                                        rows={3}
+                                        className="text-sm resize-none"
+                                        value={commentContent[m.id] ?? ''}
+                                        onChange={e => setCommentContent(prev => ({ ...prev, [m.id]: e.target.value }))}
+                                        autoFocus
+                                      />
+                                      <div className="flex gap-2 justify-end">
+                                        <Button variant="ghost" size="sm" onClick={() => {
+                                          setCommentFormOpen(prev => ({ ...prev, [m.id]: false }))
+                                          setCommentQuote(prev => ({ ...prev, [m.id]: '' }))
+                                        }}>
+                                          Annuler
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          className="gap-1.5"
+                                          disabled={!commentContent[m.id]?.trim() || submittingComment[m.id]}
+                                          onClick={() => handleCommentSubmit(m.id)}
+                                        >
+                                          {submittingComment[m.id] ? 'Envoi…' : <><Send className="h-3.5 w-3.5" />Envoyer</>}
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           )}
