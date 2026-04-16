@@ -135,7 +135,31 @@
       "Bash(/usr/local/bin/npx tsc:*)",
       "Read(//Users/adrien/**)",
       "Bash(ls /opt/homebrew/opt/node*/bin/node)",
-      "Bash(node -e \"const Stripe = require\\('stripe'\\); const s = new Stripe\\('test'\\); console.log\\('ok'\\)\")"
+      "Bash(node -e \"const Stripe = require\\('stripe'\\); const s = new Stripe\\('test'\\); console.log\\('ok'\\)\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/dashboard)",
+      "Bash(npx next:*)",
+      "Bash(sed -i '' 's/className=\"max-w-5xl space-y-6\"/className=\"space-y-6\"/' \"/Users/adrien/Desktop/Portail client/src/app/\\(dashboard\\)/dashboard/page.tsx\")",
+      "Bash(sed -i '' 's/className=\"space-y-6 max-w-5xl\"/className=\"space-y-6\"/' \"/Users/adrien/Desktop/Portail client/src/app/\\(dashboard\\)/dashboard/projects/page.tsx\")",
+      "Bash(sed -i '' 's/className=\"space-y-6 max-w-4xl\"/className=\"space-y-6\"/' \"/Users/adrien/Desktop/Portail client/src/app/\\(dashboard\\)/dashboard/clients/page.tsx\")",
+      "Bash(sed -i '' 's/className=\"space-y-5 max-w-3xl\"/className=\"space-y-5 max-w-4xl\"/' \"/Users/adrien/Desktop/Portail client/src/app/\\(dashboard\\)/dashboard/clients/[id]/page.tsx\")",
+      "Bash(sed -i '' 's/className=\"space-y-6 max-w-3xl\"/className=\"space-y-6 max-w-4xl\"/' \"/Users/adrien/Desktop/Portail client/src/app/\\(dashboard\\)/dashboard/clients/[id]/page.tsx\")",
+      "Bash(sed -i '' 's/className=\"flex flex-col gap-5 max-w-5xl\"/className=\"flex flex-col gap-5\"/' \"/Users/adrien/Desktop/Portail client/src/components/dashboard/ProjectOverview.tsx\")",
+      "Bash(sed -i '' 's/className=\"space-y-6 max-w-2xl\"/className=\"space-y-6\"/' \"/Users/adrien/Desktop/Portail client/src/app/\\(dashboard\\)/dashboard/projects/[id]/onboarding/page.tsx\")",
+      "Bash(sed -i '' 's/className=\"space-y-6 max-w-2xl\"/className=\"space-y-6 max-w-2xl\"/' \"/Users/adrien/Desktop/Portail client/src/app/\\(dashboard\\)/dashboard/projects/[id]/share/page.tsx\")",
+      "Bash(mkdir -p \"/Users/adrien/Desktop/Portail client/src/app/api/projects/[id]/meetings/[meetingId]\")",
+      "Bash(mkdir -p \"/Users/adrien/Desktop/Portail client/src/app/\\(dashboard\\)/dashboard/projects/[id]/meetings\")",
+      "Bash(next build:*)",
+      "Bash(node -e \"require\\('./.next/server/app/\\(dashboard\\)/dashboard/account/page.js'\\)\")",
+      "Bash(mkdir -p \"/Users/adrien/Desktop/Portail client/src/app/api/projects/[id]/vault/verify-password\")",
+      "Bash(mkdir -p \"/Users/adrien/Desktop/Portail client/src/app/api/projects/[id]/vault/request-update\")",
+      "Bash(cat \"/Users/adrien/Desktop/Portail client/src/app/\\(dashboard\\)/dashboard/projects/[id]/documents/page.tsx\")",
+      "Read(//tmp/**)",
+      "Bash(head -n 1000 \"/Users/adrien/Desktop/Portail client/src/app/\\(dashboard\\)/dashboard/projects/[id]/documents/page.tsx\")",
+      "Bash(tail -n +1001 \"/Users/adrien/Desktop/Portail client/src/app/\\(dashboard\\)/dashboard/projects/[id]/documents/page.tsx\")",
+      "Bash(wc -l /tmp/page_part*.txt)",
+      "Bash(python3)",
+      "Bash(gh auth:*)"
     ]
   }
 }

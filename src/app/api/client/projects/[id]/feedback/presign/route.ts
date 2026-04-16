@@ -1,17 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { generatePresignedUploadUrl } from '@/lib/s3'
 import { z } from 'zod'
 
 const schema = z.object({
-  title: z.string().min(1).max(255),
-  content: z.string().optional().nullable(),
-  type: z.enum(['feedback', 'modification_request', 'question']),
-  deliverable_id: z.string().uuid().optional().nullable(),
-  media_urls: z.array(z.string()).optional().nullable(),
+  filename: z.string().min(1).max(255),
+  contentType: z.string().regex(/^(image|video)\//),
 })
 
-// POST /api/client/projects/[id]/feedback
+const ALLOWED_MIME = [
+  'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+  'video/mp4', 'video/webm', 'video/quicktime',
+]
+
+// POST /api/client/projects/[id]/feedback/presign
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -24,7 +27,7 @@ export async function POST(
 
     const admin = createAdminClient()
 
-    // Vérifier accès : le client doit être lié à ce projet
+    // Vérifier accès
     const { data: clientRecord } = await admin
       .from('clients')
       .select('id')
@@ -48,38 +51,16 @@ export async function POST(
       return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
     }
 
-    // Récupérer la phase courante
-    const { data: existingFeedback } = await admin
-      .from('client_feedback')
-      .select('phase')
-      .eq('project_id', id)
-      .order('phase', { ascending: false })
-      .limit(1)
-      .single()
-
-    const currentPhase = existingFeedback?.phase ?? 1
-
-    const { data: newFeedback, error: insertError } = await admin
-      .from('client_feedback')
-      .insert({
-        project_id: id,
-        title: parsed.data.title,
-        content: parsed.data.content ?? null,
-        type: parsed.data.type,
-        source: 'client',
-        status: 'pending',
-        phase: currentPhase,
-        deliverable_id: parsed.data.deliverable_id ?? null,
-        media_urls: parsed.data.media_urls ?? [],
-      })
-      .select()
-      .single()
-
-    if (insertError || !newFeedback) {
-      return NextResponse.json({ error: 'Erreur lors de la création du feedback' }, { status: 500 })
+    if (!ALLOWED_MIME.includes(parsed.data.contentType)) {
+      return NextResponse.json({ error: 'Type de fichier non autorisé' }, { status: 400 })
     }
 
-    return NextResponse.json({ data: newFeedback })
+    const ext = parsed.data.filename.split('.').pop() ?? 'bin'
+    const key = `${user.id}/${id}/feedback/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
+
+    const uploadUrl = await generatePresignedUploadUrl(key, parsed.data.contentType, 300)
+
+    return NextResponse.json({ data: { uploadUrl, key } })
   } catch {
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
   }

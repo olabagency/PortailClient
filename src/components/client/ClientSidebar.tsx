@@ -5,7 +5,7 @@ import { usePathname, useSearchParams } from 'next/navigation'
 import { APP_CONFIG } from '@/config/app.config'
 import {
   FolderOpen, Settings, LogOut, LayoutDashboard, ListChecks,
-  PackageOpen, MessageSquare, ChevronLeft, FileText,
+  PackageOpen, MessageSquare, ChevronLeft, FileText, CalendarDays,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -15,6 +15,7 @@ const projectSections = [
   { key: 'deliverables', label: 'Livrables', icon: PackageOpen },
   { key: 'feedback', label: 'Retours', icon: MessageSquare },
   { key: 'documents', label: 'Documents', icon: FileText },
+  { key: 'meetings', label: 'Réunions', icon: CalendarDays },
 ]
 
 export default function ClientSidebar() {

@@ -51,6 +51,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       { data: deliverables },
       { data: documents },
       { data: feedback },
+      { data: meetings },
     ] = await Promise.all([
       admin
         .from('project_milestones')
@@ -74,6 +75,11 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
         .select('*')
         .eq('project_id', id)
         .order('created_at', { ascending: false }),
+      admin
+        .from('project_meetings')
+        .select('id, title, scheduled_at, duration_min, location, meeting_link, notes, summary, attendees')
+        .eq('project_id', id)
+        .order('scheduled_at', { ascending: true }),
     ])
 
     // Vérifier l'accès portail (optionnel, pour les métadonnées)
