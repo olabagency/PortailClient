@@ -48,6 +48,8 @@ import {
   Phone,
   Building2,
   HelpCircle,
+  MessageSquare,
+  Send,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -85,6 +87,15 @@ interface MeetingFormData {
   attendees: string[]
   type: MeetingType
   status: MeetingStatus
+}
+
+interface MeetingComment {
+  id: string
+  meeting_id: string
+  content: string
+  source: 'client' | 'freelance'
+  quoted_text: string | null
+  created_at: string
 }
 
 const defaultForm = (): MeetingFormData => ({
@@ -546,6 +557,12 @@ function MeetingsPageInner({
   const [summarySaving, setSummarySaving] = useState(false)
   const [sendingSummary, setSendingSummary] = useState(false)
 
+  // Comments
+  const [comments, setComments] = useState<MeetingComment[]>([])
+  const [loadingComments, setLoadingComments] = useState(false)
+  const [commentText, setCommentText] = useState('')
+  const [submittingComment, setSubmittingComment] = useState(false)
+
   // -------------------------------------------------------------------------
   // Fetch
   // -------------------------------------------------------------------------
@@ -716,11 +733,48 @@ function MeetingsPageInner({
   // Summary dialog
   // -------------------------------------------------------------------------
 
+  async function fetchComments(meetingId: string) {
+    setLoadingComments(true)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/meetings/${meetingId}/comments`)
+      if (res.ok) {
+        const json = (await res.json()) as { data: MeetingComment[] }
+        setComments(json.data ?? [])
+      }
+    } finally {
+      setLoadingComments(false)
+    }
+  }
+
+  async function handleSubmitComment() {
+    if (!summaryMeeting || !commentText.trim()) return
+    setSubmittingComment(true)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/meetings/${summaryMeeting.id}/comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: commentText.trim() }),
+      })
+      if (!res.ok) throw new Error()
+      const json = (await res.json()) as { data: MeetingComment }
+      setComments(prev => [...prev, json.data])
+      setCommentText('')
+      toast.success('Réponse envoyée')
+    } catch {
+      toast.error('Erreur lors de l\'envoi')
+    } finally {
+      setSubmittingComment(false)
+    }
+  }
+
   function openSummaryDialog(m: Meeting) {
     setSummaryMeeting(m)
     setSummaryText(m.summary ?? '')
     setSummaryEditing(!m.summary)
     setSummaryDialogOpen(true)
+    setComments([])
+    setCommentText('')
+    void fetchComments(m.id)
   }
 
   function closeSummaryDialog() {
@@ -728,6 +782,8 @@ function MeetingsPageInner({
     setSummaryMeeting(null)
     setSummaryText('')
     setSummaryEditing(false)
+    setComments([])
+    setCommentText('')
   }
 
   async function handleSendSummary() {
@@ -1226,8 +1282,8 @@ function MeetingsPageInner({
                 </div>
               </div>
 
-              {/* Right column: editor */}
-              <div className="flex-1 min-w-0 overflow-y-auto space-y-3">
+              {/* Right column: editor + comments */}
+              <div className="flex-1 min-w-0 overflow-y-auto space-y-4">
                 {!summaryEditing && summaryMeeting.summary ? (
                   <div className="space-y-3">
                     <div className="rounded-lg border bg-background px-4 py-4">
@@ -1258,6 +1314,98 @@ function MeetingsPageInner({
                     />
                   </div>
                 )}
+
+                {/* ── Comments section ── */}
+                <div className="border-t pt-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                    <p className="text-sm font-semibold">
+                      Commentaires
+                      {comments.length > 0 && (
+                        <span className="ml-1.5 text-xs font-normal text-muted-foreground">
+                          ({comments.length})
+                        </span>
+                      )}
+                    </p>
+                    {comments.some(c => c.source === 'client') && (
+                      <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-medium">
+                        {comments.filter(c => c.source === 'client').length} du client
+                      </span>
+                    )}
+                  </div>
+
+                  {loadingComments ? (
+                    <div className="space-y-2">
+                      {[1, 2].map(i => <Skeleton key={i} className="h-16 w-full rounded-lg" />)}
+                    </div>
+                  ) : comments.length === 0 ? (
+                    <p className="text-xs text-muted-foreground py-3 text-center">
+                      Aucun commentaire pour cette réunion.
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {comments.map(c => (
+                        <div
+                          key={c.id}
+                          className={cn(
+                            'rounded-lg px-3 py-2.5 text-sm border',
+                            c.source === 'client'
+                              ? 'bg-blue-50 border-blue-200'
+                              : 'bg-muted/40 border-muted',
+                          )}
+                        >
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className={cn(
+                              'text-[11px] font-semibold uppercase tracking-wide',
+                              c.source === 'client' ? 'text-blue-600' : 'text-muted-foreground',
+                            )}>
+                              {c.source === 'client' ? 'Client' : 'Vous'}
+                            </span>
+                            <span className="text-[11px] text-muted-foreground">
+                              {format(new Date(c.created_at), "d MMM 'à' HH'h'mm", { locale: fr })}
+                            </span>
+                          </div>
+                          {c.quoted_text && (
+                            <blockquote className="border-l-2 border-blue-300 pl-2 text-xs text-muted-foreground italic mb-1.5 line-clamp-2">
+                              {c.quoted_text}
+                            </blockquote>
+                          )}
+                          <p className="text-sm text-gray-800">{c.content}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Reply form */}
+                  <div className="flex gap-2 pt-1">
+                    <Textarea
+                      placeholder="Répondre au client…"
+                      rows={2}
+                      value={commentText}
+                      onChange={e => setCommentText(e.target.value)}
+                      className="text-sm resize-none"
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                          e.preventDefault()
+                          void handleSubmitComment()
+                        }
+                      }}
+                    />
+                    <Button
+                      size="icon"
+                      className="shrink-0 h-[68px] w-9"
+                      disabled={submittingComment || !commentText.trim()}
+                      onClick={() => void handleSubmitComment()}
+                      title="Envoyer (⌘+Entrée)"
+                    >
+                      {submittingComment
+                        ? <Loader2 className="h-4 w-4 animate-spin" />
+                        : <Send className="h-4 w-4" />
+                      }
+                    </Button>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">⌘+Entrée pour envoyer</p>
+                </div>
               </div>
             </div>
           )}
