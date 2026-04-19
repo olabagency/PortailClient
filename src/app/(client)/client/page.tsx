@@ -116,7 +116,7 @@ export default async function ClientDashboardPage() {
                     {/* Left color accent */}
                     <div
                       className="w-1.5 shrink-0 rounded-l-lg"
-                      style={{ backgroundColor: project.color ?? '#E8553A' }}
+                      style={{ backgroundColor: project.color ?? '#386FA4' }}
                     />
                     <div className="flex-1 p-5">
                       <div className="flex items-start justify-between gap-4">
@@ -141,7 +141,7 @@ export default async function ClientDashboardPage() {
                                 className="h-full rounded-full transition-all"
                                 style={{
                                   width: `${progress}%`,
-                                  background: progress === 100 ? '#22c55e' : 'linear-gradient(to right, #E8553A, #f97316)',
+                                  background: progress === 100 ? '#22c55e' : 'linear-gradient(to right, #386FA4, #59A5D8)',
                                 }}
                               />
                             </div>

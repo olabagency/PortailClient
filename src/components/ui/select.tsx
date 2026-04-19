@@ -6,7 +6,71 @@ import { Select as SelectPrimitive } from "@base-ui/react/select"
 import { cn } from "@/lib/utils"
 import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react"
 
-const Select = SelectPrimitive.Root
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Extrait récursivement le texte brut des children React */
+function extractText(children: React.ReactNode): string {
+  if (typeof children === 'string') return children
+  if (typeof children === 'number') return String(children)
+  if (Array.isArray(children)) return children.map(c => extractText(c)).join('')
+  if (React.isValidElement(children)) {
+    return extractText((children.props as { children?: React.ReactNode }).children)
+  }
+  return ''
+}
+
+/**
+ * Marqueur posé sur la fonction SelectItem pour l'identifier dans l'arbre React
+ * sans créer de dépendance circulaire.
+ */
+const _SELECT_ITEM_MARKER = Symbol('SelectItem')
+
+/** Parcourt récursivement les children pour collecter les paires value → label */
+function walkForItems(children: React.ReactNode, map: Record<string, string>) {
+  React.Children.forEach(children, child => {
+    if (!React.isValidElement(child)) return
+    const props = child.props as { value?: unknown; children?: React.ReactNode }
+    if ((child.type as { _marker?: symbol })?._marker === _SELECT_ITEM_MARKER) {
+      if (props.value !== undefined && props.value !== null) {
+        map[String(props.value)] = extractText(props.children)
+      }
+    } else if (props.children) {
+      walkForItems(props.children, map)
+    }
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Select (wrapper autour de SelectPrimitive.Root)
+// ---------------------------------------------------------------------------
+// base-ui v1.x : SelectValue n'affiche le label que si `items` est fourni sur Root.
+// Ce wrapper extrait automatiquement les paires value→label des <SelectItem> enfants
+// pour construire ce prop, sans aucun changement dans les autres fichiers.
+
+function Select({
+  children,
+  items: itemsProp,
+  ...props
+}: SelectPrimitive.Root.Props) {
+  const autoItems = React.useMemo(() => {
+    if (itemsProp !== undefined) return itemsProp
+    const map: Record<string, string> = {}
+    walkForItems(children, map)
+    return Object.keys(map).length > 0 ? map : undefined
+  }, [children, itemsProp])
+
+  return (
+    <SelectPrimitive.Root items={autoItems} {...props}>
+      {children}
+    </SelectPrimitive.Root>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// SelectGroup
+// ---------------------------------------------------------------------------
 
 function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
   return (
@@ -18,6 +82,10 @@ function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
   )
 }
 
+// ---------------------------------------------------------------------------
+// SelectValue
+// ---------------------------------------------------------------------------
+
 function SelectValue({ className, ...props }: SelectPrimitive.Value.Props) {
   return (
     <SelectPrimitive.Value
@@ -27,6 +95,10 @@ function SelectValue({ className, ...props }: SelectPrimitive.Value.Props) {
     />
   )
 }
+
+// ---------------------------------------------------------------------------
+// SelectTrigger
+// ---------------------------------------------------------------------------
 
 function SelectTrigger({
   className,
@@ -56,6 +128,10 @@ function SelectTrigger({
   )
 }
 
+// ---------------------------------------------------------------------------
+// SelectContent
+// ---------------------------------------------------------------------------
+
 function SelectContent({
   className,
   children,
@@ -83,7 +159,10 @@ function SelectContent({
         <SelectPrimitive.Popup
           data-slot="select-content"
           data-align-trigger={alignItemWithTrigger}
-          className={cn("relative isolate z-50 max-h-(--available-height) w-(--anchor-width) min-w-36 origin-(--transform-origin) overflow-x-hidden overflow-y-auto rounded-lg bg-popover text-popover-foreground shadow-md ring-1 ring-foreground/10 duration-100 data-[align-trigger=true]:animate-none data-[side=bottom]:slide-in-from-top-2 data-[side=inline-end]:slide-in-from-left-2 data-[side=inline-start]:slide-in-from-right-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95", className )}
+          className={cn(
+            "relative isolate z-50 max-h-(--available-height) w-(--anchor-width) min-w-36 origin-(--transform-origin) overflow-x-hidden overflow-y-auto rounded-lg bg-popover text-popover-foreground shadow-md ring-1 ring-foreground/10 duration-100 data-[align-trigger=true]:animate-none data-[side=bottom]:slide-in-from-top-2 data-[side=inline-end]:slide-in-from-left-2 data-[side=inline-start]:slide-in-from-right-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+            className
+          )}
           {...props}
         >
           <SelectScrollUpButton />
@@ -94,6 +173,10 @@ function SelectContent({
     </SelectPrimitive.Portal>
   )
 }
+
+// ---------------------------------------------------------------------------
+// SelectLabel
+// ---------------------------------------------------------------------------
 
 function SelectLabel({
   className,
@@ -107,6 +190,10 @@ function SelectLabel({
     />
   )
 }
+
+// ---------------------------------------------------------------------------
+// SelectItem  — défini après Select mais avant l'ajout du marqueur
+// ---------------------------------------------------------------------------
 
 function SelectItem({
   className,
@@ -136,6 +223,13 @@ function SelectItem({
   )
 }
 
+// Pose le marqueur pour que walkForItems puisse identifier ce composant
+;(SelectItem as unknown as { _marker: symbol })._marker = _SELECT_ITEM_MARKER
+
+// ---------------------------------------------------------------------------
+// SelectSeparator
+// ---------------------------------------------------------------------------
+
 function SelectSeparator({
   className,
   ...props
@@ -148,6 +242,10 @@ function SelectSeparator({
     />
   )
 }
+
+// ---------------------------------------------------------------------------
+// Scroll buttons
+// ---------------------------------------------------------------------------
 
 function SelectScrollUpButton({
   className,
@@ -162,8 +260,7 @@ function SelectScrollUpButton({
       )}
       {...props}
     >
-      <ChevronUpIcon
-      />
+      <ChevronUpIcon />
     </SelectPrimitive.ScrollUpArrow>
   )
 }
@@ -181,11 +278,14 @@ function SelectScrollDownButton({
       )}
       {...props}
     >
-      <ChevronDownIcon
-      />
+      <ChevronDownIcon />
     </SelectPrimitive.ScrollDownArrow>
   )
 }
+
+// ---------------------------------------------------------------------------
+// Exports
+// ---------------------------------------------------------------------------
 
 export {
   Select,

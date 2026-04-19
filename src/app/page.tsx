@@ -53,7 +53,7 @@ export default function LandingPage() {
           font-family: var(--font-instrument-serif, Georgia, serif);
           font-size: 24px; color: #1A1A1A; text-decoration: none; letter-spacing: -0.5px;
         }
-        .lp-logo span { color: #E8553A; }
+        .lp-logo span { color: #386FA4; }
         .lp-nav-links {
           display: flex; gap: 32px; align-items: center;
         }
@@ -72,9 +72,9 @@ export default function LandingPage() {
         .lp-btn-primary {
           font-size: 14px; font-weight: 600; font-family: var(--font-dm-sans, sans-serif);
           color: white; text-decoration: none; padding: 9px 20px;
-          border-radius: 100px; background: #E8553A; transition: all 0.2s;
+          border-radius: 100px; background: #386FA4; transition: all 0.2s;
         }
-        .lp-btn-primary:hover { background: #D4462C; transform: translateY(-1px); }
+        .lp-btn-primary:hover { background: #2d5e8e; transform: translateY(-1px); }
         @media(max-width: 768px) {
           .lp-nav-links { display: none; }
         }
@@ -85,11 +85,11 @@ export default function LandingPage() {
         }
         .lp-badge {
           display: inline-flex; align-items: center; gap: 8px;
-          background: #FEF0ED; color: #E8553A;
+          background: #EBF4FB; color: #386FA4;
           padding: 6px 16px; border-radius: 100px; font-size: 13px; font-weight: 500; margin-bottom: 32px;
         }
         .lp-badge::before {
-          content: ''; width: 6px; height: 6px; background: #E8553A; border-radius: 50%;
+          content: ''; width: 6px; height: 6px; background: #386FA4; border-radius: 50%;
           animation: lp-pulse 2s infinite;
         }
         @keyframes lp-pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
@@ -98,7 +98,7 @@ export default function LandingPage() {
           font-size: clamp(40px, 6vw, 72px); line-height: 1.05;
           letter-spacing: -2px; max-width: 820px; margin: 0 auto 24px; font-weight: 400;
         }
-        .lp-h1 em { color: #E8553A; font-style: italic; }
+        .lp-h1 em { color: #386FA4; font-style: italic; }
         .lp-hero-sub {
           font-size: 18px; color: #6B6B6B; max-width: 600px; margin: 0 auto 16px; line-height: 1.7;
         }
@@ -115,9 +115,9 @@ export default function LandingPage() {
         .lp-btn-hero {
           font-size: 15px; font-weight: 600; font-family: var(--font-dm-sans, sans-serif);
           color: white; text-decoration: none; padding: 14px 32px;
-          border-radius: 100px; background: #E8553A; transition: all 0.2s; white-space: nowrap;
+          border-radius: 100px; background: #386FA4; transition: all 0.2s; white-space: nowrap;
         }
-        .lp-btn-hero:hover { background: #D4462C; transform: translateY(-1px); }
+        .lp-btn-hero:hover { background: #2d5e8e; transform: translateY(-1px); }
         .lp-btn-hero-outline {
           font-size: 15px; font-weight: 500; font-family: var(--font-dm-sans, sans-serif);
           color: #1A1A1A; text-decoration: none; padding: 13px 32px;
@@ -137,7 +137,7 @@ export default function LandingPage() {
         }
         .lp-hero-visual::before {
           content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%;
-          background: radial-gradient(ellipse at 30% 20%, rgba(232,85,58,0.1) 0%, transparent 60%);
+          background: radial-gradient(ellipse at 30% 20%, rgba(56,111,164,0.1) 0%, transparent 60%);
           pointer-events: none;
         }
         .mock-bar { display: flex; gap: 6px; margin-bottom: 16px; }
@@ -152,7 +152,7 @@ export default function LandingPage() {
         .mock-card-title { font-size: 10.5px; color: #CCC; margin-bottom: 3px; }
         .mock-card-meta { font-size: 9px; color: #444; }
         .mock-card.done { border-left-color: #4ADE80; }
-        .mock-card.progress { border-left-color: #E8553A; }
+        .mock-card.progress { border-left-color: #386FA4; }
         .mock-card.review { border-left-color: #FBBF24; }
         .mock-card.todo { border-left-color: #555; }
         @media(max-width: 640px) {
@@ -165,7 +165,7 @@ export default function LandingPage() {
         /* SECTION COMMON */
         .lp-section-label {
           font-size: 12px; text-transform: uppercase; letter-spacing: 2px;
-          color: #E8553A; font-weight: 600; margin-bottom: 12px;
+          color: #386FA4; font-weight: 600; margin-bottom: 12px;
         }
         .lp-section-title {
           font-family: var(--font-instrument-serif, Georgia, serif);
@@ -185,10 +185,10 @@ export default function LandingPage() {
         .lp-ba-card { border-radius: 16px; padding: 32px; }
         .lp-ba-before { background: white; border: 1px solid #E5E2DB; }
         .lp-ba-after { background: #0F1115; color: white; }
-        .lp-ba-arrow { display: flex; align-items: center; justify-content: center; font-size: 32px; color: #E8553A; }
+        .lp-ba-arrow { display: flex; align-items: center; justify-content: center; font-size: 32px; color: #386FA4; }
         .lp-ba-title { font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 20px; display: flex; align-items: center; gap: 8px; }
         .lp-ba-before .lp-ba-title { color: #6B6B6B; }
-        .lp-ba-after .lp-ba-title { color: #E8553A; }
+        .lp-ba-after .lp-ba-title { color: #386FA4; }
         .lp-ba-item { padding: 10px 0; border-bottom: 1px solid rgba(128,128,128,0.15); font-size: 14px; display: flex; align-items: flex-start; gap: 10px; line-height: 1.5; }
         .lp-ba-item:last-child { border-bottom: none; }
         .lp-ba-before .lp-ba-item { color: #6B6B6B; }
@@ -209,11 +209,11 @@ export default function LandingPage() {
           padding: 28px; transition: all 0.3s; position: relative; overflow: hidden;
         }
         .lp-feature-card:hover { border-color: #E5E2DB; transform: translateY(-2px); }
-        .lp-feature-card.highlight { border: 1.5px solid #E8553A; }
+        .lp-feature-card.highlight { border: 1.5px solid #386FA4; }
         .lp-feature-card.highlight::after {
           content: 'Cœur du produit'; position: absolute; top: 12px; right: 12px;
           font-size: 10px; font-weight: 600; padding: 3px 10px; border-radius: 100px;
-          background: #FEF0ED; color: #E8553A;
+          background: #EBF4FB; color: #386FA4;
         }
         .lp-feature-icon-row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
         .lp-feature-emoji { font-size: 28px; line-height: 1; }
@@ -234,7 +234,7 @@ export default function LandingPage() {
         .lp-journey-timeline { margin-top: 56px; position: relative; }
         .lp-journey-timeline::before {
           content: ''; position: absolute; left: 32px; top: 0; bottom: 0;
-          width: 2px; background: linear-gradient(to bottom, #E8553A, #333);
+          width: 2px; background: linear-gradient(to bottom, #386FA4, #333);
         }
         .lp-journey-item { display: flex; gap: 24px; margin-bottom: 40px; position: relative; }
         .lp-journey-item:last-child { margin-bottom: 0; }
@@ -244,11 +244,11 @@ export default function LandingPage() {
           font-size: 14px; font-weight: 700; flex-shrink: 0;
           position: relative; z-index: 2;
         }
-        .lp-dot-active { background: #E8553A; color: white; box-shadow: 0 0 0 6px rgba(232,85,58,0.2); }
+        .lp-dot-active { background: #386FA4; color: white; box-shadow: 0 0 0 6px rgba(56,111,164,0.2); }
         .lp-dot-next { background: #1A1D24; border: 2px solid #333; color: #555; }
         .lp-journey-content { padding-top: 8px; flex: 1; }
         .lp-journey-content h3 { font-size: 20px; font-weight: 600; margin-bottom: 4px; color: white; }
-        .lp-j-version { font-size: 12px; color: #E8553A; font-weight: 600; margin-bottom: 6px; display: inline-block; }
+        .lp-j-version { font-size: 12px; color: #386FA4; font-weight: 600; margin-bottom: 6px; display: inline-block; }
         .lp-journey-content p { font-size: 14px; color: #888; line-height: 1.7; max-width: 520px; }
         .lp-j-features { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
         .lp-j-tag {
@@ -279,7 +279,7 @@ export default function LandingPage() {
         }
         .lp-gain-number {
           font-family: var(--font-instrument-serif, Georgia, serif);
-          font-size: 48px; color: #E8553A; line-height: 1; margin-bottom: 6px;
+          font-size: 48px; color: #386FA4; line-height: 1; margin-bottom: 6px;
         }
         .lp-gain-label { font-size: 13px; color: #6B6B6B; line-height: 1.4; }
 
@@ -327,11 +327,11 @@ export default function LandingPage() {
           margin-top: 40px; max-width: 700px; margin-left: auto; margin-right: auto;
         }
         .lp-pricing-card { background: white; border: 1px solid #F0EDE6; border-radius: 16px; padding: 32px; text-align: center; }
-        .lp-pricing-card.featured { border: 2px solid #E8553A; position: relative; }
+        .lp-pricing-card.featured { border: 2px solid #386FA4; position: relative; }
         .lp-pricing-card.featured::before {
           content: 'Le plus populaire'; position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
           font-size: 11px; font-weight: 600; padding: 4px 14px; border-radius: 100px;
-          background: #E8553A; color: white; white-space: nowrap;
+          background: #386FA4; color: white; white-space: nowrap;
         }
         .lp-pricing-card h3 { font-size: 20px; font-weight: 600; margin-bottom: 4px; color: #1A1A1A; }
         .lp-pricing-price {
@@ -350,8 +350,8 @@ export default function LandingPage() {
         }
         .lp-pricing-cta-outline { border: 1.5px solid #E5E2DB; color: #1A1A1A; }
         .lp-pricing-cta-outline:hover { border-color: #1A1A1A; }
-        .lp-pricing-cta-primary { background: #E8553A; color: white; }
-        .lp-pricing-cta-primary:hover { background: #D4462C; transform: translateY(-1px); }
+        .lp-pricing-cta-primary { background: #386FA4; color: white; }
+        .lp-pricing-cta-primary:hover { background: #2d5e8e; transform: translateY(-1px); }
 
         /* CTA SECTION */
         .lp-cta-section { padding: 100px 0; text-align: center; }
@@ -362,7 +362,7 @@ export default function LandingPage() {
         .lp-cta-box::before {
           content: ''; position: absolute; bottom: -40%; right: -20%;
           width: 500px; height: 500px;
-          background: radial-gradient(circle, rgba(232,85,58,0.12) 0%, transparent 70%);
+          background: radial-gradient(circle, rgba(56,111,164,0.12) 0%, transparent 70%);
           pointer-events: none;
         }
         .lp-cta-box h2 {
@@ -375,9 +375,9 @@ export default function LandingPage() {
         .lp-btn-cta-primary {
           font-size: 15px; font-weight: 600; font-family: var(--font-dm-sans, sans-serif);
           color: white; text-decoration: none; padding: 14px 32px;
-          border-radius: 100px; background: #E8553A; transition: all 0.2s; white-space: nowrap;
+          border-radius: 100px; background: #386FA4; transition: all 0.2s; white-space: nowrap;
         }
-        .lp-btn-cta-primary:hover { background: #D4462C; transform: translateY(-1px); }
+        .lp-btn-cta-primary:hover { background: #2d5e8e; transform: translateY(-1px); }
         .lp-btn-cta-outline {
           font-size: 15px; font-weight: 500; font-family: var(--font-dm-sans, sans-serif);
           color: white; text-decoration: none; padding: 13px 32px;
@@ -387,7 +387,7 @@ export default function LandingPage() {
         .lp-btn-cta-outline:hover { border-color: #666; }
         .lp-cta-perks { display: flex; justify-content: center; gap: 24px; position: relative; }
         .lp-cta-perks span { font-size: 12px; color: #555; display: flex; align-items: center; gap: 6px; }
-        .lp-cta-perks .check { color: #E8553A; }
+        .lp-cta-perks .check { color: #386FA4; }
         @media(max-width: 768px) {
           .lp-cta-box { padding: 40px 24px; }
           .lp-cta-perks { flex-direction: column; align-items: center; gap: 8px; }
@@ -461,7 +461,7 @@ export default function LandingPage() {
               <div className="mock-ui">
                 <div className="mock-sidebar">
                   <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px 14px", borderBottom: "1px solid #2A2D34", marginBottom: 10 }}>
-                    <div style={{ width: 28, height: 28, borderRadius: 6, background: "#E8553A", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "white" }}>S</div>
+                    <div style={{ width: 28, height: 28, borderRadius: 6, background: "#386FA4", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "white" }}>S</div>
                     <div>
                       <div style={{ fontSize: 11, fontWeight: 600, color: "#DDD" }}>Studio Martin</div>
                       <div style={{ fontSize: 9, color: "#555" }}>Plan Pro</div>
@@ -475,10 +475,10 @@ export default function LandingPage() {
                     { label: "Documents", bg: "#3A2A4A", active: false },
                     { label: "Calendrier", bg: "#4A3A2A", active: false },
                   ].map((item) => (
-                    <div key={item.label} style={{ padding: "7px 10px", borderRadius: 6, fontSize: 11.5, color: item.active ? "#E8553A" : "#555", marginBottom: 3, display: "flex", alignItems: "center", gap: 8, background: item.active ? "rgba(232,85,58,0.12)" : "transparent" }}>
-                      <div style={{ width: 14, height: 14, borderRadius: 3, background: item.active ? "rgba(232,85,58,0.3)" : item.bg, flexShrink: 0 }}></div>
+                    <div key={item.label} style={{ padding: "7px 10px", borderRadius: 6, fontSize: 11.5, color: item.active ? "#386FA4" : "#555", marginBottom: 3, display: "flex", alignItems: "center", gap: 8, background: item.active ? "rgba(56,111,164,0.12)" : "transparent" }}>
+                      <div style={{ width: 14, height: 14, borderRadius: 3, background: item.active ? "rgba(56,111,164,0.3)" : item.bg, flexShrink: 0 }}></div>
                       {item.label}
-                      {item.count && <span style={{ marginLeft: "auto", fontSize: 9, background: item.active ? "rgba(232,85,58,0.2)" : "#2A2D34", padding: "1px 6px", borderRadius: 100, color: item.active ? "#E8553A" : "#666" }}>{item.count}</span>}
+                      {item.count && <span style={{ marginLeft: "auto", fontSize: 9, background: item.active ? "rgba(56,111,164,0.2)" : "#2A2D34", padding: "1px 6px", borderRadius: 100, color: item.active ? "#386FA4" : "#666" }}>{item.count}</span>}
                     </div>
                   ))}
                   <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: 1, color: "#444", padding: "10px 10px 6px", borderTop: "1px solid #2A2D34", marginTop: 8 }}>Projet actif</div>
@@ -506,11 +506,11 @@ export default function LandingPage() {
                     </div>
                   </div>
                   <div style={{ background: "#2A2D34", borderRadius: 100, height: 4, marginBottom: 16, overflow: "hidden" }}>
-                    <div style={{ background: "linear-gradient(90deg,#4ADE80,#E8553A)", width: "72%", height: "100%", borderRadius: 100 }}></div>
+                    <div style={{ background: "linear-gradient(90deg,#4ADE80,#386FA4)", width: "72%", height: "100%", borderRadius: 100 }}></div>
                   </div>
                   <div style={{ display: "flex", gap: 0, marginBottom: 16, borderBottom: "1px solid #2A2D34" }}>
                     {["Kanban", "Liste", "Fichiers 14", "Messages 2"].map((tab, i) => (
-                      <div key={tab} style={{ padding: "6px 14px", fontSize: 11, color: i === 0 ? "#E8553A" : "#555", borderBottom: i === 0 ? "2px solid #E8553A" : "none", marginBottom: i === 0 ? -1 : 0 }}>{tab}</div>
+                      <div key={tab} style={{ padding: "6px 14px", fontSize: 11, color: i === 0 ? "#386FA4" : "#555", borderBottom: i === 0 ? "2px solid #386FA4" : "none", marginBottom: i === 0 ? -1 : 0 }}>{tab}</div>
                     ))}
                   </div>
                   <div className="mock-kanban">
@@ -521,7 +521,7 @@ export default function LandingPage() {
                       <div className="mock-card done"><div className="mock-card-title">Charte graphique</div><div className="mock-card-meta">22 mars ✓</div></div>
                     </div>
                     <div>
-                      <div className="mock-col-header"><span style={{ width: 7, height: 7, borderRadius: "50%", background: "#E8553A", display: "inline-block" }}></span> En cours <span className="mock-col-count">2</span></div>
+                      <div className="mock-col-header"><span style={{ width: 7, height: 7, borderRadius: "50%", background: "#386FA4", display: "inline-block" }}></span> En cours <span className="mock-col-count">2</span></div>
                       <div className="mock-card progress"><div className="mock-card-title">Intégration home</div><div className="mock-card-meta">En cours · J-3</div></div>
                       <div className="mock-card progress"><div className="mock-card-title">Section services</div><div className="mock-card-meta">En cours</div></div>
                     </div>
@@ -874,7 +874,7 @@ export default function LandingPage() {
                 <div className="lp-pricing-price">
                   <span style={{ textDecoration: "line-through", color: "#999", fontSize: 22, fontFamily: "var(--font-instrument-serif, Georgia, serif)" }}>19€</span> 9€<span>/mois</span>
                 </div>
-                <div className="lp-pricing-desc" style={{ color: "#E8553A", fontWeight: 500 }}>Tarif bêta-testeur garanti à vie</div>
+                <div className="lp-pricing-desc" style={{ color: "#386FA4", fontWeight: 500 }}>Tarif bêta-testeur garanti à vie</div>
                 <ul className="lp-pricing-list">
                   {["Projets illimités", "Validations d'étapes (v2)", "Messagerie projet (v2)", "Espace devis et factures (v2)", "15 Go de stockage", "Portail client complet et brandé", "Notifications email", "Suppression du branding"].map((f) => <li key={f}>{f}</li>)}
                 </ul>

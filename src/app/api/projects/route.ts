@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { createNotification } from '@/lib/notify'
 import { z } from 'zod'
 import { nanoid } from 'nanoid'
 import { APP_CONFIG } from '@/config/app.config'
@@ -162,6 +164,26 @@ export async function POST(request: NextRequest) {
             })
           )
         }
+      }
+    }
+
+    // Notifier le client si le projet est créé directement associé à lui
+    if (parsed.data.client_id) {
+      const admin = createAdminClient()
+      const { data: clientRecord } = await admin
+        .from('clients')
+        .select('user_id')
+        .eq('id', parsed.data.client_id)
+        .single()
+
+      if (clientRecord?.user_id) {
+        await createNotification({
+          userId: clientRecord.user_id,
+          type: 'project_linked',
+          title: 'Nouveau projet disponible',
+          body: `Le projet « ${data.name} » vient d'être ajouté à votre espace client.`,
+          projectId: data.id,
+        })
       }
     }
 

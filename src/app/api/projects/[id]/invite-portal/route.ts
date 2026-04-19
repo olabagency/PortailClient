@@ -55,9 +55,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: 'Erreur lors de la création du portail.' }, { status: 500 })
     }
 
-    // Lien vers la page de création de compte (email pré-rempli)
-    const signupUrl = `${APP_CONFIG.url}/client/signup?email=${encodeURIComponent(parsed.data.email)}&project=${id}`
     const senderName = profile?.company_name ?? profile?.full_name ?? 'Votre prestataire'
+    const signupUrl = `${APP_CONFIG.url}/client/signup?email=${encodeURIComponent(parsed.data.email)}&project=${id}`
 
     // Envoyer l'email via Resend
     if (process.env.RESEND_API_KEY) {
@@ -74,50 +73,32 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             <html>
             <body style="margin:0;padding:0;background:#f4f4f4;font-family:sans-serif;">
               <div style="max-width:560px;margin:40px auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
-
-                <!-- Header -->
-                <div style="background:#E8553A;padding:32px 40px;">
+                <div style="background:#386FA4;padding:32px 40px;">
                   <p style="margin:0;color:rgba(255,255,255,0.85);font-size:14px;">${senderName}</p>
-                  <h1 style="margin:8px 0 0;color:#ffffff;font-size:22px;font-weight:700;">
-                    Accédez à votre espace projet
-                  </h1>
+                  <h1 style="margin:8px 0 0;color:#ffffff;font-size:22px;font-weight:700;">Votre espace projet est prêt</h1>
                 </div>
-
-                <!-- Body -->
                 <div style="padding:32px 40px;">
+                  <p style="margin:0 0 16px;color:#374151;font-size:16px;line-height:1.6;">Bonjour,</p>
                   <p style="margin:0 0 16px;color:#374151;font-size:16px;line-height:1.6;">
-                    Bonjour,
-                  </p>
-                  <p style="margin:0 0 16px;color:#374151;font-size:16px;line-height:1.6;">
-                    <strong>${senderName}</strong> vous invite à rejoindre votre espace client pour suivre l'avancement du projet <strong>${project.name}</strong>.
+                    <strong>${senderName}</strong> vous invite à créer votre espace client pour suivre le projet <strong>${project.name}</strong>.
                   </p>
                   <p style="margin:0 0 28px;color:#6B7280;font-size:14px;line-height:1.6;">
-                    Depuis votre espace, vous pouvez consulter les étapes du projet, les livrables partagés et les documents.
+                    Créez votre compte en 30 secondes — votre email est déjà pré-rempli, il ne vous reste qu'à choisir un mot de passe.
                   </p>
-
-                  <!-- CTA -->
                   <div style="text-align:center;margin-bottom:28px;">
-                    <a href="${signupUrl}"
-                       style="display:inline-block;background:#E8553A;color:#ffffff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:16px;letter-spacing:0.01em;">
+                    <a href="${signupUrl}" style="display:inline-block;background:#386FA4;color:#ffffff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:16px;">
                       Créer mon espace client →
                     </a>
                   </div>
-
-                  <p style="margin:0 0 4px;color:#9CA3AF;font-size:12px;text-align:center;">
-                    Votre adresse email <strong>${parsed.data.email}</strong> sera pré-remplie.
-                  </p>
                   <p style="margin:0;color:#9CA3AF;font-size:12px;text-align:center;">
-                    Aucun mot de passe requis — connexion sécurisée par lien email.
+                    Votre adresse email <strong>${parsed.data.email}</strong> est pré-remplie.
                   </p>
                 </div>
-
-                <!-- Footer -->
                 <div style="background:#F9FAFB;padding:20px 40px;border-top:1px solid #E5E7EB;">
                   <p style="margin:0;color:#9CA3AF;font-size:12px;text-align:center;">
                     Si vous pensez avoir reçu cet email par erreur, vous pouvez l'ignorer.
                   </p>
                 </div>
-
               </div>
             </body>
             </html>
@@ -125,10 +106,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         })
       } catch (err) {
         console.error('[invite-portal] Resend error:', err)
-        // On ne bloque pas : l'entrée portail est créée
       }
     } else {
-      console.log(`[invite-portal] Resend non configuré. Lien signup pour ${parsed.data.email}: ${signupUrl}`)
+      console.log(`[invite-portal] URL signup pour ${parsed.data.email}: ${signupUrl}`)
     }
 
     return NextResponse.json({ data: { success: true } })

@@ -1,67 +1,45 @@
 'use client'
 
-import { use, useState, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { use, useState, useEffect, useRef, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
-import { Separator } from '@/components/ui/separator'
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
+  Dialog, DialogContent, DialogFooter, DialogHeader,
+  DialogTitle, DialogDescription,
 } from '@/components/ui/dialog'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
-  FileText,
-  Image,
-  File,
-  Link,
-  FolderOpen,
-  Plus,
-  Upload,
-  ExternalLink,
-  Eye,
-  EyeOff,
-  MoreHorizontal,
-  Trash2,
-  Pencil,
-  FolderInput,
-  ArrowLeft,
-  Loader2,
+  FileText, ImageIcon, File as FileIcon, Link as LinkIcon,
+  FolderOpen, FolderClosed, Plus, Upload, ExternalLink,
+  Eye, EyeOff, MoreHorizontal, Trash2, Pencil,
+  FolderInput, Loader2, ChevronRight, Search,
+  FolderPlus, CheckCircle2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
+import { cn } from '@/lib/utils'
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
+// ─── Types ───────────────────────────────────────────────────────────────────
 
 interface Folder {
   id: string
   name: string
   color: string
+  icon: string | null
   project_id: string
   created_at: string
+  doc_count?: number
 }
 
 interface Document {
@@ -83,41 +61,42 @@ type TabFilter = 'all' | 'admin' | 'client'
 
 const FOLDER_COLORS = ['#6B7280', '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899']
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function formatBytes(bytes: number | null): string {
-  if (bytes === null || bytes === 0) return '—'
+  if (!bytes) return '—'
   if (bytes < 1024) return `${bytes} o`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} Ko`
   return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`
 }
 
-function getFileIcon(doc: Document) {
-  if (doc.type === 'link') return <Link className="h-4 w-4 shrink-0 text-blue-500" />
+function getFileIcon(doc: Document, size = 'md') {
+  const cls = size === 'lg' ? 'h-8 w-8' : 'h-4 w-4'
+  if (doc.type === 'link') return <LinkIcon className={cn(cls, 'text-blue-500')} />
   const mime = doc.mime_type ?? ''
-  if (mime === 'application/pdf') return <FileText className="h-4 w-4 shrink-0 text-red-500" />
-  if (mime.startsWith('image/')) return <Image className="h-4 w-4 shrink-0 text-green-500" />
-  return <File className="h-4 w-4 shrink-0 text-muted-foreground" />
+  if (mime === 'application/pdf') return <FileText className={cn(cls, 'text-red-500')} />
+  if (mime.startsWith('image/')) return <ImageIcon className={cn(cls, 'text-emerald-500')} />
+  if (mime.includes('word') || mime.includes('document')) return <FileText className={cn(cls, 'text-blue-600')} />
+  if (mime.includes('sheet') || mime.includes('excel')) return <FileText className={cn(cls, 'text-green-600')} />
+  return <FileIcon className={cn(cls, 'text-muted-foreground')} />
 }
 
-// ---------------------------------------------------------------------------
-// Main Page
-// ---------------------------------------------------------------------------
+// ─── Page ────────────────────────────────────────────────────────────────────
 
 export default function DocumentsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
-  const router = useRouter()
+
+  // Navigation
+  const [currentFolderId, setCurrentFolderId] = useState<string | null>(null)
 
   // Data
   const [folders, setFolders] = useState<Folder[]>([])
   const [documents, setDocuments] = useState<Document[]>([])
-  const [rootCount, setRootCount] = useState(0)
 
-  // Selection
-  const [activeFolderId, setActiveFolderId] = useState<string | null | 'all'>('all')
+  // UI
+  const [search, setSearch] = useState('')
   const [tabFilter, setTabFilter] = useState<TabFilter>('all')
+  const [openingDocId, setOpeningDocId] = useState<string | null>(null)
 
   // Loading
   const [loadingFolders, setLoadingFolders] = useState(true)
@@ -131,182 +110,139 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
   const [moveFolderOpen, setMoveFolderOpen] = useState(false)
   const [renameFolderOpen, setRenameFolderOpen] = useState(false)
 
-  // Targeted items for dialogs
+  // Dialog targets
   const [selectedDoc, setSelectedDoc] = useState<Document | null>(null)
   const [selectedFolder, setSelectedFolder] = useState<Folder | null>(null)
 
-  // Form state — create folder
+  // Form — create folder
   const [newFolderName, setNewFolderName] = useState('')
-  const [newFolderColor, setNewFolderColor] = useState(FOLDER_COLORS[0])
+  const [newFolderColor, setNewFolderColor] = useState(FOLDER_COLORS[1])
   const [savingFolder, setSavingFolder] = useState(false)
 
-  // Form state — add link
+  // Form — add link
   const [linkName, setLinkName] = useState('')
   const [linkUrl, setLinkUrl] = useState('')
   const [linkFolderId, setLinkFolderId] = useState<string>('root')
   const [linkVisibleToClient, setLinkVisibleToClient] = useState(false)
   const [savingLink, setSavingLink] = useState(false)
 
-  // Form state — rename doc
+  // Form — rename doc
   const [renameDocName, setRenameDocName] = useState('')
   const [savingRenameDoc, setSavingRenameDoc] = useState(false)
 
-  // Form state — move doc
+  // Form — move doc
   const [moveDocFolderId, setMoveDocFolderId] = useState<string>('root')
   const [savingMoveDoc, setSavingMoveDoc] = useState(false)
 
-  // Form state — rename folder
+  // Form — rename folder
   const [renameFolderName, setRenameFolderName] = useState('')
   const [savingRenameFolder, setSavingRenameFolder] = useState(false)
 
-  // File input ref
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // ---------------------------------------------------------------------------
-  // Fetch folders
-  // ---------------------------------------------------------------------------
+  // ─── Fetch ─────────────────────────────────────────────────────────────────
 
-  async function fetchFolders() {
+  const fetchFolders = useCallback(async () => {
     setLoadingFolders(true)
     try {
       const res = await fetch(`/api/projects/${id}/folders`)
       const json = await res.json()
-      if (res.ok) {
-        setFolders(json.folders ?? [])
-        setRootCount(json.rootCount ?? 0)
-      }
+      if (res.ok) setFolders(json.data?.folders ?? [])
     } finally {
       setLoadingFolders(false)
     }
-  }
+  }, [id])
 
-  // ---------------------------------------------------------------------------
-  // Fetch documents
-  // ---------------------------------------------------------------------------
-
-  async function fetchDocuments(folderId: string | null | 'all') {
+  const fetchDocuments = useCallback(async (folderId: string | null) => {
     setLoadingDocs(true)
     try {
-      let url = `/api/projects/${id}/documents`
-      if (folderId !== 'all') {
-        const param = folderId === null ? 'root' : folderId
-        url += `?folder_id=${param}`
-      }
-      const res = await fetch(url)
+      const param = folderId === null ? 'root' : folderId
+      const res = await fetch(`/api/projects/${id}/documents?folder_id=${param}`)
       const json = await res.json()
-      if (res.ok) {
-        setDocuments(json.data ?? [])
-      }
+      if (res.ok) setDocuments(json.data ?? [])
     } finally {
       setLoadingDocs(false)
     }
-  }
-
-  useEffect(() => {
-    fetchFolders()
   }, [id])
 
-  useEffect(() => {
-    fetchDocuments(activeFolderId)
-  }, [id, activeFolderId])
+  useEffect(() => { void fetchFolders() }, [fetchFolders])
+  useEffect(() => { void fetchDocuments(currentFolderId) }, [fetchDocuments, currentFolderId])
 
-  // ---------------------------------------------------------------------------
-  // Filtered documents (tab filter)
-  // ---------------------------------------------------------------------------
+  // ─── Computed ──────────────────────────────────────────────────────────────
 
-  const filteredDocuments = documents.filter((doc) => {
-    if (tabFilter === 'client') return doc.visible_to_client
-    if (tabFilter === 'admin') return !doc.visible_to_client
+  const currentFolder = folders.find(f => f.id === currentFolderId) ?? null
+
+  const filteredDocuments = documents.filter(doc => {
+    if (tabFilter === 'client' && !doc.visible_to_client) return false
+    if (tabFilter === 'admin' && doc.visible_to_client) return false
+    if (search) return doc.name.toLowerCase().includes(search.toLowerCase())
     return true
   })
 
-  // ---------------------------------------------------------------------------
-  // Active folder label
-  // ---------------------------------------------------------------------------
+  const folderDocCount = (folderId: string) =>
+    // approximate from loaded docs (not perfectly accurate when viewing "all")
+    folders.find(f => f.id === folderId) ? 0 : 0 // counts not critical in new UI
 
-  function getActiveFolderLabel(): string {
-    if (activeFolderId === 'all') return 'Tous les documents'
-    if (activeFolderId === null) return 'Racine'
-    return folders.find((f) => f.id === activeFolderId)?.name ?? 'Dossier'
+  // ─── Open file (presigned URL) ─────────────────────────────────────────────
+
+  async function handleOpenDoc(doc: Document) {
+    if (doc.type === 'link') {
+      window.open(doc.url, '_blank', 'noopener,noreferrer')
+      return
+    }
+    setOpeningDocId(doc.id)
+    try {
+      const res = await fetch(`/api/projects/${id}/documents/${doc.id}`)
+      if (res.ok) {
+        const json = await res.json() as { url?: string }
+        if (json.url) window.open(json.url, '_blank', 'noopener,noreferrer')
+        else toast.error('URL de fichier introuvable')
+      } else {
+        toast.error('Impossible d\'ouvrir le fichier')
+      }
+    } catch { toast.error('Erreur réseau') }
+    finally { setOpeningDocId(null) }
   }
 
-  // ---------------------------------------------------------------------------
-  // File upload flow
-  // ---------------------------------------------------------------------------
+  // ─── Upload ────────────────────────────────────────────────────────────────
 
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    // Reset input so same file can be re-uploaded
     e.target.value = ''
-
-    const folderId = activeFolderId === 'all' ? null : activeFolderId
-
     setUploading(true)
     try {
-      // 1. Get presigned URL
       const presignRes = await fetch(`/api/projects/${id}/documents/presign`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          filename: file.name,
-          content_type: file.type,
-          folder_id: folderId,
-        }),
+        body: JSON.stringify({ filename: file.name, content_type: file.type, folder_id: currentFolderId }),
       })
       const presignJson = await presignRes.json()
-      if (!presignRes.ok) {
-        toast.error(presignJson.error ?? 'Erreur lors de la génération du lien d\'upload.')
-        return
-      }
-      const { presign_url, s3_key } = presignJson as { presign_url: string; s3_key: string }
+      if (!presignRes.ok) { toast.error(presignJson.error ?? 'Erreur presign'); return }
+      const { presign_url, s3_key } = presignJson.data as { presign_url: string; s3_key: string }
 
-      // 2. Upload directly to S3
-      const uploadRes = await fetch(presign_url, {
-        method: 'PUT',
-        body: file,
-        headers: { 'Content-Type': file.type },
-      })
-      if (!uploadRes.ok) {
-        toast.error('Erreur lors de l\'upload vers le stockage.')
-        return
-      }
+      const uploadRes = await fetch(presign_url, { method: 'PUT', body: file, headers: { 'Content-Type': file.type } })
+      if (!uploadRes.ok) { toast.error('Erreur upload S3'); return }
 
-      // 3. Register document in DB
       const docRes = await fetch(`/api/projects/${id}/documents`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: file.name,
-          type: 'file',
-          url: s3_key,
-          s3_key,
-          size_bytes: file.size,
-          mime_type: file.type,
-          folder_id: folderId,
-          visible_to_client: false,
+          name: file.name, type: 'file', url: s3_key, s3_key,
+          size_bytes: file.size, mime_type: file.type,
+          folder_id: currentFolderId, visible_to_client: false,
         }),
       })
       const docJson = await docRes.json()
-      if (!docRes.ok) {
-        toast.error(docJson.error ?? 'Erreur lors de l\'enregistrement du document.')
-        return
-      }
-
-      setDocuments((prev) => [docJson.data, ...prev])
-      // Update folder counts
-      fetchFolders()
+      if (!docRes.ok) { toast.error(docJson.error ?? 'Erreur enregistrement'); return }
+      setDocuments(prev => [docJson.data, ...prev])
+      void fetchFolders()
       toast.success('Fichier ajouté')
-    } catch {
-      toast.error('Une erreur inattendue s\'est produite.')
-    } finally {
-      setUploading(false)
-    }
+    } catch { toast.error('Erreur inattendue') }
+    finally { setUploading(false) }
   }
 
-  // ---------------------------------------------------------------------------
-  // Add link
-  // ---------------------------------------------------------------------------
+  // ─── Add link ──────────────────────────────────────────────────────────────
 
   async function handleAddLink(e: React.FormEvent) {
     e.preventDefault()
@@ -316,34 +252,22 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: linkName.trim() || linkUrl.trim(),
-          type: 'link',
-          url: linkUrl.trim(),
+          name: linkName.trim() || linkUrl.trim(), type: 'link', url: linkUrl.trim(),
           folder_id: linkFolderId === 'root' ? null : linkFolderId,
           visible_to_client: linkVisibleToClient,
         }),
       })
       const json = await res.json()
-      if (!res.ok) {
-        toast.error(json.error ?? 'Erreur lors de l\'ajout du lien.')
-        return
-      }
-      setDocuments((prev) => [json.data, ...prev])
-      fetchFolders()
+      if (!res.ok) { toast.error(json.error ?? 'Erreur'); return }
+      setDocuments(prev => [json.data, ...prev])
+      void fetchFolders()
       setAddLinkOpen(false)
-      setLinkName('')
-      setLinkUrl('')
-      setLinkFolderId('root')
-      setLinkVisibleToClient(false)
+      setLinkName(''); setLinkUrl(''); setLinkFolderId('root'); setLinkVisibleToClient(false)
       toast.success('Lien ajouté')
-    } finally {
-      setSavingLink(false)
-    }
+    } finally { setSavingLink(false) }
   }
 
-  // ---------------------------------------------------------------------------
-  // Create folder
-  // ---------------------------------------------------------------------------
+  // ─── Create folder ─────────────────────────────────────────────────────────
 
   async function handleCreateFolder(e: React.FormEvent) {
     e.preventDefault()
@@ -356,76 +280,59 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
         body: JSON.stringify({ name: newFolderName.trim(), color: newFolderColor }),
       })
       const json = await res.json()
-      if (!res.ok) {
-        toast.error(json.error ?? 'Erreur lors de la création du dossier.')
-        return
-      }
-      setFolders((prev) => [...prev, json.data])
+      if (!res.ok) { toast.error(json.error ?? 'Erreur'); return }
+      setFolders(prev => [...prev, json.data])
       setCreateFolderOpen(false)
-      setNewFolderName('')
-      setNewFolderColor(FOLDER_COLORS[0])
+      setNewFolderName(''); setNewFolderColor(FOLDER_COLORS[1])
       toast.success('Dossier créé')
-    } finally {
-      setSavingFolder(false)
-    }
+    } finally { setSavingFolder(false) }
   }
 
-  // ---------------------------------------------------------------------------
-  // Toggle visibility
-  // ---------------------------------------------------------------------------
+  // ─── Visibility ────────────────────────────────────────────────────────────
 
   async function handleToggleVisibility(doc: Document) {
     const res = await fetch(`/api/projects/${id}/documents/${doc.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ visible_to_client: !doc.visible_to_client }),
     })
     if (res.ok) {
-      setDocuments((prev) =>
-        prev.map((d) => d.id === doc.id ? { ...d, visible_to_client: !doc.visible_to_client } : d)
-      )
+      setDocuments(prev => prev.map(d => d.id === doc.id ? { ...d, visible_to_client: !doc.visible_to_client } : d))
       toast.success(doc.visible_to_client ? 'Document masqué aux clients' : 'Document visible aux clients')
-    } else {
-      toast.error('Erreur lors de la mise à jour.')
-    }
+    } else toast.error('Erreur')
   }
 
   async function handleAcknowledge(doc: Document) {
     const res = await fetch(`/api/projects/${id}/documents/${doc.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ client_doc_status: 'acknowledged' }),
     })
     if (res.ok) {
-      setDocuments((prev) =>
-        prev.map((d) => d.id === doc.id ? { ...d, client_doc_status: 'acknowledged' } : d)
-      )
-      toast.success('Document validé — le client en sera informé')
-    } else {
-      toast.error('Erreur lors de la validation.')
-    }
+      setDocuments(prev => prev.map(d => d.id === doc.id ? { ...d, client_doc_status: 'acknowledged' } : d))
+      toast.success('Document validé')
+    } else toast.error('Erreur')
   }
 
-  // ---------------------------------------------------------------------------
-  // Delete document
-  // ---------------------------------------------------------------------------
+  // ─── Delete ────────────────────────────────────────────────────────────────
 
   async function handleDeleteDocument(doc: Document) {
-    const res = await fetch(`/api/projects/${id}/documents/${doc.id}`, {
-      method: 'DELETE',
-    })
+    const res = await fetch(`/api/projects/${id}/documents/${doc.id}`, { method: 'DELETE' })
     if (res.ok) {
-      setDocuments((prev) => prev.filter((d) => d.id !== doc.id))
-      fetchFolders()
+      setDocuments(prev => prev.filter(d => d.id !== doc.id))
+      void fetchFolders()
       toast.success('Document supprimé')
-    } else {
-      toast.error('Erreur lors de la suppression.')
-    }
+    } else toast.error('Erreur')
   }
 
-  // ---------------------------------------------------------------------------
-  // Rename document
-  // ---------------------------------------------------------------------------
+  async function handleDeleteFolder(folder: Folder) {
+    const res = await fetch(`/api/projects/${id}/folders/${folder.id}`, { method: 'DELETE' })
+    if (res.ok) {
+      setFolders(prev => prev.filter(f => f.id !== folder.id))
+      if (currentFolderId === folder.id) setCurrentFolderId(null)
+      toast.success('Dossier supprimé')
+    } else toast.error('Erreur')
+  }
+
+  // ─── Rename doc ────────────────────────────────────────────────────────────
 
   async function handleRenameDoc(e: React.FormEvent) {
     e.preventDefault()
@@ -433,27 +340,18 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
     setSavingRenameDoc(true)
     try {
       const res = await fetch(`/api/projects/${id}/documents/${selectedDoc.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: renameDocName.trim() }),
       })
       if (res.ok) {
-        setDocuments((prev) =>
-          prev.map((d) => d.id === selectedDoc.id ? { ...d, name: renameDocName.trim() } : d)
-        )
+        setDocuments(prev => prev.map(d => d.id === selectedDoc.id ? { ...d, name: renameDocName.trim() } : d))
         setRenameDocOpen(false)
         toast.success('Document renommé')
-      } else {
-        toast.error('Erreur lors du renommage.')
-      }
-    } finally {
-      setSavingRenameDoc(false)
-    }
+      } else toast.error('Erreur')
+    } finally { setSavingRenameDoc(false) }
   }
 
-  // ---------------------------------------------------------------------------
-  // Move document
-  // ---------------------------------------------------------------------------
+  // ─── Move doc ──────────────────────────────────────────────────────────────
 
   async function handleMoveDoc(e: React.FormEvent) {
     e.preventDefault()
@@ -462,28 +360,19 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
     try {
       const folderId = moveDocFolderId === 'root' ? null : moveDocFolderId
       const res = await fetch(`/api/projects/${id}/documents/${selectedDoc.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ folder_id: folderId }),
       })
       if (res.ok) {
-        setDocuments((prev) =>
-          prev.map((d) => d.id === selectedDoc.id ? { ...d, folder_id: folderId } : d)
-        )
-        fetchFolders()
+        setDocuments(prev => prev.map(d => d.id === selectedDoc.id ? { ...d, folder_id: folderId } : d))
+        void fetchFolders()
         setMoveFolderOpen(false)
         toast.success('Document déplacé')
-      } else {
-        toast.error('Erreur lors du déplacement.')
-      }
-    } finally {
-      setSavingMoveDoc(false)
-    }
+      } else toast.error('Erreur')
+    } finally { setSavingMoveDoc(false) }
   }
 
-  // ---------------------------------------------------------------------------
-  // Rename folder
-  // ---------------------------------------------------------------------------
+  // ─── Rename folder ─────────────────────────────────────────────────────────
 
   async function handleRenameFolder(e: React.FormEvent) {
     e.preventDefault()
@@ -491,309 +380,239 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
     setSavingRenameFolder(true)
     try {
       const res = await fetch(`/api/projects/${id}/folders/${selectedFolder.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: renameFolderName.trim() }),
       })
       if (res.ok) {
-        setFolders((prev) =>
-          prev.map((f) => f.id === selectedFolder.id ? { ...f, name: renameFolderName.trim() } : f)
-        )
+        setFolders(prev => prev.map(f => f.id === selectedFolder.id ? { ...f, name: renameFolderName.trim() } : f))
         setRenameFolderOpen(false)
         toast.success('Dossier renommé')
-      } else {
-        toast.error('Erreur lors du renommage.')
-      }
-    } finally {
-      setSavingRenameFolder(false)
-    }
+      } else toast.error('Erreur')
+    } finally { setSavingRenameFolder(false) }
   }
 
-  // ---------------------------------------------------------------------------
-  // Delete folder
-  // ---------------------------------------------------------------------------
-
-  async function handleDeleteFolder(folder: Folder) {
-    const res = await fetch(`/api/projects/${id}/folders/${folder.id}`, {
-      method: 'DELETE',
-    })
-    if (res.ok) {
-      setFolders((prev) => prev.filter((f) => f.id !== folder.id))
-      if (activeFolderId === folder.id) setActiveFolderId('all')
-      fetchDocuments('all')
-      toast.success('Dossier supprimé')
-    } else {
-      toast.error('Erreur lors de la suppression du dossier.')
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Counts helper
-  // ---------------------------------------------------------------------------
-
-  function getFolderDocCount(folderId: string): number {
-    return documents.filter((d) => d.folder_id === folderId).length
-  }
-
-  // ---------------------------------------------------------------------------
-  // Render
-  // ---------------------------------------------------------------------------
+  // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col gap-4 h-full">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => router.back()}>
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
+    <div className="flex flex-col gap-0 h-full">
+
+      {/* ── Top bar ── */}
+      <div className="flex items-center justify-between gap-3 pb-5">
         <div>
-          <h1 className="text-2xl font-bold">Documents</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Gérez les fichiers et liens de ce projet</p>
+          <h1 className="text-2xl font-bold tracking-tight">Documents</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Fichiers et liens du projet</p>
+        </div>
+
+        {/* New button */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button className="gap-2" disabled={uploading}>
+              {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+              Nouveau
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>
+              <Upload className="h-4 w-4 mr-2" />
+              Importer un fichier
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setAddLinkOpen(true)}>
+              <LinkIcon className="h-4 w-4 mr-2" />
+              Ajouter un lien
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => setCreateFolderOpen(true)}>
+              <FolderPlus className="h-4 w-4 mr-2" />
+              Nouveau dossier
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileSelect} />
+      </div>
+
+      {/* ── Toolbar : breadcrumb + search + filter ── */}
+      <div className="flex items-center gap-3 mb-4 flex-wrap">
+        {/* Breadcrumb */}
+        <nav className="flex items-center gap-1 text-sm flex-1 min-w-0">
+          <button
+            onClick={() => setCurrentFolderId(null)}
+            className={cn(
+              'flex items-center gap-1.5 px-2 py-1 rounded-md transition-colors',
+              currentFolderId === null
+                ? 'text-foreground font-medium'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+            )}
+          >
+            <FolderOpen className="h-4 w-4" />
+            Mes documents
+          </button>
+          {currentFolder && (
+            <>
+              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <span
+                className="flex items-center gap-1.5 px-2 py-1 rounded-md font-medium"
+                style={{ color: currentFolder.color }}
+              >
+                <span
+                  className="h-2.5 w-2.5 rounded-full shrink-0"
+                  style={{ backgroundColor: currentFolder.color }}
+                />
+                {currentFolder.name}
+              </span>
+            </>
+          )}
+        </nav>
+
+        {/* Search */}
+        <div className="relative w-52 shrink-0">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            className="pl-8 h-8 text-sm"
+            placeholder="Rechercher…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+        </div>
+
+        {/* Filter tabs */}
+        <div className="flex items-center gap-0.5 border rounded-lg p-0.5 shrink-0">
+          {(['all', 'admin', 'client'] as TabFilter[]).map(tab => (
+            <button
+              key={tab}
+              onClick={() => setTabFilter(tab)}
+              className={cn(
+                'px-3 py-1 text-xs rounded-md transition-colors',
+                tabFilter === tab
+                  ? 'bg-primary text-primary-foreground font-medium shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              {tab === 'all' ? 'Tous' : tab === 'admin' ? 'Admin' : 'Client'}
+            </button>
+          ))}
         </div>
       </div>
 
-      <Separator />
-
-      {/* Two-column layout */}
-      <div className="flex gap-6 flex-1 min-h-0">
-        {/* ------------------------------------------------------------------ */}
-        {/* Folder Sidebar */}
-        {/* ------------------------------------------------------------------ */}
-        <aside className="w-64 shrink-0 flex flex-col gap-1">
-          {/* Sidebar header */}
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Dossiers</span>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6"
-              onClick={() => setCreateFolderOpen(true)}
-              title="Créer un dossier"
-            >
-              <Plus className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-
-          {/* "All" special folder */}
-          <button
-            onClick={() => setActiveFolderId('all')}
-            className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm w-full text-left transition-colors ${
-              activeFolderId === 'all'
-                ? 'bg-accent text-accent-foreground font-medium'
-                : 'hover:bg-muted text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <FolderOpen className="h-4 w-4 shrink-0" />
-            <span className="flex-1 truncate">Tous les documents</span>
-          </button>
-
-          {/* "Root" special folder */}
-          <button
-            onClick={() => setActiveFolderId(null)}
-            className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm w-full text-left transition-colors ${
-              activeFolderId === null
-                ? 'bg-accent text-accent-foreground font-medium'
-                : 'hover:bg-muted text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <FolderOpen className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <span className="flex-1 truncate">Racine</span>
-            {rootCount > 0 && (
-              <Badge variant="secondary" className="text-xs h-5 px-1.5">{rootCount}</Badge>
-            )}
-          </button>
-
-          {/* Real folders */}
+      {/* ── Folders grid (only on root level) ── */}
+      {currentFolderId === null && (
+        <div className="mb-6">
           {loadingFolders ? (
-            <div className="space-y-1 mt-1">
-              {[1, 2, 3].map((i) => (
-                <Skeleton key={i} className="h-8 w-full rounded-md" />
-              ))}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+              {[1, 2, 3].map(i => <Skeleton key={i} className="h-24 rounded-xl" />)}
             </div>
-          ) : (
-            folders.map((folder) => (
-              <FolderItem
-                key={folder.id}
-                folder={folder}
-                isActive={activeFolderId === folder.id}
-                docCount={getFolderDocCount(folder.id)}
-                onClick={() => setActiveFolderId(folder.id)}
-                onRename={() => {
-                  setSelectedFolder(folder)
-                  setRenameFolderName(folder.name)
-                  setRenameFolderOpen(true)
-                }}
-                onDelete={() => handleDeleteFolder(folder)}
-              />
-            ))
-          )}
-        </aside>
-
-        {/* ------------------------------------------------------------------ */}
-        {/* Document List */}
-        {/* ------------------------------------------------------------------ */}
-        <div className="flex-1 flex flex-col gap-4 min-w-0">
-          {/* Doc list header */}
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <h2 className="text-base font-semibold">{getActiveFolderLabel()}</h2>
-            <div className="flex items-center gap-2 flex-wrap">
-              {/* Tab filter */}
-              <div className="flex items-center gap-1 border rounded-md p-0.5">
-                {(['all', 'admin', 'client'] as TabFilter[]).map((tab) => (
-                  <button
-                    key={tab}
-                    onClick={() => setTabFilter(tab)}
-                    className={`px-3 py-1 text-xs rounded transition-colors ${
-                      tabFilter === tab
-                        ? 'bg-primary text-primary-foreground font-medium'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    {tab === 'all' ? 'Tous' : tab === 'admin' ? 'Admin' : 'Client'}
-                  </button>
+          ) : folders.length > 0 ? (
+            <>
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+                Dossiers · {folders.length}
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                {folders.map(folder => (
+                  <FolderCard
+                    key={folder.id}
+                    folder={folder}
+                    onClick={() => setCurrentFolderId(folder.id)}
+                    onRename={() => {
+                      setSelectedFolder(folder)
+                      setRenameFolderName(folder.name)
+                      setRenameFolderOpen(true)
+                    }}
+                    onDelete={() => handleDeleteFolder(folder)}
+                  />
                 ))}
               </div>
+            </>
+          ) : null}
+        </div>
+      )}
 
-              <Button
-                variant="ghost"
-                size="sm"
-                className="gap-1.5"
-                onClick={() => setAddLinkOpen(true)}
-              >
-                <ExternalLink className="h-3.5 w-3.5" />
-                Ajouter un lien
-              </Button>
-
-              <Button
-                size="sm"
-                className="gap-1.5"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploading}
-              >
-                {uploading ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Upload className="h-3.5 w-3.5" />
-                )}
-                Ajouter un fichier
-              </Button>
-
-              {/* Hidden file input */}
-              <input
-                ref={fileInputRef}
-                type="file"
-                className="hidden"
-                onChange={handleFileSelect}
-              />
-            </div>
+      {/* ── Documents list ── */}
+      <div className="flex-1 min-h-0">
+        {loadingDocs ? (
+          <div className="space-y-2">
+            {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-12 rounded-lg" />)}
           </div>
+        ) : filteredDocuments.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 text-center gap-3">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted">
+              <FolderOpen className="h-7 w-7 text-muted-foreground" />
+            </div>
+            <div>
+              <p className="font-medium">Aucun document</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                {search ? 'Aucun résultat pour cette recherche.' : 'Importez un fichier ou ajoutez un lien.'}
+              </p>
+            </div>
+            {!search && (
+              <div className="flex gap-2 mt-1">
+                <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setAddLinkOpen(true)}>
+                  <LinkIcon className="h-3.5 w-3.5" /> Ajouter un lien
+                </Button>
+                <Button size="sm" className="gap-1.5" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+                  <Upload className="h-3.5 w-3.5" /> Importer un fichier
+                </Button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="rounded-xl border overflow-hidden">
+            {/* Table header */}
+            <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-3 items-center px-4 py-2 bg-muted/40 border-b text-xs font-medium text-muted-foreground">
+              <span>Nom</span>
+              <span className="w-24 text-center">Visibilité</span>
+              <span className="w-16 text-right">Taille</span>
+              <span className="w-20 text-right">Ajouté</span>
+              <span className="w-8" />
+            </div>
 
-          {/* Document items */}
-          {loadingDocs ? (
-            <div className="space-y-2">
-              {[1, 2, 3, 4].map((i) => (
-                <Skeleton key={i} className="h-12 w-full rounded-md" />
-              ))}
-            </div>
-          ) : filteredDocuments.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
-              <FolderOpen className="h-12 w-12 text-muted-foreground/40" />
-              <div>
-                <p className="font-medium text-muted-foreground">Aucun document</p>
-                <p className="text-sm text-muted-foreground/60 mt-1">
-                  Ajoutez un fichier ou un lien pour commencer.
-                </p>
-              </div>
-              <div className="flex gap-2 mt-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5"
-                  onClick={() => setAddLinkOpen(true)}
-                >
-                  <ExternalLink className="h-3.5 w-3.5" />
-                  Ajouter un lien
-                </Button>
-                <Button
-                  size="sm"
-                  className="gap-1.5"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploading}
-                >
-                  <Upload className="h-3.5 w-3.5" />
-                  Ajouter un fichier
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="border rounded-md divide-y">
-              {filteredDocuments.map((doc) => (
-                <DocumentItem
+            {/* Rows */}
+            <div className="divide-y">
+              {filteredDocuments.map(doc => (
+                <DocRow
                   key={doc.id}
                   doc={doc}
-                  onOpen={() => window.open(doc.url, '_blank')}
+                  opening={openingDocId === doc.id}
+                  onOpen={() => handleOpenDoc(doc)}
                   onToggleVisibility={() => handleToggleVisibility(doc)}
-                  onRename={() => {
-                    setSelectedDoc(doc)
-                    setRenameDocName(doc.name)
-                    setRenameDocOpen(true)
-                  }}
-                  onMove={() => {
-                    setSelectedDoc(doc)
-                    setMoveDocFolderId(doc.folder_id ?? 'root')
-                    setMoveFolderOpen(true)
-                  }}
-                  onDelete={() => handleDeleteDocument(doc)}
                   onAcknowledge={() => handleAcknowledge(doc)}
+                  onRename={() => { setSelectedDoc(doc); setRenameDocName(doc.name); setRenameDocOpen(true) }}
+                  onMove={() => { setSelectedDoc(doc); setMoveDocFolderId(doc.folder_id ?? 'root'); setMoveFolderOpen(true) }}
+                  onDelete={() => handleDeleteDocument(doc)}
                 />
               ))}
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
-      {/* -------------------------------------------------------------------- */}
-      {/* Dialog — Create Folder */}
-      {/* -------------------------------------------------------------------- */}
+      {/* ── Dialogs ── */}
+
+      {/* Create folder */}
       <Dialog open={createFolderOpen} onOpenChange={setCreateFolderOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Nouveau dossier</DialogTitle>
-            <DialogDescription>Créez un dossier pour organiser vos documents.</DialogDescription>
+            <DialogDescription>Organisez vos documents par dossiers.</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreateFolder} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="folder-name">Nom</Label>
-              <Input
-                id="folder-name"
-                value={newFolderName}
-                onChange={(e) => setNewFolderName(e.target.value)}
-                placeholder="Ex : Contrats"
-                required
-                autoFocus
-              />
+              <Input id="folder-name" value={newFolderName} onChange={e => setNewFolderName(e.target.value)} placeholder="Ex : Contrats" required autoFocus />
             </div>
             <div className="space-y-2">
               <Label>Couleur</Label>
-              <div className="flex gap-2">
-                {FOLDER_COLORS.map((color) => (
+              <div className="flex gap-2 flex-wrap">
+                {FOLDER_COLORS.map(color => (
                   <button
-                    key={color}
-                    type="button"
-                    onClick={() => setNewFolderColor(color)}
-                    className={`h-7 w-7 rounded-full border-2 transition-transform ${
-                      newFolderColor === color ? 'border-foreground scale-110' : 'border-transparent hover:scale-105'
-                    }`}
+                    key={color} type="button" onClick={() => setNewFolderColor(color)}
+                    className={cn('h-7 w-7 rounded-full border-2 transition-transform', newFolderColor === color ? 'border-foreground scale-110' : 'border-transparent hover:scale-105')}
                     style={{ backgroundColor: color }}
-                    title={color}
                   />
                 ))}
               </div>
             </div>
             <DialogFooter>
-              <Button type="button" variant="ghost" onClick={() => setCreateFolderOpen(false)}>
-                Annuler
-              </Button>
+              <Button type="button" variant="ghost" onClick={() => setCreateFolderOpen(false)}>Annuler</Button>
               <Button type="submit" disabled={savingFolder || !newFolderName.trim()}>
                 {savingFolder && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
                 Créer
@@ -803,71 +622,38 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
         </DialogContent>
       </Dialog>
 
-      {/* -------------------------------------------------------------------- */}
-      {/* Dialog — Add Link */}
-      {/* -------------------------------------------------------------------- */}
+      {/* Add link */}
       <Dialog open={addLinkOpen} onOpenChange={setAddLinkOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Ajouter un lien</DialogTitle>
-            <DialogDescription>Ajoutez un lien externe (Figma, Google Drive, Notion…).</DialogDescription>
+            <DialogDescription>Ajoutez un lien externe (Figma, Notion, Drive…).</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleAddLink} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="link-url">URL</Label>
-              <Input
-                id="link-url"
-                type="url"
-                value={linkUrl}
-                onChange={(e) => setLinkUrl(e.target.value)}
-                placeholder="https://…"
-                required
-                autoFocus
-              />
+              <Input id="link-url" type="url" value={linkUrl} onChange={e => setLinkUrl(e.target.value)} placeholder="https://…" required autoFocus />
             </div>
             <div className="space-y-2">
               <Label htmlFor="link-name">Nom (optionnel)</Label>
-              <Input
-                id="link-name"
-                value={linkName}
-                onChange={(e) => setLinkName(e.target.value)}
-                placeholder="Ex : Maquette Figma"
-              />
+              <Input id="link-name" value={linkName} onChange={e => setLinkName(e.target.value)} placeholder="Ex : Maquette Figma" />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="link-folder">Dossier</Label>
-              <Select value={linkFolderId} onValueChange={(v) => setLinkFolderId(v ?? '')}>
-                <SelectTrigger id="link-folder">
-                  <SelectValue placeholder="Choisir un dossier" />
-                </SelectTrigger>
+              <Label>Dossier</Label>
+              <Select value={linkFolderId} onValueChange={v => setLinkFolderId(v ?? 'root')}>
+                <SelectTrigger><SelectValue placeholder="Choisir un dossier" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="root">Racine</SelectItem>
-                  {folders.map((f) => (
-                    <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
-                  ))}
+                  {folders.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
             <div className="flex items-center gap-3">
-              <Switch
-                id="link-visible"
-                checked={linkVisibleToClient}
-                onCheckedChange={setLinkVisibleToClient}
-              />
+              <Switch id="link-visible" checked={linkVisibleToClient} onCheckedChange={setLinkVisibleToClient} />
               <Label htmlFor="link-visible" className="cursor-pointer">Visible par le client</Label>
             </div>
             <DialogFooter>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => {
-                  setAddLinkOpen(false)
-                  setLinkName('')
-                  setLinkUrl('')
-                  setLinkFolderId('root')
-                  setLinkVisibleToClient(false)
-                }}
-              >
+              <Button type="button" variant="ghost" onClick={() => { setAddLinkOpen(false); setLinkName(''); setLinkUrl(''); setLinkFolderId('root'); setLinkVisibleToClient(false) }}>
                 Annuler
               </Button>
               <Button type="submit" disabled={savingLink || !linkUrl.trim()}>
@@ -879,9 +665,7 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
         </DialogContent>
       </Dialog>
 
-      {/* -------------------------------------------------------------------- */}
-      {/* Dialog — Rename Document */}
-      {/* -------------------------------------------------------------------- */}
+      {/* Rename document */}
       <Dialog open={renameDocOpen} onOpenChange={setRenameDocOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
@@ -890,19 +674,11 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
           </DialogHeader>
           <form onSubmit={handleRenameDoc} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="rename-doc-name">Nouveau nom</Label>
-              <Input
-                id="rename-doc-name"
-                value={renameDocName}
-                onChange={(e) => setRenameDocName(e.target.value)}
-                required
-                autoFocus
-              />
+              <Label>Nom</Label>
+              <Input value={renameDocName} onChange={e => setRenameDocName(e.target.value)} required autoFocus />
             </div>
             <DialogFooter>
-              <Button type="button" variant="ghost" onClick={() => setRenameDocOpen(false)}>
-                Annuler
-              </Button>
+              <Button type="button" variant="ghost" onClick={() => setRenameDocOpen(false)}>Annuler</Button>
               <Button type="submit" disabled={savingRenameDoc || !renameDocName.trim()}>
                 {savingRenameDoc && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
                 Enregistrer
@@ -912,9 +688,7 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
         </DialogContent>
       </Dialog>
 
-      {/* -------------------------------------------------------------------- */}
-      {/* Dialog — Move Document */}
-      {/* -------------------------------------------------------------------- */}
+      {/* Move document */}
       <Dialog open={moveFolderOpen} onOpenChange={setMoveFolderOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
@@ -923,23 +697,17 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
           </DialogHeader>
           <form onSubmit={handleMoveDoc} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="move-folder">Dossier</Label>
-              <Select value={moveDocFolderId} onValueChange={(v) => setMoveDocFolderId(v ?? '')}>
-                <SelectTrigger id="move-folder">
-                  <SelectValue placeholder="Choisir un dossier" />
-                </SelectTrigger>
+              <Label>Dossier</Label>
+              <Select value={moveDocFolderId} onValueChange={v => setMoveDocFolderId(v ?? 'root')}>
+                <SelectTrigger><SelectValue placeholder="Choisir un dossier" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="root">Racine</SelectItem>
-                  {folders.map((f) => (
-                    <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
-                  ))}
+                  {folders.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
             <DialogFooter>
-              <Button type="button" variant="ghost" onClick={() => setMoveFolderOpen(false)}>
-                Annuler
-              </Button>
+              <Button type="button" variant="ghost" onClick={() => setMoveFolderOpen(false)}>Annuler</Button>
               <Button type="submit" disabled={savingMoveDoc}>
                 {savingMoveDoc && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
                 Déplacer
@@ -949,9 +717,7 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
         </DialogContent>
       </Dialog>
 
-      {/* -------------------------------------------------------------------- */}
-      {/* Dialog — Rename Folder */}
-      {/* -------------------------------------------------------------------- */}
+      {/* Rename folder */}
       <Dialog open={renameFolderOpen} onOpenChange={setRenameFolderOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
@@ -960,19 +726,11 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
           </DialogHeader>
           <form onSubmit={handleRenameFolder} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="rename-folder-name">Nouveau nom</Label>
-              <Input
-                id="rename-folder-name"
-                value={renameFolderName}
-                onChange={(e) => setRenameFolderName(e.target.value)}
-                required
-                autoFocus
-              />
+              <Label>Nom</Label>
+              <Input value={renameFolderName} onChange={e => setRenameFolderName(e.target.value)} required autoFocus />
             </div>
             <DialogFooter>
-              <Button type="button" variant="ghost" onClick={() => setRenameFolderOpen(false)}>
-                Annuler
-              </Button>
+              <Button type="button" variant="ghost" onClick={() => setRenameFolderOpen(false)}>Annuler</Button>
               <Button type="submit" disabled={savingRenameFolder || !renameFolderName.trim()}>
                 {savingRenameFolder && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
                 Enregistrer
@@ -985,63 +743,56 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
   )
 }
 
-// ---------------------------------------------------------------------------
-// Sub-components
-// ---------------------------------------------------------------------------
+// ─── FolderCard ───────────────────────────────────────────────────────────────
 
-interface FolderItemProps {
+function FolderCard({ folder, onClick, onRename, onDelete }: {
   folder: Folder
-  isActive: boolean
-  docCount: number
   onClick: () => void
   onRename: () => void
   onDelete: () => void
-}
-
-function FolderItem({ folder, isActive, docCount, onClick, onRename, onDelete }: FolderItemProps) {
+}) {
   const [menuOpen, setMenuOpen] = useState(false)
 
   return (
     <div className="relative group">
       <button
         onClick={onClick}
-        className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm w-full text-left transition-colors ${
-          isActive
-            ? 'bg-accent text-accent-foreground font-medium'
-            : 'hover:bg-muted text-muted-foreground hover:text-foreground'
-        }`}
+        className="flex flex-col items-start gap-2 w-full rounded-xl border bg-card p-3.5 text-left hover:border-border/80 hover:shadow-sm transition-all"
       >
-        <span
-          className="h-2.5 w-2.5 rounded-full shrink-0"
-          style={{ backgroundColor: folder.color }}
-        />
-        <span className="flex-1 truncate">{folder.name}</span>
-        {docCount > 0 && (
-          <Badge variant="secondary" className="text-xs h-5 px-1.5">{docCount}</Badge>
-        )}
+        {/* Folder icon with color */}
+        <div
+          className="flex h-10 w-10 items-center justify-center rounded-lg"
+          style={{ backgroundColor: `${folder.color}20` }}
+        >
+          <FolderClosed className="h-5 w-5" style={{ color: folder.color }} />
+        </div>
+        <div className="w-full min-w-0 pr-4">
+          <p className="text-sm font-medium truncate">{folder.name}</p>
+          {(folder.doc_count ?? 0) > 0 && (
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {folder.doc_count} fichier{(folder.doc_count ?? 0) > 1 ? 's' : ''}
+            </p>
+          )}
+        </div>
       </button>
 
-      {/* Context menu button — visible on hover */}
+      {/* Context menu */}
       <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
         <DropdownMenuTrigger
-          className={`absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 inline-flex items-center justify-center rounded-md hover:bg-accent ${
+          className={cn(
+            'absolute right-2 top-2 h-6 w-6 inline-flex items-center justify-center rounded-md hover:bg-muted transition-opacity',
             menuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-          } transition-opacity`}
-          onClick={(e: React.MouseEvent) => e.stopPropagation()}
+          )}
+          onClick={e => e.stopPropagation()}
         >
           <MoreHorizontal className="h-3.5 w-3.5" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-40">
           <DropdownMenuItem onClick={onRename}>
-            <Pencil className="h-3.5 w-3.5 mr-2" />
-            Renommer
+            <Pencil className="h-3.5 w-3.5 mr-2" /> Renommer
           </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={onDelete}
-            className="text-destructive focus:text-destructive"
-          >
-            <Trash2 className="h-3.5 w-3.5 mr-2" />
-            Supprimer
+          <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive">
+            <Trash2 className="h-3.5 w-3.5 mr-2" /> Supprimer
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -1049,113 +800,114 @@ function FolderItem({ folder, isActive, docCount, onClick, onRename, onDelete }:
   )
 }
 
-interface DocumentItemProps {
+// ─── DocRow ───────────────────────────────────────────────────────────────────
+
+function DocRow({ doc, opening, onOpen, onToggleVisibility, onAcknowledge, onRename, onMove, onDelete }: {
   doc: Document
+  opening: boolean
   onOpen: () => void
   onToggleVisibility: () => void
+  onAcknowledge: () => void
   onRename: () => void
   onMove: () => void
   onDelete: () => void
-  onAcknowledge: () => void
-}
-
-function DocumentItem({ doc, onOpen, onToggleVisibility, onRename, onMove, onDelete, onAcknowledge }: DocumentItemProps) {
+}) {
   const isClientPending = doc.source === 'client' && doc.client_doc_status === 'pending_review'
+
   return (
-    <div className={`flex items-center gap-3 px-4 py-3 hover:bg-muted/40 transition-colors group ${isClientPending ? 'bg-amber-50/60' : ''}`}>
-      {/* Icon + Name */}
+    <div className={cn(
+      'grid grid-cols-[1fr_auto_auto_auto_auto] gap-3 items-center px-4 py-2.5 hover:bg-muted/30 transition-colors group',
+      isClientPending && 'bg-amber-50/50 hover:bg-amber-50/70',
+    )}>
+      {/* Name + icon */}
       <button
         onClick={onOpen}
-        className="flex items-center gap-2 flex-1 min-w-0 text-left hover:underline"
-        title={doc.url}
+        disabled={opening}
+        className="flex items-center gap-2.5 min-w-0 text-left hover:underline disabled:opacity-70"
       >
-        {getFileIcon(doc)}
-        <span className="text-sm truncate">{doc.name}</span>
-        {doc.type === 'link' && (
-          <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
+        {opening
+          ? <Loader2 className="h-4 w-4 animate-spin shrink-0 text-muted-foreground" />
+          : getFileIcon(doc)
+        }
+        <span className="text-sm truncate font-medium">{doc.name}</span>
+        {doc.type === 'link' && <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />}
+        {isClientPending && (
+          <Badge className="text-[10px] px-1.5 h-4 bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100 shrink-0">
+            Client
+          </Badge>
         )}
       </button>
 
-      {/* Client uploaded + pending badge */}
-      {isClientPending && (
-        <Badge className="text-xs shrink-0 bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100 gap-1">
-          Envoyé par le client
-        </Badge>
-      )}
-      {doc.source === 'client' && doc.client_doc_status === 'acknowledged' && (
-        <Badge className="text-xs shrink-0 bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-50">
-          Validé
-        </Badge>
-      )}
-
-      {/* Validate button for client docs */}
-      {isClientPending && (
-        <button
-          onClick={onAcknowledge}
-          className="text-xs font-medium text-emerald-700 border border-emerald-200 rounded-md px-2 py-1 hover:bg-emerald-50 transition-colors shrink-0"
-        >
-          Valider la réception
-        </button>
-      )}
-
-      {/* Visibility badge (only for freelance docs) */}
-      {doc.source !== 'client' && (
-        <Badge
-          variant={doc.visible_to_client ? 'default' : 'secondary'}
-          className={`text-xs shrink-0 ${
-            doc.visible_to_client ? 'bg-green-100 text-green-700 hover:bg-green-100' : ''
-          }`}
-        >
-          {doc.visible_to_client ? 'Client' : 'Admin'}
-        </Badge>
-      )}
+      {/* Visibility */}
+      <div className="w-24 flex items-center justify-center gap-1.5">
+        {isClientPending ? (
+          <button
+            onClick={onAcknowledge}
+            className="text-[11px] font-medium text-emerald-700 border border-emerald-200 rounded-md px-2 py-0.5 hover:bg-emerald-50 transition-colors flex items-center gap-1"
+          >
+            <CheckCircle2 className="h-3 w-3" /> Valider
+          </button>
+        ) : doc.source === 'client' ? (
+          <Badge className="text-[10px] h-5 px-1.5 bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-50">
+            Reçu
+          </Badge>
+        ) : (
+          <button
+            onClick={onToggleVisibility}
+            className={cn(
+              'inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md border transition-colors',
+              doc.visible_to_client
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                : 'bg-muted text-muted-foreground border-border hover:bg-muted/80'
+            )}
+          >
+            {doc.visible_to_client
+              ? <><Eye className="h-3 w-3" /> Client</>
+              : <><EyeOff className="h-3 w-3" /> Admin</>
+            }
+          </button>
+        )}
+      </div>
 
       {/* Size */}
-      <span className="text-xs text-muted-foreground w-16 text-right shrink-0">
+      <span className="w-16 text-right text-xs text-muted-foreground tabular-nums">
         {formatBytes(doc.size_bytes)}
       </span>
 
       {/* Date */}
-      <span className="text-xs text-muted-foreground w-20 text-right shrink-0">
-        {format(new Date(doc.created_at), 'd MMM', { locale: fr })}
+      <span className="w-20 text-right text-xs text-muted-foreground">
+        {format(new Date(doc.created_at), 'd MMM yyyy', { locale: fr })}
       </span>
 
       {/* Actions */}
-      <DropdownMenu>
-        <DropdownMenuTrigger className="h-7 w-7 inline-flex items-center justify-center rounded-md hover:bg-accent opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-          <MoreHorizontal className="h-4 w-4" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-48">
-          <DropdownMenuItem onClick={onRename}>
-            <Pencil className="h-3.5 w-3.5 mr-2" />
-            Renommer
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={onMove}>
-            <FolderInput className="h-3.5 w-3.5 mr-2" />
-            Changer de dossier
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={onToggleVisibility}>
-            {doc.visible_to_client ? (
-              <>
-                <EyeOff className="h-3.5 w-3.5 mr-2" />
-                Masquer aux clients
-              </>
-            ) : (
-              <>
-                <Eye className="h-3.5 w-3.5 mr-2" />
-                Rendre visible aux clients
-              </>
-            )}
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={onDelete}
-            className="text-destructive focus:text-destructive"
-          >
-            <Trash2 className="h-3.5 w-3.5 mr-2" />
-            Supprimer
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <div className="w-8 flex justify-end">
+        <DropdownMenu>
+          <DropdownMenuTrigger className="h-7 w-7 inline-flex items-center justify-center rounded-md hover:bg-accent opacity-0 group-hover:opacity-100 transition-opacity">
+            <MoreHorizontal className="h-4 w-4" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuItem onClick={onOpen}>
+              <ExternalLink className="h-3.5 w-3.5 mr-2" /> Ouvrir
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onRename}>
+              <Pencil className="h-3.5 w-3.5 mr-2" /> Renommer
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onMove}>
+              <FolderInput className="h-3.5 w-3.5 mr-2" /> Changer de dossier
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onToggleVisibility}>
+              {doc.visible_to_client
+                ? <><EyeOff className="h-3.5 w-3.5 mr-2" /> Masquer aux clients</>
+                : <><Eye className="h-3.5 w-3.5 mr-2" /> Rendre visible aux clients</>
+              }
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive">
+              <Trash2 className="h-3.5 w-3.5 mr-2" /> Supprimer
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
     </div>
   )
 }

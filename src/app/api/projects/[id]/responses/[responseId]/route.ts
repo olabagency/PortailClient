@@ -14,24 +14,68 @@ export async function PUT(
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
 
-    // Verify project ownership
     const { data: project } = await supabase
-      .from('projects')
-      .select('id')
-      .eq('id', id)
-      .eq('user_id', user.id)
-      .single()
+      .from('projects').select('id').eq('id', id).eq('user_id', user.id).single()
     if (!project) return NextResponse.json({ error: 'Projet introuvable' }, { status: 404 })
 
     const { data, error } = await supabase
       .from('form_responses')
       .update({ validated_at: new Date().toISOString() })
-      .eq('id', responseId)
-      .eq('project_id', id)
-      .select()
-      .single()
+      .eq('id', responseId).eq('project_id', id).select().single()
 
     if (error || !data) return NextResponse.json({ error: 'Réponse introuvable' }, { status: 404 })
+
+    // ── Auto-stocker les fichiers onboarding dans Documents/Onboarding ────────
+    try {
+      const [{ data: responseData }, { data: fileFields }] = await Promise.all([
+        supabase.from('form_responses').select('responses').eq('id', responseId).single(),
+        supabase.from('form_fields').select('id, label').eq('project_id', id).eq('type', 'file'),
+      ])
+
+      const responses = (responseData?.responses ?? {}) as Record<string, string>
+      const fileEntries = (fileFields ?? [])
+        .map(f => ({ label: f.label, key: responses[f.id] }))
+        .filter(e => e.key && typeof e.key === 'string' && !e.key.startsWith('http'))
+
+      if (fileEntries.length > 0) {
+        // Trouver ou créer le dossier "Onboarding"
+        let folderId: string
+        const { data: existing } = await supabase
+          .from('document_folders').select('id').eq('project_id', id).eq('name', 'Onboarding').single()
+        if (existing) {
+          folderId = existing.id
+        } else {
+          const { data: newFolder } = await supabase
+            .from('document_folders')
+            .insert({ project_id: id, name: 'Onboarding', color: '#6366F1', icon: 'clipboard-list' })
+            .select('id').single()
+          folderId = newFolder!.id
+        }
+
+        for (const entry of fileEntries) {
+          // Éviter les doublons
+          const { data: dup } = await supabase
+            .from('project_documents').select('id').eq('project_id', id).eq('s3_key', entry.key).single()
+          if (!dup) {
+            const fileName = entry.key.split('/').pop()?.replace(/^\d+_/, '') ?? entry.label
+            await supabase.from('project_documents').insert({
+              project_id: id,
+              name: fileName,
+              type: 'file',
+              url: entry.key,
+              s3_key: entry.key,
+              folder_id: folderId,
+              visible_to_client: true,
+              uploaded_by: user.id,
+              source: 'client',
+            })
+          }
+        }
+      }
+    } catch (e) {
+      console.error('[validate] Auto-store docs error:', e)
+    }
+
     return NextResponse.json({ data })
   } catch {
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
@@ -13,16 +14,17 @@ export async function GET(request: NextRequest) {
       const { data: { user } } = await supabase.auth.getUser()
 
       if (user?.email) {
-        // Lier le user auth à l'enregistrement clients (clé manquante au premier login)
-        await supabase
+        // Lier le user auth à l'enregistrement clients via admin (bypass RLS)
+        const admin = createAdminClient()
+        await admin
           .from('clients')
           .update({ user_id: user.id })
           .ilike('email', user.email)
           .is('user_id', null)
 
-        // Marquer le portail comme accepté
+        // Marquer le portail comme accepté via admin
         if (project) {
-          await supabase
+          await admin
             .from('client_portals')
             .update({ accepted_at: new Date().toISOString() })
             .eq('project_id', project)

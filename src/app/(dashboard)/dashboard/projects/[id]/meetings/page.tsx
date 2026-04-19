@@ -95,6 +95,7 @@ interface MeetingComment {
   content: string
   source: 'client' | 'freelance'
   quoted_text: string | null
+  commenter_name: string | null
   created_at: string
 }
 
@@ -1359,7 +1360,7 @@ function MeetingsPageInner({
                               'text-[11px] font-semibold uppercase tracking-wide',
                               c.source === 'client' ? 'text-blue-600' : 'text-muted-foreground',
                             )}>
-                              {c.source === 'client' ? 'Client' : 'Vous'}
+                              {c.commenter_name ?? (c.source === 'client' ? 'Client' : 'Vous')}
                             </span>
                             <span className="text-[11px] text-muted-foreground">
                               {format(new Date(c.created_at), "d MMM 'à' HH'h'mm", { locale: fr })}

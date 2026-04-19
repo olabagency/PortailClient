@@ -159,7 +159,13 @@
       "Bash(tail -n +1001 \"/Users/adrien/Desktop/Portail client/src/app/\\(dashboard\\)/dashboard/projects/[id]/documents/page.tsx\")",
       "Bash(wc -l /tmp/page_part*.txt)",
       "Bash(python3)",
-      "Bash(gh auth:*)"
+      "Bash(gh auth:*)",
+      "Bash(mkdir -p \"/Users/adrien/Desktop/Portail client/src/app/api/projects/[id]/feedback/[feedbackId]/comments\")",
+      "Bash(mkdir -p \"/Users/adrien/Desktop/Portail client/src/app/api/client/projects/[id]/feedback/[feedbackId]/comments\")",
+      "Bash(grep -E \"\\\\.\\(tsx|ts\\)$\")",
+      "mcp__71fcdac2-d126-40b4-9fbc-7791fd95c031__get_logs",
+      "Bash(grep -r \"Select.Value\\\\|SelectValue\\\\|getLabel\\\\|label\" node_modules/@base-ui/react/dist/select/select-value*)",
+      "Bash(grep -v \"^$\")"
     ]
   }
 }

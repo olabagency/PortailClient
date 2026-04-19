@@ -5,12 +5,10 @@ import Link from 'next/link'
 import { Card, CardContent } from '@/components/ui/card'
 import {
   FolderKanban, Users, Clock, CheckCircle2, Zap, Plus, ArrowRight,
-  CalendarDays, AlertTriangle, ClipboardList, PackageOpen, ChevronRight,
-  TrendingUp,
+  AlertTriangle, ClipboardList, PackageOpen, ChevronRight,
+  TrendingUp, MessageSquare, Crown, Sparkles, CalendarCheck, Video, ExternalLink,
 } from 'lucide-react'
 import { ActivityFeed } from '@/components/dashboard/ActivityFeed'
-import { MiniCalendar } from '@/components/dashboard/MiniCalendar'
-import type { CalendarEvent } from '@/components/dashboard/MiniCalendar'
 import { cn } from '@/lib/utils'
 
 const statusConfig: Record<string, { label: string; dot: string; text: string; bg: string; border: string }> = {
@@ -46,6 +44,24 @@ export default async function DashboardPage() {
   const { data: userProjects } = await supabase.from('projects').select('id').eq('user_id', user.id)
   const projectIds = (userProjects ?? []).map((p) => p.id)
 
+  // Réunions du jour
+  const todayStart = new Date(); todayStart.setHours(0,0,0,0)
+  const todayEnd   = new Date(); todayEnd.setHours(23,59,59,999)
+  const { data: todayMeetingsRaw } = projectIds.length > 0
+    ? await supabase
+        .from('project_meetings')
+        .select('id, title, scheduled_at, meeting_link, project_id, projects(name)')
+        .in('project_id', projectIds)
+        .gte('scheduled_at', todayStart.toISOString())
+        .lte('scheduled_at', todayEnd.toISOString())
+        .order('scheduled_at', { ascending: true })
+    : { data: [] }
+  const todayMeetings = ((todayMeetingsRaw ?? []) as unknown) as Array<{
+    id: string; title: string; scheduled_at: string
+    meeting_link: string | null; project_id: string
+    projects: { name: string } | null
+  }>
+
   // Projets récents avec client
   const { data: recentProjects } = await supabase
     .from('projects')
@@ -58,23 +74,20 @@ export default async function DashboardPage() {
   let overdueMilestones = 0
   let pendingResponses = 0
   let pendingDeliverables = 0
-  let allEvents: CalendarEvent[] = []
+  let pendingClientFeedback = 0
   let milestoneProgressMap: Record<string, { total: number; completed: number }> = {}
 
   if (projectIds.length > 0) {
     const today = new Date()
     const todayStr = today.toISOString().split('T')[0]
-    const in60 = new Date(today.getTime() + 60 * 24 * 60 * 60 * 1000)
 
     const [
       { count: pendingMilestonesCount },
       { count: overdueMilestonesCount },
       { count: pendingResponsesCount },
       { count: pendingDeliverablesCount },
+      { count: pendingClientFeedbackCount },
       { data: allMilestonesData },
-      { data: upcomingMilestonesData },
-      { data: upcomingMeetingsData },
-      { data: validatedOnboardingsData },
     ] = await Promise.all([
       supabase.from('project_milestones').select('id', { count: 'exact', head: true })
         .in('project_id', projectIds).in('status', ['pending', 'in_progress']),
@@ -85,27 +98,17 @@ export default async function DashboardPage() {
         .in('project_id', projectIds).eq('completed', true).is('validated_at', null),
       supabase.from('project_deliverables').select('id', { count: 'exact', head: true })
         .in('project_id', projectIds).eq('status', 'pending'),
+      supabase.from('client_feedback').select('id', { count: 'exact', head: true })
+        .in('project_id', projectIds).eq('source', 'client').eq('status', 'pending'),
       supabase.from('project_milestones').select('project_id, status')
         .in('project_id', (recentProjects ?? []).map(p => p.id)),
-      supabase.from('project_milestones')
-        .select('id, title, due_date, status, project_id, projects(name, color)')
-        .in('project_id', projectIds).not('due_date', 'is', null)
-        .gte('due_date', todayStr).lte('due_date', in60.toISOString().split('T')[0]).order('due_date'),
-      supabase.from('project_meetings')
-        .select('id, title, scheduled_at, project_id, projects(name, color)')
-        .in('project_id', projectIds)
-        .gte('scheduled_at', today.toISOString()).lte('scheduled_at', in60.toISOString()).order('scheduled_at'),
-      supabase.from('form_responses')
-        .select('id, validated_at, project_id, projects(name, color)')
-        .in('project_id', projectIds).not('validated_at', 'is', null)
-        .gte('validated_at', new Date(today.getTime() - 30 * 86400000).toISOString())
-        .order('validated_at', { ascending: false }),
     ])
 
-    pendingMilestones   = pendingMilestonesCount ?? 0
-    overdueMilestones   = overdueMilestonesCount ?? 0
-    pendingResponses    = pendingResponsesCount ?? 0
-    pendingDeliverables = pendingDeliverablesCount ?? 0
+    pendingMilestones    = pendingMilestonesCount ?? 0
+    overdueMilestones    = overdueMilestonesCount ?? 0
+    pendingResponses     = pendingResponsesCount ?? 0
+    pendingDeliverables  = pendingDeliverablesCount ?? 0
+    pendingClientFeedback = pendingClientFeedbackCount ?? 0
 
     // Progress par projet récent
     for (const m of (allMilestonesData ?? [])) {
@@ -113,21 +116,6 @@ export default async function DashboardPage() {
       milestoneProgressMap[m.project_id].total++
       if (m.status === 'completed') milestoneProgressMap[m.project_id].completed++
     }
-
-    // Événements calendrier
-    const milestoneEvents: CalendarEvent[] = (upcomingMilestonesData ?? []).map((m) => {
-      const proj = m.projects as unknown as { name: string; color: string | null } | null
-      return { id: m.id, title: m.title, date: m.due_date!, type: 'milestone' as const, status: m.status as CalendarEvent['status'], project_id: m.project_id, project_name: proj?.name ?? '—', project_color: proj?.color ?? null, href: `/dashboard/projects/${m.project_id}/milestones` }
-    })
-    const meetingEvents: CalendarEvent[] = (upcomingMeetingsData ?? []).map((m) => {
-      const proj = m.projects as unknown as { name: string; color: string | null } | null
-      return { id: m.id, title: m.title, date: (m.scheduled_at as string).slice(0, 10), type: 'meeting' as const, project_id: m.project_id, project_name: proj?.name ?? '—', project_color: proj?.color ?? null, href: `/dashboard/projects/${m.project_id}/meetings` }
-    })
-    const onboardingEvents: CalendarEvent[] = (validatedOnboardingsData ?? []).map((v) => {
-      const proj = v.projects as unknown as { name: string; color: string | null } | null
-      return { id: v.id, title: 'Onboarding validé', date: (v.validated_at as string).slice(0, 10), type: 'onboarding' as const, status: 'validated' as const, project_id: v.project_id, project_name: proj?.name ?? '—', project_color: proj?.color ?? null, href: `/dashboard/projects/${v.project_id}/onboarding` }
-    })
-    allEvents = [...milestoneEvents, ...meetingEvents, ...onboardingEvents]
   }
 
   const firstName = profile?.full_name?.split(' ')[0] ?? null
@@ -162,6 +150,15 @@ export default async function DashboardPage() {
       color: 'text-amber-600',
       bg: 'bg-amber-50',
       border: 'border-amber-200',
+      href: '/dashboard/projects',
+    },
+    pendingClientFeedback > 0 && {
+      label: `${pendingClientFeedback} retour${pendingClientFeedback > 1 ? 's' : ''} client à traiter`,
+      sub: 'Retour(s) en attente de réponse',
+      Icon: MessageSquare,
+      color: 'text-blue-600',
+      bg: 'bg-blue-50',
+      border: 'border-blue-200',
       href: '/dashboard/projects',
     },
   ].filter(Boolean) as Array<{ label: string; sub: string; Icon: React.ElementType; color: string; bg: string; border: string; href: string }>
@@ -287,7 +284,7 @@ export default async function DashboardPage() {
                     href={`/dashboard/projects/${project.id}`}
                     className="group flex items-stretch rounded-xl border border-border bg-white hover:shadow-sm hover:border-primary/20 transition-all overflow-hidden"
                   >
-                    <div className="w-1 shrink-0" style={{ backgroundColor: project.color ?? '#E8553A' }} />
+                    <div className="w-1 shrink-0" style={{ backgroundColor: project.color ?? '#386FA4' }} />
                     <div className="flex-1 px-4 py-3">
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex-1 min-w-0">
@@ -315,7 +312,7 @@ export default async function DashboardPage() {
                               className="h-full rounded-full transition-all"
                               style={{
                                 width: `${pct}%`,
-                                backgroundColor: pct === 100 ? '#22c55e' : (project.color ?? '#E8553A'),
+                                backgroundColor: pct === 100 ? '#22c55e' : (project.color ?? '#386FA4'),
                               }}
                             />
                           </div>
@@ -358,64 +355,109 @@ export default async function DashboardPage() {
 
         {/* Col droite : Activité + plan */}
         <div className="space-y-4">
-          <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-            Activité récente
-          </h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              Activité récente
+            </h2>
+          </div>
           <Card className="bg-white">
             <CardContent className="py-2 px-4">
-              <ActivityFeed apiUrl="/api/activity" limit={8} showProject />
+              <ActivityFeed
+                apiUrl="/api/activity"
+                limit={10}
+                showProject
+                viewAllHref="/dashboard/activity"
+              />
             </CardContent>
           </Card>
 
-          {plan === 'free' && (
-            <Card className="bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
-              <CardContent className="py-4 px-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Zap className="h-4 w-4 text-primary" />
-                  <p className="text-sm font-semibold">Plan Gratuit</p>
-                </div>
-                <p className="text-xs text-muted-foreground mb-3">
-                  {totalProjects}/{maxProjects} projets utilisés
-                </p>
-                <div className="h-1.5 bg-primary/20 rounded-full overflow-hidden mb-3">
-                  <div
-                    className="h-full bg-primary rounded-full transition-all"
-                    style={{ width: `${Math.min(((totalProjects ?? 0) / (maxProjects === Infinity ? 1 : maxProjects)) * 100, 100)}%` }}
-                  />
-                </div>
-                <Link href="/dashboard/settings/billing" className="text-xs font-semibold text-primary hover:underline flex items-center gap-1">
-                  Passer au Pro <ArrowRight className="h-3 w-3" />
-                </Link>
-              </CardContent>
-            </Card>
+          {todayMeetings.length > 0 && (
+            <div>
+              <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-2">
+                <CalendarCheck className="h-3.5 w-3.5 text-violet-500" />
+                Réunions du jour
+              </h2>
+              <div className="space-y-2">
+                {todayMeetings.map(m => (
+                  <div key={m.id} className="rounded-xl border border-violet-100 bg-violet-50 px-4 py-3 flex items-center justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-violet-900 truncate">{m.title}</p>
+                      <p className="text-xs text-violet-600 mt-0.5">
+                        {new Date(m.scheduled_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                        {m.projects?.name ? ` · ${m.projects.name}` : ''}
+                      </p>
+                    </div>
+                    {m.meeting_link && (
+                      <a
+                        href={m.meeting_link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="shrink-0 inline-flex items-center gap-1.5 bg-violet-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-violet-700 transition-colors"
+                      >
+                        <Video className="h-3.5 w-3.5" />
+                        Rejoindre
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
         </div>
       </div>
 
-      {/* ── Calendrier ── */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-            <CalendarDays className="h-3.5 w-3.5" />
-            Calendrier — 60 prochains jours
-          </h2>
-          <Link href="/dashboard/calendar" className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors">
-            Vue complète <ArrowRight className="h-3 w-3" />
+      {/* ── Bannière plan ── */}
+      {plan === 'free' ? (
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#133C55] via-[#386FA4] to-[#59A5D8] px-6 py-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          {/* Cercles décoratifs */}
+          <div className="absolute -top-8 -right-8 h-32 w-32 rounded-full bg-white/5 pointer-events-none" />
+          <div className="absolute -bottom-10 right-24 h-40 w-40 rounded-full bg-white/5 pointer-events-none" />
+
+          <div className="text-white space-y-1.5 relative z-10">
+            <p className="font-bold text-lg flex items-center gap-2">
+              <Crown className="h-5 w-5 text-[#84D2F6]" />
+              Passez au Plan Pro — 14€/mois
+            </p>
+            <p className="text-sm text-white/80 leading-relaxed">
+              Projets illimités · Messagerie client · Google Calendar &amp; Meet · 10 Go de stockage
+            </p>
+            <div className="flex flex-wrap gap-2 pt-1">
+              {['✓ Illimité', '✓ Messagerie', '✓ Google Meet', '✓ 10 Go'].map(f => (
+                <span key={f} className="text-xs bg-white/15 text-white px-2.5 py-0.5 rounded-full font-medium">
+                  {f}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <Link
+            href="/dashboard/settings/billing"
+            className="relative z-10 shrink-0 inline-flex items-center gap-2 bg-white text-[#133C55] font-semibold text-sm px-5 py-2.5 rounded-xl hover:bg-white/90 transition-colors shadow-sm whitespace-nowrap"
+          >
+            <Sparkles className="h-4 w-4" />
+            Voir les offres
           </Link>
         </div>
-        <Card className="bg-white">
-          <CardContent className="p-4">
-            {allEvents.length > 0 ? (
-              <MiniCalendar events={allEvents} fullViewHref="/dashboard/calendar" />
-            ) : (
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <CalendarDays className="h-8 w-8 text-muted-foreground/30 mb-2" />
-                <p className="text-sm text-muted-foreground">Aucun événement prévu dans les 60 prochains jours.</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+      ) : (
+        <div className="rounded-2xl bg-gradient-to-r from-[#133C55] to-[#386FA4] px-6 py-4 flex items-center justify-between gap-4">
+          <div className="text-white flex items-center gap-3">
+            <Crown className="h-5 w-5 text-[#84D2F6] shrink-0" />
+            <div>
+              <p className="font-semibold text-sm">
+                Plan {APP_CONFIG.plans[plan as keyof typeof APP_CONFIG.plans]?.name ?? 'Pro'} activé
+              </p>
+              <p className="text-xs text-white/70 mt-0.5">Toutes les fonctionnalités sont disponibles.</p>
+            </div>
+          </div>
+          <Link
+            href="/dashboard/settings/billing"
+            className="shrink-0 text-xs text-white/70 hover:text-white flex items-center gap-1 transition-colors"
+          >
+            Gérer <ArrowRight className="h-3 w-3" />
+          </Link>
+        </div>
+      )}
 
     </div>
   )

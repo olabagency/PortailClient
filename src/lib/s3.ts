@@ -13,8 +13,25 @@ export const s3 = new S3Client({
 
 export const BUCKET = process.env.S3_BUCKET_NAME!
 
-export async function generatePresignedUploadUrl(key: string, contentType: string, expiresIn = 300) {
-  const command = new PutObjectCommand({ Bucket: BUCKET, Key: key, ContentType: contentType })
+/** URL publique correcte pour Scaleway (virtual-hosted style) */
+export function getPublicUrl(key: string): string {
+  const bucket = process.env.S3_BUCKET_NAME!
+  const region = process.env.S3_REGION!
+  return `https://${bucket}.s3.${region}.scw.cloud/${key}`
+}
+
+export async function generatePresignedUploadUrl(
+  key: string,
+  contentType: string,
+  expiresIn = 300,
+  acl: 'public-read' | 'private' = 'private'
+) {
+  const command = new PutObjectCommand({
+    Bucket: BUCKET,
+    Key: key,
+    ContentType: contentType,
+    ACL: acl,
+  })
   return getSignedUrl(s3, command, { expiresIn })
 }
 

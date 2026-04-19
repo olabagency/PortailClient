@@ -1,7 +1,7 @@
 'use client'
 
 import { Suspense, useEffect, useRef, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/button'
@@ -147,6 +147,7 @@ function AccountPageInner() {
   const { user } = useAuth()
   const supabase = createClient()
   const searchParams = useSearchParams()
+  const router = useRouter()
   const defaultTab = searchParams.get('tab') ?? 'compte'
 
   const [profile, setProfile] = useState<Profile | null>(null)
@@ -200,20 +201,45 @@ function AccountPageInner() {
   }, [user])
 
   // ---------------------------------------------------------------------------
+  // Compression image (Canvas → JPEG max 512px)
+  // ---------------------------------------------------------------------------
+
+  async function compressImage(file: File): Promise<File> {
+    if (file.type === 'image/svg+xml') return file
+    return new Promise((resolve) => {
+      const img = new Image()
+      img.onload = () => {
+        const MAX = 512
+        const scale = Math.min(1, MAX / Math.max(img.width, img.height))
+        const canvas = document.createElement('canvas')
+        canvas.width = Math.round(img.width * scale)
+        canvas.height = Math.round(img.height * scale)
+        const ctx = canvas.getContext('2d')!
+        ctx.fillStyle = '#ffffff'
+        ctx.fillRect(0, 0, canvas.width, canvas.height)
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+        canvas.toBlob(
+          blob => resolve(new File([blob!], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' })),
+          'image/jpeg', 0.85
+        )
+      }
+      img.src = URL.createObjectURL(file)
+    })
+  }
+
+  // ---------------------------------------------------------------------------
   // Upload logo
   // ---------------------------------------------------------------------------
 
-  async function handleLogoUpload(file: File) {
+  async function handleLogoUpload(rawFile: File) {
     setUploadingLogo(true)
     try {
+      const file = await compressImage(rawFile)
+
       const presignRes = await fetch('/api/profile/logo-presign', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          filename: file.name,
-          content_type: file.type,
-          size: file.size,
-        }),
+        body: JSON.stringify({ filename: file.name, content_type: file.type, size: file.size }),
       })
       const presignJson = await presignRes.json()
       if (!presignRes.ok || !presignJson.data) {
@@ -221,19 +247,16 @@ function AccountPageInner() {
         return
       }
 
-      const { uploadUrl, publicUrl } = presignJson.data as {
-        uploadUrl: string
-        publicUrl: string
-        key: string
-      }
+      const { uploadUrl, publicUrl } = presignJson.data as { uploadUrl: string; publicUrl: string }
 
+      // x-amz-acl transmis car inclus dans la signature presigned
       const uploadRes = await fetch(uploadUrl, {
         method: 'PUT',
-        headers: { 'Content-Type': file.type },
+        headers: { 'Content-Type': file.type, 'x-amz-acl': 'public-read' },
         body: file,
       })
       if (!uploadRes.ok) {
-        toast.error("Erreur lors de l'upload du logo.")
+        toast.error("Erreur lors de l'upload. Vérifiez les permissions du bucket.")
         return
       }
 
@@ -243,10 +266,7 @@ function AccountPageInner() {
         body: JSON.stringify({ logo_url: publicUrl }),
       })
       const saveJson = await saveRes.json()
-      if (!saveRes.ok) {
-        toast.error(saveJson.error ?? 'Erreur lors de la sauvegarde du logo.')
-        return
-      }
+      if (!saveRes.ok) { toast.error(saveJson.error ?? 'Erreur sauvegarde.'); return }
 
       setLogoUrl(publicUrl)
       toast.success('Logo mis à jour.')
@@ -255,6 +275,14 @@ function AccountPageInner() {
     } finally {
       setUploadingLogo(false)
     }
+  }
+
+  async function handleLogoDelete() {
+    try {
+      const res = await fetch('/api/profile/logo', { method: 'DELETE' })
+      if (res.ok) { setLogoUrl(null); toast.success('Logo supprimé.') }
+      else toast.error('Erreur lors de la suppression.')
+    } catch { toast.error('Erreur réseau.') }
   }
 
   // ---------------------------------------------------------------------------
@@ -394,9 +422,9 @@ function AccountPageInner() {
             <Building2 className="h-4 w-4 mr-2" />
             Mon entreprise
           </TabsTrigger>
-          <TabsTrigger value="forfaits">
+          <TabsTrigger value="forfaits" onClick={() => router.push('/dashboard/settings/billing')}>
             <CreditCard className="h-4 w-4 mr-2" />
-            Forfaits
+            Forfait
           </TabsTrigger>
         </TabsList>
 
@@ -431,20 +459,33 @@ function AccountPageInner() {
                 <div className="space-y-2">
                   <p className="text-sm font-medium">Logo ou photo de profil</p>
                   <p className="text-xs text-muted-foreground">JPG, PNG, WebP ou SVG · 5 Mo max</p>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={uploadingLogo}
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    {uploadingLogo ? (
-                      <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Upload className="mr-2 h-3.5 w-3.5" />
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={uploadingLogo}
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      {uploadingLogo ? (
+                        <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Upload className="mr-2 h-3.5 w-3.5" />
+                      )}
+                      {uploadingLogo ? 'Upload...' : 'Choisir une image'}
+                    </Button>
+                    {logoUrl && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                        onClick={handleLogoDelete}
+                      >
+                        Supprimer
+                      </Button>
                     )}
-                    {uploadingLogo ? 'Upload en cours...' : 'Choisir une image'}
-                  </Button>
+                  </div>
                   <input
                     ref={fileInputRef}
                     type="file"

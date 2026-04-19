@@ -34,10 +34,14 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuSeparator, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
   Plus, GripVertical, Pencil, Trash2, Eye, Layers,
   ChevronDown, ChevronRight, Send, UserCircle, CheckCircle2,
   FileText, Lock, KeyRound, Loader2, RefreshCw, BookmarkPlus,
-  MessageSquareDiff, Share2, Copy, Check, Link2,
+  MessageSquareDiff, Share2, Copy, Check,
   ClipboardList, FolderOpen, Settings, Sparkles,
   Users, AlertCircle, Info, Zap, Globe, Hash, Mail, Phone,
   Building2, MapPin, Calendar, CreditCard, ListPlus,
@@ -364,6 +368,45 @@ function ResponseCard({ response, formFields, projectId, onValidate, onRevisionR
     return String(value)
   }
 
+  // ── FilePreviewLink — fetches presigned URL then opens in new tab ──────────
+  function FilePreviewLink({ s3Key }: { s3Key: string }) {
+    const [loading, setLoading] = useState(false)
+    const ext = s3Key.split('.').pop()?.toLowerCase() ?? ''
+    const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext)
+    const fileName = s3Key.split('/').pop()?.replace(/^\d+_/, '') ?? s3Key
+
+    async function handleOpen() {
+      setLoading(true)
+      try {
+        const res = await fetch(
+          `/api/projects/${projectId}/responses/${response.id}/file?key=${encodeURIComponent(s3Key)}`
+        )
+        if (res.ok) {
+          const { url } = await res.json() as { url: string }
+          window.open(url, '_blank', 'noopener,noreferrer')
+        } else {
+          toast.error('Impossible d\'ouvrir le fichier')
+        }
+      } catch { toast.error('Erreur réseau') } finally { setLoading(false) }
+    }
+
+    return (
+      <button
+        onClick={handleOpen}
+        disabled={loading}
+        className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline disabled:opacity-60"
+      >
+        {loading
+          ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          : isImage
+            ? <ImageIcon className="h-3.5 w-3.5" />
+            : <FileText className="h-3.5 w-3.5" />
+        }
+        {fileName}
+      </button>
+    )
+  }
+
   const clientInfoEntries = response.client_info ? Object.entries(response.client_info).filter(([, v]) => v) : []
 
   const labelMap: Record<string, string> = {
@@ -536,11 +579,18 @@ function ResponseCard({ response, formFields, projectId, onValidate, onRevisionR
                 <div className="space-y-2.5">
                   {formFields.map(field => {
                     const value = response.responses[field.id]
-                    if (value === undefined) return null
+                    if (value === undefined || value === null || value === '') return null
+                    const isFile = field.type === 'file'
                     return (
                       <div key={field.id} className="rounded-lg border bg-muted/30 px-3 py-2">
                         <p className="text-xs font-medium text-muted-foreground">{field.label}</p>
-                        <p className="text-sm mt-0.5">{formatValue(value)}</p>
+                        {isFile && typeof value === 'string' && !value.startsWith('http') ? (
+                          <div className="mt-0.5">
+                            <FilePreviewLink s3Key={value} />
+                          </div>
+                        ) : (
+                          <p className="text-sm mt-0.5">{formatValue(value)}</p>
+                        )}
                       </div>
                     )
                   })}
@@ -645,6 +695,7 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
   const [inviteOpen, setInviteOpen] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteSending, setInviteSending] = useState(false)
+  const [clientEmailFromProject, setClientEmailFromProject] = useState<string>('')
 
   // Field modal
   const [editField, setEditField] = useState<FormField | null>(null)
@@ -700,6 +751,7 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
       setFields(fieldsData.data?.fields ?? [])
       setSections(fieldsData.data?.sections ?? [])
       setPublicId(projectData.data?.public_id ?? '')
+      setClientEmailFromProject(projectData.data?.clients?.email ?? '')
       const settings = projectData.data?.settings ?? null
       setProjectSettings(settings)
       const welcome = (settings?.welcome ?? {}) as Record<string, string>
@@ -800,6 +852,11 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
     setCopiedLink(true)
     toast.success('Lien copié dans le presse-papier')
     setTimeout(() => setCopiedLink(false), 2000)
+  }
+
+  function openInviteDialog() {
+    setInviteEmail(clientEmailFromProject)
+    setInviteOpen(true)
   }
 
   async function handleSaveAsTemplate(e: React.FormEvent) {
@@ -1226,22 +1283,53 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
             Configurez le formulaire que recevra votre client pour démarrer le projet
           </p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap self-start">
-          <Button variant="outline" size="sm" onClick={openLoadTemplateDialog}>
-            <Layers className="h-4 w-4 mr-2" />
-            Charger un template
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => { setTemplateName(''); setSaveTemplateOpen(true) }}>
-            <BookmarkPlus className="h-4 w-4 mr-2" />
-            Sauvegarder en template
-          </Button>
+        <div className="flex items-center gap-2 self-start">
+          {/* Actions secondaires groupées */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Settings className="h-4 w-4 mr-2" />
+                Options
+                <ChevronDown className="h-3.5 w-3.5 ml-1.5 text-muted-foreground" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuItem onClick={openLoadTemplateDialog}>
+                <Layers className="h-4 w-4 mr-2" />
+                Charger un template
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => { setTemplateName(''); setSaveTemplateOpen(true) }}>
+                <BookmarkPlus className="h-4 w-4 mr-2" />
+                Sauvegarder en template
+              </DropdownMenuItem>
+              {publicId && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => router.push(`/p/${publicId}`)}>
+                    <Eye className="h-4 w-4 mr-2" />
+                    Aperçu du formulaire
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Copier le lien — bouton discret */}
           {publicId && (
-            <Button variant="outline" size="sm" onClick={() => router.push(`/p/${publicId}`)}>
-              <Eye className="h-4 w-4 mr-2" />
-              Aperçu
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={copyFormLink}
+              className={cn(copiedLink && 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50')}
+            >
+              {copiedLink
+                ? <><Check className="h-4 w-4 mr-2" />Copié</>
+                : <><Copy className="h-4 w-4 mr-2" />Copier le lien</>}
             </Button>
           )}
-          <Button size="sm" onClick={() => setInviteOpen(true)}>
+
+          {/* Action principale */}
+          <Button size="sm" onClick={openInviteDialog}>
             <Send className="h-4 w-4 mr-2" />
             Envoyer au client
           </Button>
@@ -1302,34 +1390,6 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
           </div>
         ))}
       </div>
-
-      {/* ── Form link ───────────────────────────────────────────────────────── */}
-      {publicId && (
-        <div className="flex items-center gap-2 rounded-xl border bg-muted/30 px-4 py-2.5">
-          <Link2 className="h-4 w-4 shrink-0 text-muted-foreground" />
-          <span className="flex-1 text-xs text-muted-foreground truncate font-mono">
-            {typeof window !== 'undefined' ? `${window.location.origin}/p/${publicId}` : `/p/${publicId}`}
-          </span>
-          <button
-            onClick={copyFormLink}
-            className={cn(
-              'flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors shrink-0',
-              copiedLink
-                ? 'bg-emerald-100 text-emerald-700'
-                : 'bg-background border hover:bg-accent text-foreground',
-            )}
-          >
-            {copiedLink ? <><Check className="h-3.5 w-3.5" /> Copié</> : <><Copy className="h-3.5 w-3.5" /> Copier</>}
-          </button>
-          <button
-            onClick={() => setInviteOpen(true)}
-            className="flex items-center gap-1.5 rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors shrink-0"
-          >
-            <Send className="h-3.5 w-3.5" />
-            Envoyer
-          </button>
-        </div>
-      )}
 
       {/* ── Tabs ────────────────────────────────────────────────────────────── */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -1722,7 +1782,7 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
               <p className="mb-4 max-w-xs text-sm text-muted-foreground">
                 Envoyez le formulaire à votre client pour commencer à recevoir ses informations.
               </p>
-              <Button size="sm" onClick={() => setInviteOpen(true)}>
+              <Button size="sm" onClick={() => openInviteDialog()}>
                 <Send className="h-4 w-4 mr-2" />
                 Envoyer le formulaire
               </Button>
@@ -1801,20 +1861,31 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
           </DialogHeader>
           <form onSubmit={handleSendInvite} className="space-y-4">
             <div className="space-y-1.5">
-              <Label htmlFor="invite-email">Adresse email du client</Label>
-              <Input id="invite-email" type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="client@exemple.com" required autoFocus />
-            </div>
-            {publicId && (
-              <div className="rounded-lg bg-muted/50 border p-3">
-                <p className="text-xs text-muted-foreground mb-1 font-medium">Ou partagez directement le lien :</p>
-                <div className="flex items-center gap-2">
-                  <code className="text-xs flex-1 truncate text-muted-foreground">/p/{publicId}</code>
-                  <button type="button" onClick={copyFormLink} className="text-xs text-primary hover:underline shrink-0 flex items-center gap-1">
-                    {copiedLink ? <><Check className="h-3 w-3" /> Copié</> : <><Copy className="h-3 w-3" /> Copier</>}
-                  </button>
-                </div>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="invite-email">Adresse email</Label>
+                {clientEmailFromProject && inviteEmail === clientEmailFromProject && (
+                  <span className="text-[11px] text-muted-foreground">Issu de la fiche client</span>
+                )}
               </div>
-            )}
+              <Input
+                id="invite-email"
+                type="email"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                placeholder="client@exemple.com"
+                required
+                autoFocus
+              />
+              {clientEmailFromProject && inviteEmail !== clientEmailFromProject && (
+                <button
+                  type="button"
+                  onClick={() => setInviteEmail(clientEmailFromProject)}
+                  className="text-xs text-primary hover:underline"
+                >
+                  Utiliser l&apos;email de la fiche client ({clientEmailFromProject})
+                </button>
+              )}
+            </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => { setInviteOpen(false); setInviteEmail('') }} disabled={inviteSending}>
                 Annuler

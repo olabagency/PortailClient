@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { Suspense } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import ClientSidebar from '@/components/client/ClientSidebar'
+import ClientPortalRefresher from '@/components/client/ClientPortalRefresher'
 
 export default async function ClientLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -13,6 +14,7 @@ export default async function ClientLayout({ children }: { children: React.React
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
+      <ClientPortalRefresher />
       <Suspense fallback={<div className="hidden md:block w-56 shrink-0 border-r bg-white h-screen" />}>
         <ClientSidebar />
       </Suspense>

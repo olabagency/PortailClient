@@ -31,7 +31,7 @@ export default async function CalendarPage() {
       { data: onboardingsData },
     ] = await Promise.all([
       supabase.from('project_milestones')
-        .select('id, title, due_date, status, project_id, projects(name, color)')
+        .select('id, title, due_date, start_date, status, project_id, projects(name, color)')
         .in('project_id', projectIds).not('due_date', 'is', null).order('due_date'),
       supabase.from('project_meetings')
         .select('id, title, scheduled_at, project_id, projects(name, color)')
@@ -44,7 +44,20 @@ export default async function CalendarPage() {
 
     const milestoneEvents: CalendarEvent[] = (milestonesData ?? []).map(m => {
       const proj = m.projects as unknown as { name: string; color: string | null } | null
-      return { id: m.id, title: m.title, date: (m.due_date as string).slice(0, 10), type: 'milestone' as const, status: m.status as CalendarEvent['status'], project_id: m.project_id, project_name: proj?.name ?? '—', project_color: proj?.color ?? null, href: `/dashboard/projects/${m.project_id}/milestones` }
+      const dueDate = (m.due_date as string).slice(0, 10)
+      const startDate = m.start_date ? (m.start_date as string).slice(0, 10) : undefined
+      return {
+        id: m.id,
+        title: m.title,
+        date: dueDate,
+        range_start: startDate && startDate !== dueDate ? startDate : undefined,
+        type: 'milestone' as const,
+        status: m.status as CalendarEvent['status'],
+        project_id: m.project_id,
+        project_name: proj?.name ?? '—',
+        project_color: proj?.color ?? null,
+        href: `/dashboard/projects/${m.project_id}/milestones`,
+      }
     })
     const meetingEvents: CalendarEvent[] = (meetingsData ?? []).map(m => {
       const proj = m.projects as unknown as { name: string; color: string | null } | null

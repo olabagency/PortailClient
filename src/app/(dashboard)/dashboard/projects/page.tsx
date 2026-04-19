@@ -171,7 +171,7 @@ export default function ProjectsPage() {
             return (
               <Card key={project.id} className="overflow-hidden hover:shadow-sm hover:border-primary/20 transition-all group bg-white">
                 <CardContent className="flex items-stretch gap-0 p-0">
-                  <div className="w-1 shrink-0" style={{ backgroundColor: project.color ?? '#E8553A' }} />
+                  <div className="w-1 shrink-0" style={{ backgroundColor: project.color ?? '#386FA4' }} />
                   <div
                     className="flex-1 flex items-center justify-between gap-3 px-4 py-3.5 cursor-pointer"
                     onClick={() => router.push(`/dashboard/projects/${project.id}`)}
@@ -238,7 +238,7 @@ export default function ProjectsPage() {
                 {/* Color header */}
                 <div
                   className="h-2 w-full"
-                  style={{ backgroundColor: project.color ?? '#E8553A' }}
+                  style={{ backgroundColor: project.color ?? '#386FA4' }}
                 />
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between gap-2 mb-2">

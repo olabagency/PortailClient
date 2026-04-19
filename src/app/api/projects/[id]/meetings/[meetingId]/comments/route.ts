@@ -63,6 +63,14 @@ export async function POST(
       .single()
     if (!project) return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
 
+    // Récupérer le nom du freelance
+    const { data: profile } = await admin
+      .from('profiles')
+      .select('full_name')
+      .eq('id', user.id)
+      .single()
+    const commenterName = profile?.full_name ?? user.email ?? 'Prestataire'
+
     const body = await request.json() as unknown
     const parsed = schema.safeParse(body)
     if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
@@ -75,6 +83,7 @@ export async function POST(
         content: parsed.data.content,
         quoted_text: parsed.data.quoted_text ?? null,
         source: 'freelance',
+        commenter_name: commenterName,
       })
       .select()
       .single()

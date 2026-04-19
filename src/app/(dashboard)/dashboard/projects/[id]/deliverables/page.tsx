@@ -22,8 +22,9 @@ import { Textarea } from '@/components/ui/textarea'
 import {
   ArrowLeft, FolderOpen, FileText, Link2, Plus, Trash2,
   CheckCircle2, XCircle, Clock, AlertCircle, Upload,
-  MessageSquare, Wrench, HelpCircle, ChevronLeft, ChevronRight, Lock,
-  Info, RotateCcw, CheckCheck, LayersIcon,
+  MessageSquare, Wrench, HelpCircle,
+  Info, RotateCcw, CheckCheck, LayersIcon, Send, Loader2 as Loader2Icon,
+  ExternalLink, Image as ImageIcon, Play, GitBranch,
 } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
@@ -72,8 +73,18 @@ interface FeedbackItem {
   type: FeedbackType
   status: FeedbackStatus
   source: 'client' | 'freelance'
+  media_urls: string[] | null
   created_at: string
   updated_at: string
+}
+
+interface FeedbackComment {
+  id: string
+  feedback_id: string
+  content: string
+  source: 'client' | 'freelance'
+  commenter_name: string | null
+  created_at: string
 }
 
 interface FeedbackStats {
@@ -648,24 +659,229 @@ function AddFeedbackDialog({
 // ---------------------------------------------------------------------------
 // Feedback — Card
 // ---------------------------------------------------------------------------
+// Feedback Detail Dialog
+// ---------------------------------------------------------------------------
+
+function FeedbackDetailDialog({
+  item,
+  projectId,
+  deliverables,
+  open,
+  onClose,
+  onStatusCycle,
+}: {
+  item: FeedbackItem | null
+  projectId: string
+  deliverables: DeliverableMin[]
+  open: boolean
+  onClose: () => void
+  onStatusCycle: (id: string, next: FeedbackStatus) => void
+}) {
+  const [comments, setComments] = useState<FeedbackComment[]>([])
+  const [loadingComments, setLoadingComments] = useState(false)
+  const [commentText, setCommentText] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    if (!open || !item) return
+    setLoadingComments(true)
+    fetch(`/api/projects/${projectId}/feedback/${item.id}/comments`)
+      .then(r => r.ok ? r.json() as Promise<{ data: FeedbackComment[] }> : { data: [] })
+      .then(json => setComments(json.data ?? []))
+      .finally(() => setLoadingComments(false))
+  }, [open, item, projectId])
+
+  async function handleSubmitComment() {
+    if (!item || !commentText.trim()) return
+    setSubmitting(true)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/feedback/${item.id}/comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: commentText.trim() }),
+      })
+      if (!res.ok) throw new Error()
+      const json = (await res.json()) as { data: FeedbackComment }
+      setComments(prev => [...prev, json.data])
+      setCommentText('')
+      toast.success('Commentaire envoyé')
+    } catch {
+      toast.error('Erreur lors de l\'envoi')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  if (!item) return null
+
+  const deliverableName = deliverables.find(d => d.id === item.deliverable_id)?.name ?? null
+  const mediaUrls = item.media_urls?.filter(Boolean) ?? []
+
+  function isVideo(url: string) {
+    return /\.(mp4|mov|webm|avi)(\?|$)/i.test(url)
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={o => { if (!o) onClose() }}>
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <TypeBadge type={item.type} />
+            <span className="flex-1 truncate">{item.title}</span>
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="overflow-y-auto flex-1 space-y-4 py-2">
+          {/* Meta */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {item.source === 'client' && (
+              <Badge variant="secondary" className="text-xs">Du client</Badge>
+            )}
+            {deliverableName && (
+              <span className="text-xs text-muted-foreground bg-muted rounded-md px-2 py-0.5 flex items-center gap-1">
+                <FileText className="h-3 w-3" />{deliverableName}
+              </span>
+            )}
+            <span className="text-xs text-muted-foreground ml-auto">
+              {format(new Date(item.created_at), "d MMM yyyy 'à' HH'h'mm", { locale: fr })}
+            </span>
+          </div>
+
+          {/* Content */}
+          {item.content && (
+            <div className="rounded-lg border bg-muted/40 px-4 py-3 text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">
+              {item.content}
+            </div>
+          )}
+
+          {/* Media */}
+          {mediaUrls.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                Pièces jointes ({mediaUrls.length})
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {mediaUrls.map((url, i) => (
+                  isVideo(url) ? (
+                    <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                      className="relative rounded-lg border overflow-hidden bg-black aspect-video flex items-center justify-center hover:opacity-90 transition-opacity">
+                      <Play className="h-8 w-8 text-white/80" />
+                      <span className="absolute bottom-1 right-1 text-[10px] text-white/60 bg-black/40 px-1 rounded">Vidéo</span>
+                    </a>
+                  ) : (
+                    <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                      className="relative rounded-lg border overflow-hidden aspect-video bg-muted hover:opacity-90 transition-opacity group">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={url} alt={`media-${i}`} className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                      <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-black/20 transition-opacity">
+                        <ExternalLink className="h-5 w-5 text-white" />
+                      </span>
+                    </a>
+                  )
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Status */}
+          <div className="flex items-center justify-between border-t pt-3">
+            <span className="text-sm text-muted-foreground">Statut du retour</span>
+            <button
+              onClick={() => onStatusCycle(item.id, nextFeedbackStatus(item.status))}
+              className="hover:opacity-75 transition-opacity"
+              title="Cliquer pour changer"
+            >
+              <FeedbackStatusBadge status={item.status} />
+            </button>
+          </div>
+
+          {/* Comments */}
+          <div className="border-t pt-4 space-y-3">
+            <p className="text-sm font-semibold flex items-center gap-2">
+              <MessageSquare className="h-4 w-4 text-muted-foreground" />
+              Commentaires
+              {comments.length > 0 && <span className="text-xs font-normal text-muted-foreground">({comments.length})</span>}
+            </p>
+
+            {loadingComments ? (
+              <div className="space-y-2">
+                <div className="h-12 rounded-lg bg-muted animate-pulse" />
+                <div className="h-12 rounded-lg bg-muted animate-pulse" />
+              </div>
+            ) : comments.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-3">Aucun commentaire. Posez une question au client ci-dessous.</p>
+            ) : (
+              <div className="space-y-2">
+                {comments.map(c => (
+                  <div key={c.id} className={`rounded-lg px-3 py-2.5 text-sm border ${c.source === 'client' ? 'bg-blue-50 border-blue-200' : 'bg-muted/40 border-muted'}`}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className={`text-[11px] font-semibold uppercase tracking-wide ${c.source === 'client' ? 'text-blue-600' : 'text-muted-foreground'}`}>
+                        {c.commenter_name ?? (c.source === 'client' ? 'Client' : 'Vous')}
+                      </span>
+                      <span className="text-[11px] text-muted-foreground">
+                        {format(new Date(c.created_at), "d MMM 'à' HH'h'mm", { locale: fr })}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-800">{c.content}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-1">
+              <Textarea
+                placeholder="Demander plus d'infos au client… (⌘+Entrée pour envoyer)"
+                rows={2}
+                value={commentText}
+                onChange={e => setCommentText(e.target.value)}
+                className="text-sm resize-none"
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                    e.preventDefault()
+                    void handleSubmitComment()
+                  }
+                }}
+              />
+              <Button
+                size="icon"
+                className="shrink-0 h-[68px] w-9"
+                disabled={submitting || !commentText.trim()}
+                onClick={() => void handleSubmitComment()}
+              >
+                {submitting ? <Loader2Icon className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ---------------------------------------------------------------------------
 
 function FeedbackRow({
   item,
   deliverables,
   onStatusCycle,
+  onOpen,
 }: {
   item: FeedbackItem
   deliverables: DeliverableMin[]
   onStatusCycle: (id: string, next: FeedbackStatus) => void
+  onOpen: (item: FeedbackItem) => void
 }) {
   const deliverableName = deliverables.find(d => d.id === item.deliverable_id)?.name ?? null
+  const mediaCount = item.media_urls?.filter(Boolean).length ?? 0
 
   return (
     <div
       className={[
-        'flex items-start gap-4 bg-white rounded-xl px-4 py-4 border transition-shadow hover:shadow-sm group',
+        'flex items-start gap-4 bg-white rounded-xl px-4 py-4 border transition-shadow hover:shadow-sm group cursor-pointer',
         feedbackStatusBorderClass(item.status),
+        item.source === 'client' && item.status === 'pending' ? 'ring-1 ring-blue-200' : '',
       ].join(' ')}
+      onClick={() => onOpen(item)}
     >
       {/* Left: type + content */}
       <div className="flex-1 min-w-0 space-y-2">
@@ -674,10 +890,19 @@ function FeedbackRow({
           {item.source === 'client' && (
             <Badge variant="secondary" className="text-xs py-0.5 px-2">Client</Badge>
           )}
+          {item.source === 'client' && item.status === 'pending' && (
+            <Badge className="text-xs py-0.5 px-2 bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-100">À traiter</Badge>
+          )}
           {deliverableName && (
             <span className="text-xs text-muted-foreground bg-muted rounded-md px-2 py-0.5 flex items-center gap-1">
               <FileText className="h-3 w-3" />
               {deliverableName}
+            </span>
+          )}
+          {mediaCount > 0 && (
+            <span className="text-xs text-muted-foreground bg-muted rounded-md px-2 py-0.5 flex items-center gap-1">
+              <ImageIcon className="h-3 w-3" />
+              {mediaCount} fichier{mediaCount > 1 ? 's' : ''}
             </span>
           )}
         </div>
@@ -692,7 +917,7 @@ function FeedbackRow({
 
       {/* Right: status cycle button */}
       <button
-        onClick={() => onStatusCycle(item.id, nextFeedbackStatus(item.status))}
+        onClick={e => { e.stopPropagation(); onStatusCycle(item.id, nextFeedbackStatus(item.status)) }}
         className="shrink-0 mt-0.5 hover:opacity-75 transition-opacity"
         title="Cliquer pour changer le statut"
       >
@@ -728,14 +953,23 @@ export default function DeliverablesPage({
   const [linkDialogOpen, setLinkDialogOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // ---- Timeline link state (post-upload) ----
+  const [timelineLinkOpen, setTimelineLinkOpen] = useState(false)
+  const [pendingDeliverableForTimeline, setPendingDeliverableForTimeline] = useState<Deliverable | null>(null)
+  const [timelineLinkMode, setTimelineLinkMode] = useState<'existing' | 'new' | 'skip'>('existing')
+  const [timelineLinkMilestoneId, setTimelineLinkMilestoneId] = useState('')
+  const [timelineLinkTitle, setTimelineLinkTitle] = useState('')
+  const [timelineLinkPriority, setTimelineLinkPriority] = useState<'normal' | 'high' | 'urgent'>('normal')
+  const [timelineLinkDueDate, setTimelineLinkDueDate] = useState('')
+  const [timelineLinkSaving, setTimelineLinkSaving] = useState(false)
+
   // ---- Feedback state ----
   const [feedback, setFeedback] = useState<FeedbackItem[]>([])
   const [stats, setStats] = useState<FeedbackStats>({ total: 0, pending: 0, in_progress: 0, treated: 0, questions: 0 })
-  const [currentPhase, setCurrentPhase] = useState(1)
-  const [viewPhase, setViewPhase] = useState(1)
   const [loadingFeedback, setLoadingFeedback] = useState(true)
-  const [closingPhase, setClosingPhase] = useState(false)
   const [addDialogOpen, setAddDialogOpen] = useState(false)
+  const [selectedFeedback, setSelectedFeedback] = useState<FeedbackItem | null>(null)
+  const [feedbackDetailOpen, setFeedbackDetailOpen] = useState(false)
 
   // -------------------------------------------------------------------------
   // Fetch — Deliverables
@@ -765,10 +999,9 @@ export default function DeliverablesPage({
   // Fetch — Feedback
   // -------------------------------------------------------------------------
 
-  const fetchFeedback = useCallback(async (phase?: number) => {
+  const fetchFeedback = useCallback(async () => {
     try {
-      const targetPhase = phase ?? viewPhase
-      const res = await fetch(`/api/projects/${projectId}/feedback?phase=${targetPhase}`)
+      const res = await fetch(`/api/projects/${projectId}/feedback`)
       if (!res.ok) throw new Error()
       const json = (await res.json()) as {
         data: {
@@ -779,14 +1012,12 @@ export default function DeliverablesPage({
       }
       setFeedback(json.data.feedback)
       setStats(json.data.stats)
-      setCurrentPhase(json.data.current_phase)
-      if (phase === undefined) setViewPhase(json.data.current_phase)
     } catch {
       toast.error('Impossible de charger les retours')
     } finally {
       setLoadingFeedback(false)
     }
-  }, [projectId, viewPhase])
+  }, [projectId])
 
   useEffect(() => {
     void fetchDeliverables()
@@ -837,6 +1068,13 @@ export default function DeliverablesPage({
       const { data } = (await createRes.json()) as { data: Deliverable }
       setDeliverables(prev => [data, ...prev])
       toast.success(`${file.name} uploadé`)
+      // Propose linking to timeline
+      setPendingDeliverableForTimeline(data)
+      setTimelineLinkTitle(file.name.replace(/\.[^.]+$/, ''))
+      setTimelineLinkMode('existing')
+      setTimelineLinkMilestoneId('')
+      setTimelineLinkDueDate('')
+      setTimelineLinkOpen(true)
     } catch {
       toast.error('Erreur lors de l\'upload')
     } finally {
@@ -877,6 +1115,13 @@ export default function DeliverablesPage({
     const { data } = (await res.json()) as { data: Deliverable }
     setDeliverables(prev => [data, ...prev])
     toast.success('Lien ajouté')
+    // Propose linking to timeline
+    setPendingDeliverableForTimeline(data)
+    setTimelineLinkTitle(form.name.trim())
+    setTimelineLinkMode('existing')
+    setTimelineLinkMilestoneId('')
+    setTimelineLinkDueDate('')
+    setTimelineLinkOpen(true)
   }
 
   // -------------------------------------------------------------------------
@@ -931,45 +1176,6 @@ export default function DeliverablesPage({
   }
 
   // -------------------------------------------------------------------------
-  // Phase navigation
-  // -------------------------------------------------------------------------
-
-  async function navigatePhase(newPhase: number) {
-    if (newPhase < 1 || newPhase > currentPhase) return
-    setViewPhase(newPhase)
-    setLoadingFeedback(true)
-    await fetchFeedback(newPhase)
-  }
-
-  // -------------------------------------------------------------------------
-  // Close phase
-  // -------------------------------------------------------------------------
-
-  async function handleClosePhase() {
-    if (viewPhase !== currentPhase) return
-    setClosingPhase(true)
-    try {
-      const res = await fetch(`/api/projects/${projectId}/feedback/phase`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ current_phase: currentPhase }),
-      })
-      if (!res.ok) throw new Error()
-      const json = (await res.json()) as { data: { new_phase: number } }
-      const newPhase = json.data.new_phase
-      setCurrentPhase(newPhase)
-      setViewPhase(newPhase)
-      setFeedback([])
-      setStats({ total: 0, pending: 0, in_progress: 0, treated: 0, questions: 0 })
-      toast.success(`Phase ${newPhase - 1} clôturée · Phase ${newPhase} ouverte`)
-    } catch {
-      toast.error('Erreur lors de la clôture de la phase')
-    } finally {
-      setClosingPhase(false)
-    }
-  }
-
-  // -------------------------------------------------------------------------
   // Add feedback
   // -------------------------------------------------------------------------
 
@@ -982,7 +1188,7 @@ export default function DeliverablesPage({
         content: form.content.trim() || null,
         type: form.type,
         deliverable_id: form.deliverable_id || null,
-        phase: viewPhase,
+        phase: 1,
         source: 'freelance',
       }),
     })
@@ -1034,6 +1240,57 @@ export default function DeliverablesPage({
   }
 
   // -------------------------------------------------------------------------
+  // Timeline link (post-upload)
+  // -------------------------------------------------------------------------
+
+  async function handleTimelineLink() {
+    if (!pendingDeliverableForTimeline) return
+    if (timelineLinkMode === 'skip') {
+      setTimelineLinkOpen(false)
+      return
+    }
+    setTimelineLinkSaving(true)
+    try {
+      if (timelineLinkMode === 'existing' && timelineLinkMilestoneId) {
+        // Link deliverable to existing milestone
+        await fetch(`/api/projects/${projectId}/deliverables/${pendingDeliverableForTimeline.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ milestone_id: timelineLinkMilestoneId }),
+        })
+        const ms = milestones.find(m => m.id === timelineLinkMilestoneId)
+        toast.success(`Lié à l'étape "${ms?.title ?? ''}"`)
+      } else if (timelineLinkMode === 'new' && timelineLinkTitle.trim()) {
+        // Create new milestone linked to this deliverable
+        const res = await fetch(`/api/projects/${projectId}/milestones`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: timelineLinkTitle.trim(),
+            status: 'pending',
+            priority: timelineLinkPriority,
+            due_date: timelineLinkDueDate || null,
+            visible_to_client: true,
+            responsible: 'freelancer',
+            reference_type: 'deliverable',
+            reference_id: pendingDeliverableForTimeline.id,
+            subtasks: [],
+          }),
+        })
+        if (res.ok) {
+          const json = (await res.json()) as { data: { title: string } }
+          toast.success(`Étape "${json.data.title}" créée dans la timeline`)
+        }
+      }
+      setTimelineLinkOpen(false)
+    } catch {
+      toast.error('Erreur lors de la liaison à la timeline')
+    } finally {
+      setTimelineLinkSaving(false)
+    }
+  }
+
+  // -------------------------------------------------------------------------
   // Render helpers
   // -------------------------------------------------------------------------
 
@@ -1041,8 +1298,6 @@ export default function DeliverablesPage({
     if (!milestoneId) return null
     return milestones.find(m => m.id === milestoneId)?.title ?? null
   }
-
-  const isCurrentPhase = viewPhase === currentPhase
 
   const deliverablesMins: DeliverableMin[] = deliverables.map(d => ({ id: d.id, name: d.name }))
 
@@ -1337,82 +1592,32 @@ export default function DeliverablesPage({
         {/* ---------------------------------------------------------------- */}
         <TabsContent value="retours" className="space-y-5 mt-6">
 
+          {/* Alerte retours clients en attente */}
+          {feedback.filter(f => f.source === 'client' && f.status === 'pending').length > 0 && (
+            <div className="flex items-center gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
+              <AlertCircle className="h-4 w-4 text-blue-600 shrink-0" />
+              <p className="text-sm text-blue-800 flex-1">
+                <span className="font-semibold">
+                  {feedback.filter(f => f.source === 'client' && f.status === 'pending').length} retour{feedback.filter(f => f.source === 'client' && f.status === 'pending').length > 1 ? 's' : ''} client
+                </span>{' '}en attente de traitement — cliquez pour ouvrir.
+              </p>
+            </div>
+          )}
+
           {/* Info callout */}
           <div className="flex items-start gap-3 rounded-xl border border-violet-100 bg-violet-50 px-4 py-3">
             <Info className="h-4 w-4 text-violet-500 mt-0.5 shrink-0" />
             <p className="text-sm text-violet-700 leading-relaxed">
-              Les retours regroupent les commentaires, demandes de modifications et questions du client sur votre travail. Chaque phase correspond à une itération — clôturez une phase pour en ouvrir une nouvelle.
+              Les retours regroupent les commentaires, demandes de modifications et questions du client sur votre travail.
             </p>
           </div>
 
-          {/* Phase selector + actions */}
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            {/* Phase navigation */}
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => navigatePhase(viewPhase - 1)}
-                disabled={viewPhase <= 1}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-
-              <div className={[
-                'flex items-center gap-2 rounded-lg border px-3 py-1.5',
-                isCurrentPhase
-                  ? 'bg-pink-50 border-pink-200'
-                  : 'bg-muted border-border',
-              ].join(' ')}>
-                <LayersIcon className={`h-3.5 w-3.5 ${isCurrentPhase ? 'text-pink-500' : 'text-muted-foreground'}`} />
-                <span className={`text-sm font-semibold ${isCurrentPhase ? 'text-pink-700' : 'text-muted-foreground'}`}>
-                  Phase {viewPhase}
-                </span>
-                {!isCurrentPhase && (
-                  <Lock className="h-3 w-3 text-muted-foreground" />
-                )}
-                {isCurrentPhase && (
-                  <span className="text-xs text-pink-500 font-normal">en cours</span>
-                )}
-              </div>
-
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => navigatePhase(viewPhase + 1)}
-                disabled={viewPhase >= currentPhase}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-
-              {currentPhase > 1 && (
-                <span className="text-xs text-muted-foreground">
-                  {currentPhase} phase{currentPhase > 1 ? 's' : ''}
-                </span>
-              )}
-            </div>
-
-            {/* Actions */}
-            <div className="flex items-center gap-2">
-              {isCurrentPhase && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleClosePhase}
-                  disabled={closingPhase}
-                  className="border-orange-200 text-orange-700 hover:bg-orange-50 hover:text-orange-700"
-                >
-                  <Lock className="h-3.5 w-3.5 mr-1.5" />
-                  {closingPhase ? 'Clôture…' : 'Clôturer la phase'}
-                </Button>
-              )}
-              <Button onClick={() => setAddDialogOpen(true)} size="sm">
-                <Plus className="h-4 w-4 mr-1.5" />
-                Ajouter un retour
-              </Button>
-            </div>
+          {/* Actions */}
+          <div className="flex items-center justify-end">
+            <Button onClick={() => setAddDialogOpen(true)} size="sm">
+              <Plus className="h-4 w-4 mr-1.5" />
+              Ajouter un retour
+            </Button>
           </div>
 
           {/* Stats bar */}
@@ -1468,20 +1673,14 @@ export default function DeliverablesPage({
                 <div className="h-16 w-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
                   <MessageSquare className="h-8 w-8 text-muted-foreground" />
                 </div>
-                <h2 className="text-base font-semibold mb-1">
-                  {isCurrentPhase ? 'Aucun retour pour cette phase' : 'Aucun retour enregistré'}
-                </h2>
+                <h2 className="text-base font-semibold mb-1">Aucun retour pour l&apos;instant</h2>
                 <p className="text-sm text-muted-foreground mb-6 max-w-xs">
-                  {isCurrentPhase
-                    ? 'Ajoutez un retour manuellement ou attendez les retours via le portail client.'
-                    : 'Cette phase ne contient aucun retour.'}
+                  Ajoutez un retour manuellement ou attendez les retours via le portail client.
                 </p>
-                {isCurrentPhase && (
-                  <Button onClick={() => setAddDialogOpen(true)}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Ajouter un retour
-                  </Button>
-                )}
+                <Button onClick={() => setAddDialogOpen(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Ajouter un retour
+                </Button>
               </CardContent>
             </Card>
           ) : (
@@ -1492,6 +1691,7 @@ export default function DeliverablesPage({
                   item={item}
                   deliverables={deliverablesMins}
                   onStatusCycle={handleStatusCycle}
+                  onOpen={f => { setSelectedFeedback(f); setFeedbackDetailOpen(true) }}
                 />
               ))}
             </div>
@@ -1524,6 +1724,131 @@ export default function DeliverablesPage({
         onClose={() => setAddDialogOpen(false)}
         onAdd={handleAddFeedback}
       />
+
+      {/* Feedback Detail Dialog */}
+      <FeedbackDetailDialog
+        open={feedbackDetailOpen}
+        item={selectedFeedback}
+        projectId={projectId}
+        deliverables={deliverablesMins}
+        onClose={() => { setFeedbackDetailOpen(false); setSelectedFeedback(null) }}
+        onStatusCycle={(id, next) => {
+          handleStatusCycle(id, next)
+          setSelectedFeedback(prev => prev ? { ...prev, status: next } : null)
+        }}
+      />
+
+      {/* Timeline Link Dialog */}
+      <Dialog open={timelineLinkOpen} onOpenChange={open => { if (!open) setTimelineLinkOpen(false) }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <GitBranch className="h-4 w-4 text-primary" />
+              Ajouter à la timeline ?
+            </DialogTitle>
+          </DialogHeader>
+
+          <p className="text-sm text-muted-foreground -mt-1">
+            Voulez-vous lier <strong>&quot;{pendingDeliverableForTimeline?.name}&quot;</strong> à une étape de votre timeline ?
+          </p>
+
+          {/* Mode selector */}
+          <div className="flex flex-col gap-2">
+            {[
+              { value: 'existing', label: '🔗 Lier à une étape existante', disabled: milestones.length === 0 },
+              { value: 'new',      label: '➕ Créer une nouvelle étape', disabled: false },
+              { value: 'skip',     label: '⏭ Ignorer',                   disabled: false },
+            ].map(opt => (
+              <button
+                key={opt.value}
+                type="button"
+                disabled={opt.disabled}
+                onClick={() => setTimelineLinkMode(opt.value as typeof timelineLinkMode)}
+                className={[
+                  'flex items-center gap-2 rounded-lg border-2 px-4 py-3 text-left text-sm font-medium transition-all',
+                  timelineLinkMode === opt.value ? 'border-primary bg-primary/5 text-primary' : 'border-border hover:border-primary/30',
+                  opt.disabled ? 'opacity-40 cursor-not-allowed' : '',
+                ].join(' ')}
+              >
+                {opt.label}
+                {opt.value === 'existing' && opt.disabled && (
+                  <span className="ml-auto text-xs font-normal text-muted-foreground">(aucune étape)</span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* Existing milestone selector */}
+          {timelineLinkMode === 'existing' && milestones.length > 0 && (
+            <div className="space-y-1.5">
+              <Label>Étape à lier</Label>
+              <Select value={timelineLinkMilestoneId} onValueChange={(v: string) => setTimelineLinkMilestoneId(v)}>
+                <SelectTrigger><SelectValue placeholder="Choisir une étape…" /></SelectTrigger>
+                <SelectContent>
+                  {milestones.map(m => (
+                    <SelectItem key={m.id} value={m.id}>{m.title}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* New milestone form */}
+          {timelineLinkMode === 'new' && (
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="tl-title">Titre de l&apos;étape <span className="text-destructive">*</span></Label>
+                <Input
+                  id="tl-title"
+                  value={timelineLinkTitle}
+                  onChange={e => setTimelineLinkTitle(e.target.value)}
+                  placeholder="Ex : Livraison maquettes"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="tl-priority">Priorité</Label>
+                  <Select value={timelineLinkPriority} onValueChange={(v: string) => setTimelineLinkPriority(v as typeof timelineLinkPriority)}>
+                    <SelectTrigger id="tl-priority"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="normal">⚪ Normale</SelectItem>
+                      <SelectItem value="high">🟠 Haute</SelectItem>
+                      <SelectItem value="urgent">🔴 Urgente</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="tl-due">Date limite</Label>
+                  <Input
+                    id="tl-due"
+                    type="date"
+                    value={timelineLinkDueDate}
+                    onChange={e => setTimelineLinkDueDate(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTimelineLinkOpen(false)} disabled={timelineLinkSaving}>
+              Ignorer
+            </Button>
+            {timelineLinkMode !== 'skip' && (
+              <Button
+                onClick={handleTimelineLink}
+                disabled={
+                  timelineLinkSaving ||
+                  (timelineLinkMode === 'existing' && !timelineLinkMilestoneId) ||
+                  (timelineLinkMode === 'new' && !timelineLinkTitle.trim())
+                }
+              >
+                {timelineLinkSaving ? 'Enregistrement…' : 'Confirmer'}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

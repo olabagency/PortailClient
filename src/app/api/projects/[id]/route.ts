@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { createNotification } from '@/lib/notify'
 import { z } from 'zod'
 import { nanoid } from 'nanoid'
 
@@ -50,6 +52,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
     }
 
+    // Lire l'ancien client_id pour détecter un changement de liaison
+    const { data: before } = await supabase
+      .from('projects')
+      .select('client_id, name')
+      .eq('id', id)
+      .eq('user_id', user.id)
+      .single()
+
     const { data, error } = await supabase
       .from('projects')
       .update(parsed.data)
@@ -59,6 +69,27 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       .single()
 
     if (error || !data) return NextResponse.json({ error: 'Projet introuvable' }, { status: 404 })
+
+    // Notifier le client si un nouveau client_id vient d'être associé
+    const newClientId = parsed.data.client_id
+    if (newClientId && newClientId !== before?.client_id) {
+      const admin = createAdminClient()
+      const { data: clientRecord } = await admin
+        .from('clients')
+        .select('user_id, name')
+        .eq('id', newClientId)
+        .single()
+
+      if (clientRecord?.user_id) {
+        await createNotification({
+          userId: clientRecord.user_id,
+          type: 'project_linked',
+          title: 'Nouveau projet disponible',
+          body: `Le projet « ${before?.name ?? data.name} » vient d'être ajouté à votre espace client.`,
+          projectId: id,
+        })
+      }
+    }
 
     return NextResponse.json({ data })
   } catch {

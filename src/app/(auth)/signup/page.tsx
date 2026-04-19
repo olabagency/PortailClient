@@ -106,7 +106,7 @@ export default function SignupPage() {
               </p>
               <Link
                 href="/login"
-                className="text-sm text-[#E8553A] hover:underline font-medium"
+                className="text-sm text-[#386FA4] hover:underline font-medium"
               >
                 ← Retour à la connexion
               </Link>
@@ -233,7 +233,7 @@ export default function SignupPage() {
 
                 <Button
                   type="submit"
-                  className="w-full h-10 bg-[#E8553A] hover:bg-[#d44a30] text-white font-medium"
+                  className="w-full h-10 bg-[#386FA4] hover:bg-[#2d5e8e] text-white font-medium"
                   disabled={loading || googleLoading}
                 >
                   {loading ? 'Création...' : 'Créer mon compte gratuitement'}
@@ -253,7 +253,7 @@ export default function SignupPage() {
               <div className="mt-4 text-center">
                 <p className="text-sm text-gray-500">
                   Déjà un compte ?{' '}
-                  <Link href="/login" className="text-[#E8553A] hover:underline font-medium">
+                  <Link href="/login" className="text-[#386FA4] hover:underline font-medium">
                     Se connecter →
                   </Link>
                 </p>

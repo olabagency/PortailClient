@@ -13,7 +13,6 @@ const deliverableCreateSchema = z.object({
   size_bytes: z.number().int().optional().nullable(),
   mime_type: z.string().optional().nullable(),
   milestone_id: z.string().uuid().optional().nullable(),
-  visible_to_client: z.boolean().optional().default(true),
 })
 
 // GET /api/projects/[id]/deliverables
@@ -88,7 +87,6 @@ export async function POST(
         size_bytes: parsed.data.size_bytes ?? null,
         mime_type: parsed.data.mime_type ?? null,
         milestone_id: parsed.data.milestone_id ?? null,
-        visible_to_client: parsed.data.visible_to_client,
         status: 'pending',
       })
       .select()
@@ -96,9 +94,8 @@ export async function POST(
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-    // Notifier le client par email si livrable visible
-    if (parsed.data.visible_to_client) {
-      try {
+    // Notifier le client par email
+    try {
         const { data: portal } = await supabase
           .from('client_portals')
           .select('email')
@@ -117,9 +114,8 @@ export async function POST(
             }),
           })
         }
-      } catch (emailErr) {
-        console.error('[deliverables/post] Email error:', emailErr)
-      }
+    } catch (emailErr) {
+      console.error('[deliverables/post] Email error:', emailErr)
     }
 
     return NextResponse.json({ data }, { status: 201 })

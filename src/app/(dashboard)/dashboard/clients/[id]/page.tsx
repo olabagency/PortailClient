@@ -19,9 +19,14 @@ import {
 import {
   ArrowLeft, Pencil, Mail, Phone, Building2, FolderKanban, Plus, Calendar,
   Globe, CreditCard, MapPin, Receipt, ChevronRight, X, Check, Link2,
+  Share2, ShieldCheck, ShieldOff,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel,
+  AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { toast } from 'sonner'
 
@@ -71,6 +76,7 @@ interface Client {
   zip_code: string | null
   country: string | null
   created_at: string
+  user_id: string | null
   projects: Project[]
 }
 
@@ -174,6 +180,40 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
   // Error state
   const [errorCoordonnees, setErrorCoordonnees] = useState<string | null>(null)
   const [errorFacturation, setErrorFacturation] = useState<string | null>(null)
+
+  // Portal access
+  const [invitingPortal, setInvitingPortal] = useState(false)
+  const [revokeOpen, setRevokeOpen] = useState(false)
+  const [revoking, setRevoking] = useState(false)
+
+  async function handleInvitePortal() {
+    if (!client) return
+    const projectId = client.projects?.[0]?.id
+    if (!projectId) { toast.error('Liez d\'abord un projet à ce client.'); return }
+    setInvitingPortal(true)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/invite-portal`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: client.email }),
+      })
+      if (res.ok) toast.success(`Invitation envoyée à ${client.email}`)
+      else { const j = await res.json() as { error?: string }; toast.error(j.error ?? 'Erreur') }
+    } catch { toast.error('Erreur réseau') } finally { setInvitingPortal(false) }
+  }
+
+  async function handleRevokeAccess() {
+    if (!client) return
+    setRevoking(true)
+    try {
+      const res = await fetch(`/api/clients/${client.id}/portal-access`, { method: 'DELETE' })
+      if (res.ok) {
+        toast.success('Accès portail révoqué')
+        setRevokeOpen(false)
+        setClient(prev => prev ? { ...prev, user_id: null } : prev)
+      } else { const j = await res.json() as { error?: string }; toast.error(j.error ?? 'Erreur') }
+    } catch { toast.error('Erreur réseau') } finally { setRevoking(false) }
+  }
 
   // Link project
   const [linkProjectOpen, setLinkProjectOpen] = useState(false)
@@ -669,6 +709,58 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
         </CardContent>
       </Card>
 
+      {/* ── Accès portail client ── */}
+      <Card className="bg-white">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4" />
+              Accès portail client
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              {client.user_id ? (
+                <>
+                  <span className="inline-flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-1 font-medium">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                    Accès actif
+                  </span>
+                  <Button size="sm" variant="outline" className="gap-1.5 h-8" disabled={invitingPortal} onClick={handleInvitePortal}>
+                    <Share2 className="h-3.5 w-3.5" />
+                    {invitingPortal ? 'Envoi...' : 'Renvoyer l\'invitation'}
+                  </Button>
+                  <Button size="sm" variant="outline" className="gap-1.5 h-8 text-amber-600 border-amber-200 hover:bg-amber-50" onClick={() => setRevokeOpen(true)}>
+                    <ShieldOff className="h-3.5 w-3.5" />
+                    Révoquer
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <span className="inline-flex items-center gap-1.5 text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-full px-2.5 py-1 font-medium">
+                    <span className="h-1.5 w-1.5 rounded-full bg-gray-300" />
+                    Pas d&apos;accès
+                  </span>
+                  {client.email && (
+                    <Button size="sm" variant="outline" className="gap-1.5 h-8" disabled={invitingPortal} onClick={handleInvitePortal}>
+                      <Share2 className="h-3.5 w-3.5" />
+                      {invitingPortal ? 'Envoi...' : 'Envoyer une invitation'}
+                    </Button>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-0">
+          <p className="text-xs text-muted-foreground">
+            {client.user_id
+              ? 'Ce client peut se connecter à son espace de suivi de projet.'
+              : client.email
+                ? 'Envoyez une invitation par email pour donner accès au portail client.'
+                : 'Ajoutez un email à ce client pour pouvoir l\'inviter.'}
+          </p>
+        </CardContent>
+      </Card>
+
       {/* ── Projets (read-only) ── */}
       <Card className="bg-white">
         <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -721,7 +813,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                   >
                     <div
                       className="w-1 h-8 rounded-full shrink-0"
-                      style={{ backgroundColor: project.color ?? '#E8553A' }}
+                      style={{ backgroundColor: project.color ?? '#386FA4' }}
                     />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium group-hover:text-primary transition-colors truncate">{project.name}</p>
@@ -738,6 +830,26 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
           )}
         </CardContent>
       </Card>
+
+      {/* ── Dialog révocation portail ── */}
+      <AlertDialog open={revokeOpen} onOpenChange={setRevokeOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Révoquer l&apos;accès portail ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              <span className="font-semibold">{client.name}</span> ne pourra plus se connecter à son espace client.
+              Vous pourrez lui renvoyer une invitation à tout moment.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={revoking}>Annuler</AlertDialogCancel>
+            <AlertDialogAction onClick={handleRevokeAccess} disabled={revoking}
+              className="bg-amber-600 text-white hover:bg-amber-700">
+              {revoking ? 'Révocation...' : 'Révoquer l\'accès'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ── Dialog lier un projet ── */}
       <Dialog open={linkProjectOpen} onOpenChange={setLinkProjectOpen}>
@@ -764,7 +876,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                   >
                     <div
                       className="h-8 w-2 rounded-full shrink-0"
-                      style={{ backgroundColor: p.color ?? '#E8553A' }}
+                      style={{ backgroundColor: p.color ?? '#386FA4' }}
                     />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{p.name}</p>

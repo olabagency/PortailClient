@@ -16,6 +16,11 @@ import { cn } from '@/lib/utils'
 
 type FilterType = 'all' | 'milestone' | 'meeting' | 'onboarding'
 
+/** Extended type used internally for range-event rendering */
+type CalendarEventEx = CalendarEvent & {
+  _pos?: 'single' | 'start' | 'mid' | 'end'
+}
+
 export interface ProjectInfo {
   id: string
   name: string
@@ -68,12 +73,35 @@ export function FullCalendarView({ events, projects = [] }: FullCalendarViewProp
   )
 
   const byDate = useMemo(() => {
-    const map: Record<string, CalendarEvent[]> = {}
+    const map: Record<string, CalendarEventEx[]> = {}
     for (const e of filteredEvents) {
       if (!e.date) continue
-      const key = e.date.slice(0, 10)
-      if (!map[key]) map[key] = []
-      map[key].push(e)
+
+      if (e.range_start) {
+        // Expand multi-day event across every day in the range
+        try {
+          const rangeStart = parseISO(e.range_start)
+          const rangeEnd = parseISO(e.date.slice(0, 10))
+          const rangeDays = eachDayOfInterval({ start: rangeStart, end: rangeEnd })
+          const len = rangeDays.length
+          rangeDays.forEach((d, i) => {
+            const key = format(d, 'yyyy-MM-dd')
+            if (!map[key]) map[key] = []
+            const pos: CalendarEventEx['_pos'] =
+              len === 1 ? 'single' : i === 0 ? 'start' : i === len - 1 ? 'end' : 'mid'
+            map[key].push({ ...e, _pos: pos })
+          })
+        } catch {
+          // fallback: just add on the end date
+          const key = e.date.slice(0, 10)
+          if (!map[key]) map[key] = []
+          map[key].push({ ...e, _pos: 'single' })
+        }
+      } else {
+        const key = e.date.slice(0, 10)
+        if (!map[key]) map[key] = []
+        map[key].push({ ...e, _pos: 'single' })
+      }
     }
     return map
   }, [filteredEvents])
@@ -213,12 +241,40 @@ export function FullCalendarView({ events, projects = [] }: FullCalendarViewProp
                 {isCurrentMonth && dayEvents.length > 0 && (
                   <div className="flex flex-col gap-0.5">
                     {dayEvents.slice(0, 3).map(e => {
+                      const pos = e._pos ?? 'single'
                       const accentColor = e.project_color ?? getEventAccent(e)
+
+                      // Mid-range day: show a compact coloured bar, no text
+                      if (pos === 'mid') {
+                        return (
+                          <div
+                            key={`${e.id}-mid-${key}`}
+                            className="h-5 w-full"
+                            style={{ backgroundColor: accentColor + '30', borderTop: `1px solid ${accentColor}50`, borderBottom: `1px solid ${accentColor}50` }}
+                            title={`${e.title} — ${e.project_name}`}
+                          />
+                        )
+                      }
+
+                      // End day: compact coloured bar with rounded right
+                      if (pos === 'end') {
+                        return (
+                          <div
+                            key={`${e.id}-end-${key}`}
+                            className="h-5 w-full rounded-r"
+                            style={{ backgroundColor: accentColor + '30', borderTop: `1px solid ${accentColor}50`, borderBottom: `1px solid ${accentColor}50`, borderRight: `2px solid ${accentColor}` }}
+                            title={`${e.title} — ${e.project_name}`}
+                          />
+                        )
+                      }
+
+                      // Single or start: full chip with label
                       const chip = (
                         <div
                           className={cn(
-                            'flex items-center gap-1 rounded px-1 py-0.5 text-[11px] font-medium border truncate',
+                            'flex items-center gap-1 py-0.5 text-[11px] font-medium border truncate',
                             getEventBg(e),
+                            pos === 'start' ? 'rounded-l px-1' : 'rounded px-1',
                           )}
                           style={{ borderLeftColor: accentColor, borderLeftWidth: '3px' }}
                           title={`${e.title} — ${e.project_name}`}
@@ -228,11 +284,11 @@ export function FullCalendarView({ events, projects = [] }: FullCalendarViewProp
                         </div>
                       )
                       return e.href ? (
-                        <Link key={e.id} href={e.href} className="hover:opacity-80 transition-opacity">
+                        <Link key={`${e.id}-${pos}`} href={e.href} className="hover:opacity-80 transition-opacity">
                           {chip}
                         </Link>
                       ) : (
-                        <div key={e.id}>{chip}</div>
+                        <div key={`${e.id}-${pos}`}>{chip}</div>
                       )
                     })}
                     {dayEvents.length > 3 && (

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { z } from 'zod'
 import { APP_CONFIG } from '@/config/app.config'
+import { createNotification } from '@/lib/notify'
 
 const submitSchema = z.object({
   session_id: z.string().optional(),
@@ -153,6 +154,20 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     } catch (emailErr) {
       console.error('[submit] Email notification error:', emailErr)
       // Ne pas bloquer la réponse si l'email échoue
+    }
+
+    // Notification in-app au freelance
+    try {
+      const respondentDisplay = parsed.data.respondent_name || parsed.data.respondent_email || 'Un client'
+      await createNotification({
+        userId: project.user_id,
+        type: 'onboarding_submitted',
+        title: `Onboarding complété — ${project.name}`,
+        body: `${respondentDisplay} a rempli le formulaire d'onboarding.`,
+        projectId: project.id,
+      })
+    } catch (notifErr) {
+      console.error('[submit] Notification error:', notifErr)
     }
 
     // Auto-inviter le client dans son portail si email fourni

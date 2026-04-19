@@ -24,11 +24,15 @@ const TYPE_ICONS: Record<string, string> = {
   client_info_update: '👤',
   meeting_comment: '💬',
   feedback_received: '📝',
+  feedback_comment: '💬',
   document_uploaded: '📄',
   deliverable_validated: '✅',
   deliverable_revised: '🔄',
   onboarding_form_responded: '📋',
+  onboarding_submitted: '📋',
   milestone_overdue: '⚠️',
+  project_linked: '🔗',
+  client_account_created: '🎉',
 }
 
 function typeIcon(type: string): string {
@@ -79,6 +83,9 @@ export default function NotificationsBell() {
     if (n.project_id && n.type === 'document_uploaded') {
       return `/dashboard/projects/${n.project_id}/documents`
     }
+    if (n.project_id && n.type === 'feedback_comment') {
+      return `/dashboard/projects/${n.project_id}/deliverables?tab=retours`
+    }
     if (n.client_id && n.type === 'client_info_update') {
       return `/dashboard/clients/${n.client_id}`
     }
@@ -106,9 +113,13 @@ export default function NotificationsBell() {
           {/* Backdrop */}
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
 
-          {/* Panel */}
-          <div className="absolute right-0 top-11 w-96 max-h-[28rem] bg-white rounded-2xl shadow-xl border z-50 flex flex-col overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 border-b shrink-0">
+          {/* Panel — fixed pour sortir du contexte backdrop-blur du header */}
+          <div
+            className="fixed right-4 w-96 max-h-[28rem] rounded-2xl shadow-2xl border border-border z-[9999] flex flex-col overflow-hidden"
+            style={{ top: '68px', backgroundColor: '#ffffff' }}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b shrink-0" style={{ backgroundColor: '#ffffff' }}>
               <div className="flex items-center gap-2">
                 <h3 className="font-semibold text-sm">Notifications</h3>
                 {unreadCount > 0 && (
@@ -122,7 +133,8 @@ export default function NotificationsBell() {
               )}
             </div>
 
-            <div className="overflow-y-auto flex-1">
+            {/* List */}
+            <div className="overflow-y-auto flex-1" style={{ backgroundColor: '#ffffff' }}>
               {loading && notifications.length === 0 ? (
                 <div className="py-8 text-center">
                   <div className="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
@@ -139,7 +151,7 @@ export default function NotificationsBell() {
                       key={n.id}
                       href={getNotifLink(n)}
                       onClick={() => { void markAsRead(n.id); setOpen(false) }}
-                      className={`flex items-start gap-3 px-4 py-3 hover:bg-gray-50 transition-colors ${!n.read ? 'bg-blue-50/50' : ''}`}
+                      className={`flex items-start gap-3 px-4 py-3 transition-colors ${!n.read ? 'bg-blue-50/60 hover:bg-blue-50' : 'hover:bg-gray-50'}`}
                     >
                       <span className="text-xl shrink-0 mt-0.5">{typeIcon(n.type)}</span>
                       <div className="flex-1 min-w-0">
@@ -160,6 +172,18 @@ export default function NotificationsBell() {
                   ))}
                 </div>
               )}
+            </div>
+
+            {/* Footer — lien historique complet */}
+            <div className="shrink-0 border-t px-4 py-2.5" style={{ backgroundColor: '#ffffff' }}>
+              <Link
+                href="/dashboard/history"
+                onClick={() => setOpen(false)}
+                className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors py-0.5"
+              >
+                Voir tout l&apos;historique
+                <span className="text-[10px]">→</span>
+              </Link>
             </div>
           </div>
         </>

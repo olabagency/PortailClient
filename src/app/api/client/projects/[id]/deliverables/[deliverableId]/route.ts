@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createNotification } from '@/lib/notify'
 import { z } from 'zod'
 
 const schema = z.object({
@@ -24,7 +25,7 @@ export async function PUT(
     // Vérifier accès : le client doit être lié à ce projet
     const { data: clientRecord } = await admin
       .from('clients')
-      .select('id')
+      .select('id, name')
       .eq('user_id', user.id)
       .single()
 
@@ -32,7 +33,7 @@ export async function PUT(
 
     const { data: project } = await admin
       .from('projects')
-      .select('id')
+      .select('id, user_id, name')
       .eq('id', id)
       .eq('client_id', clientRecord.id)
       .single()
@@ -59,6 +60,24 @@ export async function PUT(
     if (updateError || !updatedDeliverable) {
       return NextResponse.json({ error: 'Livrable introuvable ou mise à jour impossible' }, { status: 404 })
     }
+
+    const status = parsed.data.status
+    const notifType = status === 'validated' ? 'deliverable_validated' : 'deliverable_revised'
+    const statusLabel = status === 'validated'
+      ? 'validé ✅'
+      : status === 'rejected'
+      ? 'rejeté ❌'
+      : 'révision demandée 🔄'
+
+    try {
+      await createNotification({
+        userId: project.user_id,
+        type: notifType,
+        title: `Livrable ${statusLabel} — ${project.name}`,
+        body: `${clientRecord.name} a ${statusLabel.split(' ')[0]} « ${updatedDeliverable.name} »${parsed.data.client_note ? ` : "${parsed.data.client_note}"` : ''}`,
+        projectId: id,
+      })
+    } catch { /* notification non bloquante */ }
 
     return NextResponse.json({ data: updatedDeliverable })
   } catch {

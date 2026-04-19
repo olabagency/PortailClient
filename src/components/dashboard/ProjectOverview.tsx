@@ -72,6 +72,7 @@ interface Project {
     company: string | null
     email: string
     website?: string | null
+    user_id?: string | null
   } | null
   created_at: string
 }
@@ -124,6 +125,8 @@ export function ProjectOverview({
   const [portalInvited, setPortalInvited] = useState(false)
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
+  const [revokeDialogOpen, setRevokeDialogOpen] = useState(false)
+  const [revoking, setRevoking] = useState(false)
   const [linkClientOpen, setLinkClientOpen] = useState(false)
   const [clientsList, setClientsList] = useState<{ id: string; name: string; company: string | null; email: string | null }[]>([])
   const [clientSearch, setClientSearch] = useState('')
@@ -133,7 +136,7 @@ export function ProjectOverview({
   const progressPct = milestoneStats.total > 0
     ? Math.round((milestoneStats.completed / milestoneStats.total) * 100)
     : 0
-  const accentColor = project.color ?? '#E8553A'
+  const accentColor = project.color ?? '#386FA4'
   const initials = project.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
 
   async function openLinkClientDialog() {
@@ -196,6 +199,22 @@ export function ProjectOverview({
         toast.error(json.error ?? 'Erreur lors de l\'envoi')
       }
     } catch { toast.error('Erreur réseau') } finally { setInvitingPortal(false) }
+  }
+
+  async function handleRevokeAccess() {
+    setRevoking(true)
+    try {
+      const res = await fetch(`/api/projects/${project.id}/portal-access`, { method: 'DELETE' })
+      if (res.ok) {
+        toast.success('Accès portail révoqué')
+        setRevokeDialogOpen(false)
+        setPortalInvited(false)
+        router.refresh()
+      } else {
+        const json = await res.json() as { error?: string }
+        toast.error(json.error ?? 'Erreur lors de la révocation')
+      }
+    } catch { toast.error('Erreur réseau') } finally { setRevoking(false) }
   }
 
   async function handleClose() {
@@ -310,9 +329,15 @@ export function ProjectOverview({
 
             {/* Right: actions */}
             <div className="flex items-center gap-2 shrink-0 flex-wrap">
-              {portalInvited ? (
+              {/* Statut de session portail */}
+              {project.clients?.user_id ? (
                 <span className="inline-flex items-center gap-1.5 text-xs text-emerald-600 border border-emerald-200 bg-emerald-50 rounded-lg px-3 py-1.5 font-medium">
                   <CheckCircle className="h-3.5 w-3.5" />
+                  Accès actif
+                </span>
+              ) : portalInvited ? (
+                <span className="inline-flex items-center gap-1.5 text-xs text-blue-600 border border-blue-200 bg-blue-50 rounded-lg px-3 py-1.5 font-medium">
+                  <Share2 className="h-3.5 w-3.5" />
                   Invitation envoyée
                 </span>
               ) : (
@@ -334,7 +359,7 @@ export function ProjectOverview({
                 <DropdownMenuTrigger className="inline-flex items-center justify-center rounded-lg border h-9 w-9 hover:bg-accent text-muted-foreground hover:text-foreground transition-colors">
                   <MoreHorizontal className="h-4 w-4" />
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
+                <DropdownMenuContent align="end" className="w-64">
                   <DropdownMenuItem onClick={openLinkClientDialog}>
                     <Users className="mr-2 h-4 w-4" />
                     {project.clients ? 'Changer de client' : 'Lier à un client'}
@@ -343,6 +368,21 @@ export function ProjectOverview({
                     <DropdownMenuItem onClick={handleUnlinkClient}>
                       <Users className="mr-2 h-4 w-4 text-muted-foreground" />
                       Délier le client
+                    </DropdownMenuItem>
+                  )}
+                  {project.clients && (
+                    <DropdownMenuItem onClick={() => handleInvitePortal()}>
+                      <Share2 className="mr-2 h-4 w-4" />
+                      Renvoyer l&apos;invitation
+                    </DropdownMenuItem>
+                  )}
+                  {project.clients?.user_id && (
+                    <DropdownMenuItem
+                      className="text-amber-600 focus:text-amber-600"
+                      onClick={() => setRevokeDialogOpen(true)}
+                    >
+                      <ShieldCheck className="mr-2 h-4 w-4" />
+                      Révoquer l&apos;accès portail
                     </DropdownMenuItem>
                   )}
                   <DropdownMenuSeparator />
@@ -451,7 +491,7 @@ export function ProjectOverview({
         <ModuleCard
           href={`/dashboard/projects/${project.id}/deliverables`}
           icon={<PackageOpen className="h-5 w-5" />}
-          iconBg="bg-orange-100 text-orange-600"
+          iconBg="bg-sky-100 text-sky-700"
           title="Livrables"
           subtitle="Validation & retours"
           metric={deliverableStats.total}
@@ -728,6 +768,29 @@ export function ProjectOverview({
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {deleting ? 'Suppression...' : 'Supprimer définitivement'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ── Dialog révocation accès portail ── */}
+      <AlertDialog open={revokeDialogOpen} onOpenChange={setRevokeDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Révoquer l&apos;accès portail ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              <span className="font-semibold">{project.clients?.name}</span> ne pourra plus se
+              connecter à son espace client. Vous pourrez lui renvoyer une invitation à tout moment.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={revoking}>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleRevokeAccess}
+              disabled={revoking}
+              className="bg-amber-600 text-white hover:bg-amber-700"
+            >
+              {revoking ? 'Révocation...' : 'Révoquer l\'accès'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

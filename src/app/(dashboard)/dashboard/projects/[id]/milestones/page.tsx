@@ -39,10 +39,12 @@ import { Textarea } from '@/components/ui/textarea'
 import {
   GripVertical, Plus, Pencil, Trash2, CheckCircle2, Clock, Circle,
   Eye, EyeOff, ListChecks, Link2, CalendarCheck, SendHorizonal,
-  CalendarDays, AlertTriangle, Flag, Search, SlidersHorizontal,
-  ChevronDown, ChevronRight, Copy, User, Tag, TrendingUp,
+  CalendarDays, AlertTriangle, Flag, Search,
+  ChevronDown, ChevronRight, Copy, User, TrendingUp,
   LayoutList, GitBranch, ArrowUpDown, X, CheckCheck, Layers,
-  CalendarRange, Zap, Target,
+  CalendarRange, Zap, Target, Video, ExternalLink,
+  ListTodo, Square, SquareCheck, Download, FileText, Link as LinkIcon,
+  AlertCircle,
 } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
@@ -52,6 +54,12 @@ import {
 interface ReferenceItem {
   id: string
   name: string
+}
+
+interface Subtask {
+  id: string
+  title: string
+  completed: boolean
 }
 
 type MilestoneStatus = 'pending' | 'in_progress' | 'completed'
@@ -69,12 +77,13 @@ interface Milestone {
   start_date: string | null
   visible_to_client: boolean
   order_index: number
-  reference_type: 'deliverable' | 'document' | 'onboarding' | null
+  reference_type: 'deliverable' | 'document' | 'onboarding' | 'meeting' | null
   reference_id: string | null
   priority: MilestonePriority
-  tags: string[]
-  assigned_to: string | null
   completion_note: string | null
+  responsible: 'freelancer' | 'client'
+  subtasks: Subtask[]
+  meeting_url: string | null
 }
 
 interface MilestoneFormData {
@@ -87,9 +96,10 @@ interface MilestoneFormData {
   reference_type: string
   reference_id: string
   priority: MilestonePriority
-  tags: string
-  assigned_to: string
   completion_note: string
+  responsible: 'freelancer' | 'client'
+  subtasks: Subtask[]
+  meeting_url: string
 }
 
 const defaultForm = (): MilestoneFormData => ({
@@ -100,12 +110,120 @@ const defaultForm = (): MilestoneFormData => ({
   start_date: '',
   visible_to_client: true,
   reference_type: '',
+  subtasks: [],
+  meeting_url: '',
   reference_id: '',
   priority: 'normal',
-  tags: '',
-  assigned_to: '',
   completion_note: '',
+  responsible: 'freelancer',
 })
+
+// ---------------------------------------------------------------------------
+// Built-in timeline templates (shared with project wizard)
+// ---------------------------------------------------------------------------
+
+interface TemplateMS {
+  title: string
+  description?: string
+  priority: 'normal' | 'high' | 'urgent'
+  responsible: 'freelancer' | 'client'
+  visible_to_client: boolean
+}
+
+interface TimelineTpl {
+  id: string
+  name: string
+  emoji: string
+  description: string
+  milestones: TemplateMS[]
+}
+
+const TIMELINE_TEMPLATES: TimelineTpl[] = [
+  {
+    id: 'site-web', name: 'Site web', emoji: '🌐',
+    description: 'Création ou refonte d\'un site vitrine ou e-commerce',
+    milestones: [
+      { title: 'Onboarding & collecte d\'informations', priority: 'high', responsible: 'client', visible_to_client: true },
+      { title: 'Maquettes wireframes', priority: 'normal', responsible: 'freelancer', visible_to_client: true },
+      { title: 'Validation des wireframes', priority: 'normal', responsible: 'client', visible_to_client: true },
+      { title: 'Maquettes visuelles', priority: 'high', responsible: 'freelancer', visible_to_client: true },
+      { title: 'Validation du design', priority: 'high', responsible: 'client', visible_to_client: true },
+      { title: 'Intégration & développement', priority: 'normal', responsible: 'freelancer', visible_to_client: false },
+      { title: 'Tests & corrections', priority: 'normal', responsible: 'freelancer', visible_to_client: false },
+      { title: 'Recette client', priority: 'urgent', responsible: 'client', visible_to_client: true },
+      { title: 'Mise en ligne', priority: 'urgent', responsible: 'freelancer', visible_to_client: true },
+    ],
+  },
+  {
+    id: 'appli-mobile', name: 'Application mobile', emoji: '📱',
+    description: 'Conception et développement d\'une app iOS / Android',
+    milestones: [
+      { title: 'Cahier des charges & spécifications', priority: 'high', responsible: 'client', visible_to_client: true },
+      { title: 'Maquettes UX / wireframes', priority: 'normal', responsible: 'freelancer', visible_to_client: true },
+      { title: 'Design UI — écrans clés', priority: 'normal', responsible: 'freelancer', visible_to_client: true },
+      { title: 'Validation du design', priority: 'high', responsible: 'client', visible_to_client: true },
+      { title: 'Développement — Phase 1', priority: 'normal', responsible: 'freelancer', visible_to_client: false },
+      { title: 'Développement — Phase 2', priority: 'high', responsible: 'freelancer', visible_to_client: false },
+      { title: 'Tests & recette', priority: 'normal', responsible: 'freelancer', visible_to_client: false },
+      { title: 'Validation client & recette finale', priority: 'urgent', responsible: 'client', visible_to_client: true },
+      { title: 'Publication (App Store / Play Store)', priority: 'urgent', responsible: 'freelancer', visible_to_client: true },
+    ],
+  },
+  {
+    id: 'community-management', name: 'Community Management', emoji: '📣',
+    description: 'Gestion de réseaux sociaux et stratégie éditoriale',
+    milestones: [
+      { title: 'Audit de présence en ligne', priority: 'normal', responsible: 'freelancer', visible_to_client: true },
+      { title: 'Validation de la stratégie éditoriale', priority: 'high', responsible: 'client', visible_to_client: true },
+      { title: 'Création des visuels & templates', priority: 'normal', responsible: 'freelancer', visible_to_client: true },
+      { title: 'Validation des visuels', priority: 'normal', responsible: 'client', visible_to_client: true },
+      { title: 'Planning éditorial — Mois 1', priority: 'high', responsible: 'freelancer', visible_to_client: true },
+      { title: 'Lancement & publications', priority: 'normal', responsible: 'freelancer', visible_to_client: false },
+      { title: 'Rapport de performance mensuel', priority: 'normal', responsible: 'freelancer', visible_to_client: true },
+    ],
+  },
+  {
+    id: 'identite-visuelle', name: 'Identité visuelle', emoji: '🎨',
+    description: 'Création d\'un logo et d\'une charte graphique',
+    milestones: [
+      { title: 'Brief créatif & moodboard', priority: 'high', responsible: 'client', visible_to_client: true },
+      { title: 'Propositions logo (3 pistes)', priority: 'high', responsible: 'freelancer', visible_to_client: true },
+      { title: 'Sélection & retours piste logo', priority: 'urgent', responsible: 'client', visible_to_client: true },
+      { title: 'Affinage du logo', priority: 'normal', responsible: 'freelancer', visible_to_client: true },
+      { title: 'Validation finale logo', priority: 'high', responsible: 'client', visible_to_client: true },
+      { title: 'Création de la charte graphique', priority: 'normal', responsible: 'freelancer', visible_to_client: true },
+      { title: 'Livrables finaux', priority: 'normal', responsible: 'freelancer', visible_to_client: true },
+    ],
+  },
+  {
+    id: 'refonte-site', name: 'Refonte de site', emoji: '🔄',
+    description: 'Modernisation d\'un site existant',
+    milestones: [
+      { title: 'Audit du site existant', priority: 'normal', responsible: 'freelancer', visible_to_client: true },
+      { title: 'Benchmark & recommandations', priority: 'normal', responsible: 'freelancer', visible_to_client: true },
+      { title: 'Validation de l\'architecture', priority: 'high', responsible: 'client', visible_to_client: true },
+      { title: 'Maquettes design', priority: 'high', responsible: 'freelancer', visible_to_client: true },
+      { title: 'Validation des maquettes', priority: 'high', responsible: 'client', visible_to_client: true },
+      { title: 'Intégration', priority: 'normal', responsible: 'freelancer', visible_to_client: false },
+      { title: 'Migration de contenu', priority: 'normal', responsible: 'freelancer', visible_to_client: false },
+      { title: 'Recette & corrections', priority: 'urgent', responsible: 'client', visible_to_client: true },
+      { title: 'Mise en ligne', priority: 'urgent', responsible: 'freelancer', visible_to_client: true },
+    ],
+  },
+  {
+    id: 'video-motion', name: 'Vidéo / Motion', emoji: '🎬',
+    description: 'Production vidéo ou animation motion design',
+    milestones: [
+      { title: 'Brief créatif & script', priority: 'high', responsible: 'client', visible_to_client: true },
+      { title: 'Storyboard & validation', priority: 'high', responsible: 'client', visible_to_client: true },
+      { title: 'Tournage / Production', priority: 'normal', responsible: 'freelancer', visible_to_client: false },
+      { title: 'Montage v1', priority: 'normal', responsible: 'freelancer', visible_to_client: true },
+      { title: 'Retours client v1', priority: 'normal', responsible: 'client', visible_to_client: true },
+      { title: 'Montage final', priority: 'high', responsible: 'freelancer', visible_to_client: true },
+      { title: 'Livraison des fichiers', priority: 'high', responsible: 'freelancer', visible_to_client: true },
+    ],
+  },
+]
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -167,9 +285,14 @@ function getReferenceLabel(
   m: Milestone,
   deliverables: ReferenceItem[],
   documents: ReferenceItem[],
+  meetings: { id: string; title: string }[],
 ): string | null {
   if (!m.reference_type) return null
   if (m.reference_type === 'onboarding') return "Lié à l'onboarding"
+  if (m.reference_type === 'meeting') {
+    const found = meetings.find(mt => mt.id === m.reference_id)
+    return found ? `Réunion : ${found.title}` : 'Réunion liée'
+  }
   if (m.reference_type === 'deliverable') {
     const found = deliverables.find(d => d.id === m.reference_id)
     return found ? found.name : 'Livrable référencé'
@@ -181,21 +304,6 @@ function getReferenceLabel(
   return null
 }
 
-function getInitials(name: string): string {
-  return name
-    .split(' ')
-    .map(w => w[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2)
-}
-
-function parseTags(input: string): string[] {
-  return input
-    .split(',')
-    .map(t => t.trim())
-    .filter(Boolean)
-}
 
 // ---------------------------------------------------------------------------
 // StatusNode
@@ -292,6 +400,7 @@ function SortableMilestone({
   onDelete,
   onDuplicate,
   onRequestValidation,
+  onToggleSubtask,
   sendingValidationId,
   referenceLabel,
 }: {
@@ -303,6 +412,7 @@ function SortableMilestone({
   onDelete: (id: string) => void
   onDuplicate: (m: Milestone) => void
   onRequestValidation: (id: string) => void
+  onToggleSubtask: (milestoneId: string, subtaskId: string) => void
   sendingValidationId: string | null
   referenceLabel?: string
 }) {
@@ -321,7 +431,7 @@ function SortableMilestone({
   const dueDateStatus = getDueDateStatus(milestone.due_date, milestone.status)
   const dueDateLabel = getDueDateLabel(milestone.due_date, milestone.status)
   const priority = milestone.priority ?? 'normal'
-  const tags = milestone.tags ?? []
+
 
   return (
     <div ref={setNodeRef} style={style} className="flex gap-4 group">
@@ -413,18 +523,6 @@ function SortableMilestone({
                 </Badge>
               )}
 
-              {/* Tags */}
-              {tags.slice(0, 3).map(tag => (
-                <span
-                  key={tag}
-                  className="inline-flex items-center gap-0.5 rounded-full border border-violet-200 bg-violet-50 px-1.5 text-[10px] font-medium text-violet-700 h-5"
-                >
-                  {tag}
-                </span>
-              ))}
-              {tags.length > 3 && (
-                <span className="text-[10px] text-muted-foreground">+{tags.length - 3}</span>
-              )}
             </div>
 
             {/* Title row */}
@@ -479,31 +577,26 @@ function SortableMilestone({
               <SendHorizonal className={cn('h-3.5 w-3.5', sendingValidationId === milestone.id && 'animate-pulse')} />
             </button>
             <button
+              onClick={() => onDuplicate(milestone)}
+              className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              title="Dupliquer"
+            >
+              <Copy className="h-3.5 w-3.5" />
+            </button>
+            <button
               onClick={() => onEdit(milestone)}
               className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               title="Modifier"
             >
               <Pencil className="h-3.5 w-3.5" />
             </button>
-            <DropdownMenu>
-              <DropdownMenuTrigger className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
-                <ChevronDown className="h-3.5 w-3.5" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-44">
-                <DropdownMenuItem onClick={() => onDuplicate(milestone)}>
-                  <Copy className="mr-2 h-3.5 w-3.5" />
-                  Dupliquer
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={() => onDelete(milestone.id)}
-                  className="text-destructive focus:text-destructive"
-                >
-                  <Trash2 className="mr-2 h-3.5 w-3.5" />
-                  Supprimer
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <button
+              onClick={() => onDelete(milestone.id)}
+              className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-500"
+              title="Supprimer"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
           </div>
         </div>
 
@@ -530,6 +623,56 @@ function SortableMilestone({
           </div>
         )}
 
+        {/* Meeting URL */}
+        {milestone.meeting_url && (
+          <div className="mx-5 mb-2">
+            <a
+              href={milestone.meeting_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-md bg-violet-50 border border-violet-200 px-3 py-1.5 text-xs font-medium text-violet-700 hover:bg-violet-100 transition-colors"
+            >
+              <Video className="h-3.5 w-3.5" />
+              Rejoindre la réunion
+              <ExternalLink className="h-3 w-3" />
+            </a>
+          </div>
+        )}
+
+        {/* Subtasks */}
+        {milestone.subtasks && milestone.subtasks.length > 0 && (
+          <div className="mx-5 mb-3 space-y-1">
+            {/* Progress header */}
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                <ListTodo className="h-3.5 w-3.5" />
+                Sous-tâches · {milestone.subtasks.filter(s => s.completed).length}/{milestone.subtasks.length}
+              </span>
+              <div className="h-1.5 w-24 rounded-full bg-muted overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-emerald-500 transition-all"
+                  style={{ width: `${(milestone.subtasks.filter(s => s.completed).length / milestone.subtasks.length) * 100}%` }}
+                />
+              </div>
+            </div>
+            {milestone.subtasks.map(subtask => (
+              <button
+                key={subtask.id}
+                onClick={() => onToggleSubtask(milestone.id, subtask.id)}
+                className="flex w-full items-center gap-2 rounded-md px-2 py-1 text-xs hover:bg-muted/60 transition-colors text-left group/sub"
+              >
+                {subtask.completed
+                  ? <SquareCheck className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                  : <Square className="h-3.5 w-3.5 shrink-0 text-muted-foreground group-hover/sub:text-primary" />
+                }
+                <span className={cn(subtask.completed && 'line-through text-muted-foreground')}>
+                  {subtask.title}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Footer */}
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t bg-muted/20 px-5 py-2 text-xs text-muted-foreground rounded-b-xl">
           {/* Date range */}
@@ -552,15 +695,6 @@ function SortableMilestone({
             )}
           </div>
 
-          {/* Assignee */}
-          {milestone.assigned_to && (
-            <div className="flex items-center gap-1.5">
-              <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-[9px] font-bold text-primary">
-                {getInitials(milestone.assigned_to)}
-              </div>
-              <span>{milestone.assigned_to}</span>
-            </div>
-          )}
 
           {/* Visibility */}
           <div
@@ -572,6 +706,12 @@ function SortableMilestone({
               : <EyeOff className="h-3.5 w-3.5" />
             }
             <span>{milestone.visible_to_client ? 'Visible' : 'Masqué'}</span>
+          </div>
+
+          {/* Responsible */}
+          <div className="flex items-center gap-1" title="Responsable de validation">
+            <User className="h-3.5 w-3.5 shrink-0" />
+            <span>{milestone.responsible === 'client' ? 'Client' : 'Prestataire'}</span>
           </div>
         </div>
       </div>
@@ -590,6 +730,7 @@ function ListRow({
   onDelete,
   onDuplicate,
   onRequestValidation,
+  onToggleSubtask,
   sendingValidationId,
 }: {
   milestone: Milestone
@@ -598,11 +739,12 @@ function ListRow({
   onDelete: (id: string) => void
   onDuplicate: (m: Milestone) => void
   onRequestValidation: (id: string) => void
+  onToggleSubtask: (milestoneId: string, subtaskId: string) => void
   sendingValidationId: string | null
 }) {
   const dueDateStatus = getDueDateStatus(milestone.due_date, milestone.status)
   const priority = milestone.priority ?? 'normal'
-  const tags = milestone.tags ?? []
+
 
   return (
     <div className={cn(
@@ -623,38 +765,33 @@ function ListRow({
         size="sm"
       />
 
-      {/* Title */}
-      <div className="min-w-0 flex-1">
+      {/* Title + badges */}
+      <div className="min-w-0 flex-1 flex items-center gap-2">
         <span className={cn(
-          'font-medium',
+          'font-medium truncate',
           milestone.status === 'completed' && 'line-through text-muted-foreground',
         )}>
           {milestone.title}
         </span>
-        {tags.length > 0 && (
-          <div className="mt-0.5 flex flex-wrap gap-1">
-            {tags.slice(0, 4).map(tag => (
-              <span key={tag} className="rounded-full border border-violet-200 bg-violet-50 px-1.5 text-[10px] text-violet-700">
-                {tag}
-              </span>
-            ))}
-          </div>
+        {milestone.meeting_url && (
+          <a
+            href={milestone.meeting_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={e => e.stopPropagation()}
+            className="shrink-0 inline-flex items-center gap-1 rounded bg-violet-50 border border-violet-200 px-1.5 py-0.5 text-[10px] font-medium text-violet-700 hover:bg-violet-100 transition-colors"
+            title="Rejoindre la réunion"
+          >
+            <Video className="h-3 w-3" /> Réunion
+          </a>
+        )}
+        {milestone.subtasks?.length > 0 && (
+          <span className="shrink-0 text-[10px] text-muted-foreground">
+            {milestone.subtasks.filter(s => s.completed).length}/{milestone.subtasks.length} ✓
+          </span>
         )}
       </div>
 
-      {/* Assignee */}
-      <div className="hidden w-28 shrink-0 sm:flex items-center gap-1.5 text-xs text-muted-foreground">
-        {milestone.assigned_to ? (
-          <>
-            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-[9px] font-bold text-primary shrink-0">
-              {getInitials(milestone.assigned_to)}
-            </div>
-            <span className="truncate">{milestone.assigned_to}</span>
-          </>
-        ) : (
-          <span className="italic">—</span>
-        )}
-      </div>
 
       {/* Due date */}
       <div className={cn(
@@ -673,6 +810,12 @@ function ListRow({
       {/* Visibility */}
       <div className="hidden shrink-0 sm:block text-muted-foreground">
         {milestone.visible_to_client ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+      </div>
+
+      {/* Responsible */}
+      <div className="hidden shrink-0 sm:flex items-center gap-1 text-xs text-muted-foreground w-24" title="Responsable">
+        <User className="h-3.5 w-3.5 shrink-0" />
+        <span className="truncate">{milestone.responsible === 'client' ? 'Client' : 'Prestataire'}</span>
       </div>
 
       {/* Actions */}
@@ -695,28 +838,119 @@ function ListRow({
           <SendHorizonal className={cn('h-3.5 w-3.5', sendingValidationId === milestone.id && 'animate-pulse')} />
         </button>
         <button
+          onClick={() => onDuplicate(milestone)}
+          className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+          title="Dupliquer"
+        >
+          <Copy className="h-3.5 w-3.5" />
+        </button>
+        <button
           onClick={() => onEdit(milestone)}
           className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
           title="Modifier"
         >
           <Pencil className="h-3.5 w-3.5" />
         </button>
-        <DropdownMenu>
-          <DropdownMenuTrigger className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground">
-            <ChevronDown className="h-3.5 w-3.5" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-44">
-            <DropdownMenuItem onClick={() => onDuplicate(milestone)}>
-              <Copy className="mr-2 h-3.5 w-3.5" />
-              Dupliquer
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => onDelete(milestone.id)} className="text-destructive focus:text-destructive">
-              <Trash2 className="mr-2 h-3.5 w-3.5" />
-              Supprimer
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <button
+          onClick={() => onDelete(milestone.id)}
+          className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-red-50 hover:text-red-500"
+          title="Supprimer"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// SubtaskEditor
+// ---------------------------------------------------------------------------
+
+function SubtaskEditor({
+  subtasks,
+  onChange,
+}: {
+  subtasks: Subtask[]
+  onChange: (subtasks: Subtask[]) => void
+}) {
+  const [newTitle, setNewTitle] = useState('')
+
+  function addSubtask() {
+    const title = newTitle.trim()
+    if (!title) return
+    onChange([...subtasks, { id: crypto.randomUUID(), title, completed: false }])
+    setNewTitle('')
+  }
+
+  function removeSubtask(id: string) {
+    onChange(subtasks.filter(s => s.id !== id))
+  }
+
+  function toggleSubtask(id: string) {
+    onChange(subtasks.map(s => s.id === id ? { ...s, completed: !s.completed } : s))
+  }
+
+  return (
+    <div className="space-y-2 border-t pt-4">
+      <Label className="flex items-center gap-1.5">
+        <ListTodo className="h-3.5 w-3.5" />
+        Sous-tâches
+        {subtasks.length > 0 && (
+          <span className="text-xs text-muted-foreground font-normal">
+            · {subtasks.filter(s => s.completed).length}/{subtasks.length} complétées
+          </span>
+        )}
+      </Label>
+
+      {subtasks.length > 0 && (
+        <div className="space-y-1 rounded-lg border bg-muted/20 p-2">
+          {subtasks.map(s => (
+            <div key={s.id} className="flex items-center gap-2 group/sub">
+              <button
+                type="button"
+                onClick={() => toggleSubtask(s.id)}
+                className="shrink-0"
+              >
+                {s.completed
+                  ? <SquareCheck className="h-4 w-4 text-emerald-600" />
+                  : <Square className="h-4 w-4 text-muted-foreground" />
+                }
+              </button>
+              <span className={cn('flex-1 text-sm', s.completed && 'line-through text-muted-foreground')}>
+                {s.title}
+              </span>
+              <button
+                type="button"
+                onClick={() => removeSubtask(s.id)}
+                className="opacity-0 group-hover/sub:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Add new */}
+      <div className="flex gap-2">
+        <Input
+          placeholder="Ajouter une sous-tâche…"
+          value={newTitle}
+          onChange={e => setNewTitle(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addSubtask() } }}
+          className="h-8 text-sm"
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={addSubtask}
+          disabled={!newTitle.trim()}
+          className="shrink-0 h-8 px-3"
+        >
+          <Plus className="h-3.5 w-3.5" />
+        </Button>
       </div>
     </div>
   )
@@ -777,7 +1011,14 @@ export default function MilestonesPage({
   const [saving, setSaving] = useState(false)
   const [deliverables, setDeliverables] = useState<ReferenceItem[]>([])
   const [documents, setDocuments] = useState<ReferenceItem[]>([])
+  const [meetings, setMeetings] = useState<{ id: string; title: string; scheduled_at: string; meeting_link: string | null }[]>([])
   const [sendingValidationId, setSendingValidationId] = useState<string | null>(null)
+
+  // Import template state
+  const [importDialogOpen, setImportDialogOpen] = useState(false)
+  const [importSelectedId, setImportSelectedId] = useState<string | null>(null)
+  const [importLoading, setImportLoading] = useState(false)
+  const [importConfirmed, setImportConfirmed] = useState(false)
 
   // View/filter state
   const [viewMode, setViewMode] = useState<ViewMode>('timeline')
@@ -831,6 +1072,13 @@ export default function MilestonesPage({
         setDocuments((data ?? []).map(d => ({ id: d.id, name: d.name })))
       })
       .catch(() => {})
+
+    fetch(`/api/projects/${projectId}/meetings`)
+      .then(r => r.json())
+      .then(({ data }: { data?: { id: string; title: string; scheduled_at: string; meeting_link: string | null }[] }) => {
+        setMeetings(data ?? [])
+      })
+      .catch(() => {})
   }, [fetchMilestones, projectId])
 
   // -------------------------------------------------------------------------
@@ -864,9 +1112,7 @@ export default function MilestonesPage({
         const q = searchQuery.toLowerCase()
         const inTitle = m.title.toLowerCase().includes(q)
         const inDesc = m.description?.toLowerCase().includes(q) ?? false
-        const inTags = m.tags?.some(t => t.toLowerCase().includes(q)) ?? false
-        const inAssignee = m.assigned_to?.toLowerCase().includes(q) ?? false
-        if (!inTitle && !inDesc && !inTags && !inAssignee) return false
+        if (!inTitle && !inDesc) return false
       }
       return true
     })
@@ -1001,10 +1247,11 @@ export default function MilestonesPage({
         start_date: m.start_date,
         visible_to_client: m.visible_to_client,
         priority: m.priority,
-        tags: m.tags,
-        assigned_to: m.assigned_to,
         reference_type: m.reference_type,
         reference_id: m.reference_id,
+        responsible: m.responsible,
+        subtasks: m.subtasks.map(s => ({ ...s, completed: false })),
+        meeting_url: m.meeting_url,
       }
       const res = await fetch(`/api/projects/${projectId}/milestones`, {
         method: 'POST',
@@ -1017,6 +1264,28 @@ export default function MilestonesPage({
       toast.success('Étape dupliquée')
     } catch {
       toast.error('Erreur lors de la duplication')
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Toggle subtask
+  // -------------------------------------------------------------------------
+
+  async function handleToggleSubtask(milestoneId: string, subtaskId: string) {
+    const milestone = milestones.find(m => m.id === milestoneId)
+    if (!milestone) return
+    const updated = milestone.subtasks.map(s =>
+      s.id === subtaskId ? { ...s, completed: !s.completed } : s
+    )
+    setMilestones(prev => prev.map(m => m.id === milestoneId ? { ...m, subtasks: updated } : m))
+    try {
+      await fetch(`/api/projects/${projectId}/milestones/${milestoneId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subtasks: updated }),
+      })
+    } catch {
+      void fetchMilestones()
     }
   }
 
@@ -1067,9 +1336,10 @@ export default function MilestonesPage({
       reference_type: m.reference_type ?? '',
       reference_id: m.reference_id ?? '',
       priority: m.priority ?? 'normal',
-      tags: (m.tags ?? []).join(', '),
-      assigned_to: m.assigned_to ?? '',
       completion_note: m.completion_note ?? '',
+      responsible: m.responsible ?? 'freelancer',
+      subtasks: m.subtasks ?? [],
+      meeting_url: m.meeting_url ?? '',
     })
     setDialogOpen(true)
   }
@@ -1103,9 +1373,10 @@ export default function MilestonesPage({
           ? (form.reference_id.trim() || null)
           : null,
         priority: form.priority,
-        tags: parseTags(form.tags),
-        assigned_to: form.assigned_to.trim() || null,
         completion_note: form.completion_note.trim() || null,
+        responsible: form.responsible,
+        subtasks: form.subtasks,
+        meeting_url: form.meeting_url.trim() || null,
       }
 
       if (editingMilestone) {
@@ -1140,6 +1411,66 @@ export default function MilestonesPage({
   }
 
   // -------------------------------------------------------------------------
+  // Import template
+  // -------------------------------------------------------------------------
+
+  async function handleImportTemplate() {
+    if (!importSelectedId) return
+    const template = TIMELINE_TEMPLATES.find(t => t.id === importSelectedId)
+    if (!template) return
+
+    if (milestones.length > 0 && !importConfirmed) {
+      setImportConfirmed(true)
+      return
+    }
+
+    setImportLoading(true)
+    try {
+      // Delete existing milestones
+      if (milestones.length > 0) {
+        await Promise.all(
+          milestones.map(m =>
+            fetch(`/api/projects/${projectId}/milestones/${m.id}`, { method: 'DELETE' })
+          )
+        )
+      }
+
+      // Create new milestones
+      const created: Milestone[] = []
+      for (let i = 0; i < template.milestones.length; i++) {
+        const m = template.milestones[i]
+        const res = await fetch(`/api/projects/${projectId}/milestones`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: m.title,
+            description: m.description ?? null,
+            status: 'pending',
+            priority: m.priority,
+            responsible: m.responsible,
+            visible_to_client: m.visible_to_client,
+            order_index: i,
+            subtasks: [],
+          }),
+        })
+        if (res.ok) {
+          const json = (await res.json()) as { data: Milestone }
+          created.push(json.data)
+        }
+      }
+      setMilestones(created)
+      toast.success(`Template "${template.name}" importé — ${created.length} étapes créées`)
+      setImportDialogOpen(false)
+      setImportSelectedId(null)
+      setImportConfirmed(false)
+    } catch {
+      toast.error('Erreur lors de l\'import du template')
+    } finally {
+      setImportLoading(false)
+    }
+  }
+
+  // -------------------------------------------------------------------------
   // Render helpers
   // -------------------------------------------------------------------------
 
@@ -1169,10 +1500,10 @@ export default function MilestonesPage({
           <Button
             variant="outline"
             size="sm"
-            onClick={() => router.push(`/dashboard/projects/${projectId}/meetings`)}
+            onClick={() => { setImportSelectedId(null); setImportConfirmed(false); setImportDialogOpen(true) }}
           >
-            <CalendarCheck className="mr-2 h-4 w-4" />
-            Réunion
+            <Download className="mr-2 h-4 w-4" />
+            Importer un template
           </Button>
           <Button size="sm" onClick={openAddDialog}>
             <Plus className="mr-2 h-4 w-4" />
@@ -1461,8 +1792,9 @@ export default function MilestonesPage({
                           onDelete={handleDelete}
                           onDuplicate={handleDuplicate}
                           onRequestValidation={handleRequestValidation}
+                          onToggleSubtask={handleToggleSubtask}
                           sendingValidationId={sendingValidationId}
-                          referenceLabel={getReferenceLabel(milestone, deliverables, documents) ?? undefined}
+                          referenceLabel={getReferenceLabel(milestone, deliverables, documents, meetings) ?? undefined}
                         />
                       ))}
                     </div>
@@ -1480,9 +1812,9 @@ export default function MilestonesPage({
             <div className="w-1 shrink-0" />
             <div className="w-7 shrink-0" />
             <div className="flex-1">Étape</div>
-            <div className="hidden w-28 shrink-0 sm:block">Assigné à</div>
             <div className="hidden w-28 shrink-0 sm:block">Date limite</div>
             <div className="hidden shrink-0 sm:block w-6">Vis.</div>
+            <div className="hidden w-24 shrink-0 sm:block">Responsable</div>
             <div className="w-28 shrink-0" />
           </div>
           {Object.entries(groupedMilestones).map(([groupKey, items]) => (
@@ -1503,6 +1835,7 @@ export default function MilestonesPage({
                     onDelete={handleDelete}
                     onDuplicate={handleDuplicate}
                     onRequestValidation={handleRequestValidation}
+                    onToggleSubtask={handleToggleSubtask}
                     sendingValidationId={sendingValidationId}
                   />
                 ))}
@@ -1549,7 +1882,7 @@ export default function MilestonesPage({
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label htmlFor="ms-status">Statut</Label>
-                <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v as MilestoneStatus }))}>
+                <Select value={form.status} onValueChange={(v: string) => setForm(f => ({ ...f, status: v as MilestoneStatus }))}>
                   <SelectTrigger id="ms-status"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="pending">⬜ En attente</SelectItem>
@@ -1560,7 +1893,7 @@ export default function MilestonesPage({
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="ms-priority">Priorité</Label>
-                <Select value={form.priority} onValueChange={v => setForm(f => ({ ...f, priority: v as MilestonePriority }))}>
+                <Select value={form.priority} onValueChange={(v: string) => setForm(f => ({ ...f, priority: v as MilestonePriority }))}>
                   <SelectTrigger id="ms-priority"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="normal">⚪ Normale</SelectItem>
@@ -1599,35 +1932,6 @@ export default function MilestonesPage({
               </div>
             </div>
 
-            {/* Assigné à + Tags */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="ms-assigned">
-                  <User className="inline mr-1 h-3.5 w-3.5" />
-                  Assigné à
-                </Label>
-                <Input
-                  id="ms-assigned"
-                  placeholder="Prénom Nom"
-                  value={form.assigned_to}
-                  onChange={e => setForm(f => ({ ...f, assigned_to: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="ms-tags">
-                  <Tag className="inline mr-1 h-3.5 w-3.5" />
-                  Tags
-                </Label>
-                <Input
-                  id="ms-tags"
-                  placeholder="Design, UI, Livrable…"
-                  value={form.tags}
-                  onChange={e => setForm(f => ({ ...f, tags: e.target.value }))}
-                />
-                <p className="text-xs text-muted-foreground">Séparer par des virgules</p>
-              </div>
-            </div>
-
             {/* Note de clôture (si statut = completed) */}
             {form.status === 'completed' && (
               <div className="space-y-1.5">
@@ -1655,6 +1959,44 @@ export default function MilestonesPage({
               />
             </div>
 
+            {/* Responsable */}
+            <div className="space-y-1.5">
+              <Label htmlFor="ms-responsible">Responsable de validation</Label>
+              <Select
+                value={form.responsible}
+                onValueChange={(v: string) => setForm(f => ({ ...f, responsible: v as 'freelancer' | 'client' }))}
+              >
+                <SelectTrigger id="ms-responsible"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="freelancer">🧑‍💻 Prestataire</SelectItem>
+                  <SelectItem value="client">👤 Client</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">Indique qui doit valider cette étape</p>
+            </div>
+
+            {/* Lien de réunion */}
+            <div className="space-y-1.5">
+              <Label htmlFor="ms-meeting">
+                <Video className="inline mr-1.5 h-3.5 w-3.5 text-violet-600" />
+                Lien de réunion (optionnel)
+              </Label>
+              <Input
+                id="ms-meeting"
+                type="url"
+                placeholder="https://meet.google.com/… ou https://zoom.us/…"
+                value={form.meeting_url}
+                onChange={e => setForm(f => ({ ...f, meeting_url: e.target.value }))}
+              />
+              <p className="text-xs text-muted-foreground">Un bouton "Rejoindre la réunion" sera affiché sur la carte</p>
+            </div>
+
+            {/* Sous-tâches */}
+            <SubtaskEditor
+              subtasks={form.subtasks}
+              onChange={subtasks => setForm(f => ({ ...f, subtasks }))}
+            />
+
             {/* Référence associée */}
             <div className="space-y-3 border-t pt-4">
               <p className="text-sm font-medium flex items-center gap-1.5">
@@ -1665,11 +2007,17 @@ export default function MilestonesPage({
                 <Label htmlFor="ms-ref-type">Type</Label>
                 <Select
                   value={form.reference_type}
-                  onValueChange={v => setForm(f => ({ ...f, reference_type: v ?? '', reference_id: '' }))}
+                  onValueChange={(v: string) => setForm(f => ({
+                    ...f,
+                    reference_type: v ?? '',
+                    reference_id: '',
+                    meeting_url: v !== 'meeting' && f.reference_type === 'meeting' ? '' : f.meeting_url,
+                  }))}
                 >
                   <SelectTrigger id="ms-ref-type"><SelectValue placeholder="Aucune" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">Aucune</SelectItem>
+                    <SelectItem value="meeting">📅 Réunion</SelectItem>
                     <SelectItem value="onboarding">Onboarding client</SelectItem>
                     <SelectItem value="deliverable">Livrable</SelectItem>
                     <SelectItem value="document">Document</SelectItem>
@@ -1677,11 +2025,53 @@ export default function MilestonesPage({
                 </Select>
               </div>
 
+              {form.reference_type === 'meeting' && (
+                <div className="space-y-1.5">
+                  <Label>Réunion associée</Label>
+                  {meetings.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">Aucune réunion sur ce projet.</p>
+                  ) : (
+                    <div className="space-y-1.5 max-h-48 overflow-y-auto rounded-lg border bg-muted/20 p-1.5">
+                      {meetings.map(m => (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => {
+                            setForm(f => ({
+                              ...f,
+                              reference_id: m.id,
+                              meeting_url: m.meeting_link ?? f.meeting_url,
+                            }))
+                          }}
+                          className={cn(
+                            'w-full flex items-start gap-2.5 rounded-md px-2.5 py-2 text-left text-sm transition-colors',
+                            form.reference_id === m.id
+                              ? 'bg-primary/10 text-primary font-medium'
+                              : 'hover:bg-muted',
+                          )}
+                        >
+                          <Video className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                          <div className="min-w-0">
+                            <p className="truncate font-medium">{m.title}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {format(new Date(m.scheduled_at), 'd MMM yyyy à HH:mm', { locale: fr })}
+                            </p>
+                            {m.meeting_link && (
+                              <p className="text-[11px] text-emerald-600 mt-0.5">✓ Lien disponible — sera auto-rempli</p>
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {form.reference_type === 'deliverable' && (
                 <div className="space-y-1.5">
                   <Label>Livrable associé</Label>
                   {deliverables.length > 0 ? (
-                    <Select value={form.reference_id} onValueChange={v => setForm(f => ({ ...f, reference_id: v ?? '' }))}>
+                    <Select value={form.reference_id} onValueChange={(v: string) => setForm(f => ({ ...f, reference_id: v ?? '' }))}>
                       <SelectTrigger><SelectValue placeholder="Sélectionner" /></SelectTrigger>
                       <SelectContent>
                         {deliverables.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
@@ -1696,15 +2086,30 @@ export default function MilestonesPage({
               {form.reference_type === 'document' && (
                 <div className="space-y-1.5">
                   <Label>Document associé</Label>
-                  {documents.length > 0 ? (
-                    <Select value={form.reference_id} onValueChange={v => setForm(f => ({ ...f, reference_id: v ?? '' }))}>
-                      <SelectTrigger><SelectValue placeholder="Sélectionner" /></SelectTrigger>
-                      <SelectContent>
-                        {documents.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  ) : (
+                  {documents.length === 0 ? (
                     <p className="text-xs text-muted-foreground">Aucun document sur ce projet.</p>
+                  ) : (
+                    <div className="space-y-1.5 max-h-48 overflow-y-auto rounded-lg border bg-muted/20 p-1.5">
+                      {documents.map(d => (
+                        <button
+                          key={d.id}
+                          type="button"
+                          onClick={() => setForm(f => ({ ...f, reference_id: d.id }))}
+                          className={cn(
+                            'w-full flex items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm transition-colors',
+                            form.reference_id === d.id
+                              ? 'bg-primary/10 text-primary font-medium'
+                              : 'hover:bg-muted',
+                          )}
+                        >
+                          <FileText className="h-3.5 w-3.5 mt-0.5 shrink-0 text-muted-foreground" />
+                          <span className="truncate">{d.name}</span>
+                          {form.reference_id === d.id && (
+                            <CheckCircle2 className="h-3.5 w-3.5 ml-auto shrink-0 text-primary" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
                   )}
                 </div>
               )}
@@ -1715,6 +2120,88 @@ export default function MilestonesPage({
             <Button variant="outline" onClick={closeDialog} disabled={saving}>Annuler</Button>
             <Button onClick={handleSave} disabled={saving}>
               {saving ? 'Enregistrement…' : editingMilestone ? 'Mettre à jour' : 'Ajouter'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Import Template Dialog ─────────────────────────────────────────── */}
+      <Dialog open={importDialogOpen} onOpenChange={open => {
+        if (!open) { setImportDialogOpen(false); setImportSelectedId(null); setImportConfirmed(false) }
+      }}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Download className="h-4 w-4" />
+              Importer un template de timeline
+            </DialogTitle>
+          </DialogHeader>
+
+          {importConfirmed && milestones.length > 0 && (
+            <div className="flex items-start gap-3 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3">
+              <AlertCircle className="h-4 w-4 text-orange-500 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-orange-800">Confirmation requise</p>
+                <p className="text-sm text-orange-700 mt-0.5">
+                  Cette action va supprimer les <strong>{milestones.length} étape{milestones.length > 1 ? 's' : ''}</strong> existante{milestones.length > 1 ? 's' : ''} et les remplacer par celles du template. Cette action est irréversible.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {!importConfirmed && milestones.length > 0 && (
+            <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+              <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+              <p className="text-sm text-amber-700">
+                Vous avez <strong>{milestones.length} étape{milestones.length > 1 ? 's' : ''}</strong> existante{milestones.length > 1 ? 's' : ''}. Importer un template les <strong>remplacera toutes</strong>.
+              </p>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-3">
+            {TIMELINE_TEMPLATES.map(t => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => { setImportSelectedId(t.id); setImportConfirmed(false) }}
+                className={cn(
+                  'relative flex flex-col gap-2 rounded-xl border-2 p-4 text-left transition-all',
+                  importSelectedId === t.id ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/40',
+                )}
+              >
+                {importSelectedId === t.id && (
+                  <div className="absolute top-2.5 right-2.5 h-5 w-5 rounded-full bg-primary flex items-center justify-center">
+                    <CheckCircle2 className="h-3 w-3 text-white" />
+                  </div>
+                )}
+                <div className="flex items-center gap-2 pr-6">
+                  <span className="text-xl">{t.emoji}</span>
+                  <p className="text-sm font-semibold truncate">{t.name}</p>
+                </div>
+                <p className="text-xs text-muted-foreground line-clamp-2">{t.description}</p>
+                <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <GitBranch className="h-3 w-3" />
+                  {t.milestones.length} étapes
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setImportDialogOpen(false); setImportConfirmed(false) }} disabled={importLoading}>
+              Annuler
+            </Button>
+            <Button
+              onClick={handleImportTemplate}
+              disabled={!importSelectedId || importLoading}
+              className={cn(importConfirmed && milestones.length > 0 && 'bg-orange-500 hover:bg-orange-600 border-orange-500')}
+            >
+              {importLoading
+                ? 'Import en cours…'
+                : importConfirmed && milestones.length > 0
+                  ? '⚠ Confirmer et remplacer'
+                  : 'Importer ce template'
+              }
             </Button>
           </DialogFooter>
         </DialogContent>

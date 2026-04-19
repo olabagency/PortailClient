@@ -14,6 +14,13 @@ const milestoneCreateSchema = z.object({
   tags: z.array(z.string().max(50)).optional().default([]),
   assigned_to: z.string().max(100).optional().nullable(),
   completion_note: z.string().max(500).optional().nullable(),
+  responsible: z.enum(['freelancer', 'client']).optional().default('freelancer'),
+  subtasks: z.array(z.object({
+    id: z.string(),
+    title: z.string().max(200),
+    completed: z.boolean(),
+  })).optional().default([]),
+  meeting_url: z.string().url().optional().nullable(),
 })
 
 // GET /api/projects/[id]/milestones
@@ -103,6 +110,9 @@ export async function POST(
         tags: parsed.data.tags ?? [],
         assigned_to: parsed.data.assigned_to ?? null,
         completion_note: parsed.data.completion_note ?? null,
+        responsible: parsed.data.responsible,
+        subtasks: parsed.data.subtasks ?? [],
+        meeting_url: parsed.data.meeting_url ?? null,
       })
       .select()
       .single()

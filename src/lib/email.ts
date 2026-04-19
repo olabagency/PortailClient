@@ -115,7 +115,7 @@ export function revisionRequestEmail({
     <div style="background:#fafafa;border:1px solid #eee;border-radius:8px;padding:16px;margin:0 0 20px">
       <p style="margin:0;color:#333;font-size:15px;white-space:pre-wrap">${message}</p>
     </div>
-    <a href="${formUrl}" style="display:inline-block;background:#E8553A;color:white;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;font-size:15px">
+    <a href="${formUrl}" style="display:inline-block;background:#386FA4;color:white;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;font-size:15px">
       Modifier mon questionnaire →
     </a>
     <p style="color:#999;font-size:12px;margin-top:20px">
@@ -141,7 +141,7 @@ export function clientPortalInviteEmail({
       Merci pour votre onboarding sur le projet <strong>${projectName}</strong>.
       Votre espace client est maintenant accessible — suivez l'avancement de votre projet, consultez les livrables et accédez à vos documents.
     </p>
-    <a href="${magicLink}" style="display:inline-block;background:#E8553A;color:white;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;font-size:15px">
+    <a href="${magicLink}" style="display:inline-block;background:#386FA4;color:white;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;font-size:15px">
       Accéder à mon espace client →
     </a>
     <p style="color:#999;font-size:12px;margin-top:20px">

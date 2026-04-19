@@ -48,6 +48,7 @@ interface Milestone {
   status: MilestoneStatus
   due_date: string | null
   order_index: number
+  responsible: 'freelancer' | 'client'
 }
 
 interface Deliverable {
@@ -108,6 +109,7 @@ interface MeetingComment {
   content: string
   source: 'client' | 'freelance'
   quoted_text: string | null
+  commenter_name: string | null
   created_at: string
 }
 
@@ -188,7 +190,7 @@ function ProjectInitials({ name, color }: { name: string; color: string | null }
   return (
     <div
       className="h-12 w-12 rounded-xl flex items-center justify-center text-white font-bold text-lg shrink-0"
-      style={{ backgroundColor: color ?? '#E8553A' }}
+      style={{ backgroundColor: color ?? '#386FA4' }}
     >
       {initials}
     </div>
@@ -578,7 +580,7 @@ export default function ClientProjectPage({ params }: { params: Promise<{ id: st
   const pendingDeliverables = deliverables.filter(d => d.status === 'pending').length
   const validatedDeliverables = deliverables.filter(d => d.status === 'validated').length
 
-  const accentColor = project.color ?? '#E8553A'
+  const accentColor = project.color ?? '#386FA4'
 
   const sortedMilestones = [...milestones].sort((a, b) => a.order_index - b.order_index)
   const upcomingMilestones = sortedMilestones.filter(m => m.status !== 'completed').slice(0, 3)
@@ -900,6 +902,15 @@ export default function ClientProjectPage({ params }: { params: Promise<{ id: st
                         >
                           {milestoneStatusLabel(m.status)}
                         </Badge>
+                        {m.responsible === 'client' ? (
+                          <Badge variant="outline" className="text-xs py-0 border-violet-200 bg-violet-50 text-violet-700">
+                            👤 À valider par vous
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-xs py-0 border-gray-200 bg-gray-50 text-gray-600">
+                            🧑‍💻 Prestataire
+                          </Badge>
+                        )}
                       </div>
                       {m.description && (
                         <p className="text-xs text-muted-foreground mt-0.5">{m.description}</p>
@@ -1020,7 +1031,7 @@ export default function ClientProjectPage({ params }: { params: Promise<{ id: st
 
           {feedbackFormOpen ? (
             <div className="rounded-2xl border bg-white shadow-sm p-5 mb-4">
-              <form onSubmit={handleFeedbackSubmit} className="space-y-3">
+              <form onSubmit={handleFeedbackSubmit} className="space-y-3" noValidate>
                 <div className="space-y-1.5">
                   <Label htmlFor="fb-title">Titre <span className="text-destructive">*</span></Label>
                   <Input
@@ -1466,7 +1477,7 @@ export default function ClientProjectPage({ params }: { params: Promise<{ id: st
                                           )}
                                           <p className="text-sm">{c.content}</p>
                                           <p className="text-[11px] text-muted-foreground mt-1">
-                                            {c.source === 'client' ? 'Vous' : 'Prestataire'} · {format(new Date(c.created_at), "d MMM 'à' HH'h'mm", { locale: fr })}
+                                            {c.source === 'client' ? 'Vous' : (c.commenter_name ?? 'Prestataire')} · {format(new Date(c.created_at), "d MMM 'à' HH'h'mm", { locale: fr })}
                                           </p>
                                         </div>
                                       ))}

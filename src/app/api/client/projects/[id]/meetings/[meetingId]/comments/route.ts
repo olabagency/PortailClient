@@ -73,6 +73,7 @@ export async function POST(
         content: parsed.data.content,
         quoted_text: parsed.data.quoted_text ?? null,
         source: 'client',
+        commenter_name: clientRecord.name,
       })
       .select()
       .single()

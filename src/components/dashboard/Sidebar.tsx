@@ -119,7 +119,7 @@ function SidebarContent() {
   return (
     <div className="flex flex-col h-full">
       {/* Logo */}
-      <div className="px-4 py-4 border-b">
+      <div className="px-4 h-[60px] flex items-center border-b">
         <Link href="/dashboard" className="flex items-center gap-2.5">
           <div className="h-7 w-7 rounded-lg bg-primary flex items-center justify-center shrink-0">
             <span className="text-primary-foreground text-xs font-bold leading-none">

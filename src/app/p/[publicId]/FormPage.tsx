@@ -36,12 +36,20 @@ interface ProjectData {
   settings: Record<string, unknown> | null
 }
 
+interface FreelancerBranding {
+  name: string | null
+  company_name: string | null
+  logo_url: string | null
+  avatar_url: string | null
+}
+
 interface FormPageProps {
   project: ProjectData
   sections: OnboardingSection[]
   fields: FormField[]
   publicId: string
   initialClientInfo?: Partial<ClientInfo>
+  freelancer?: FreelancerBranding
 }
 
 interface ClientInfo {
@@ -67,7 +75,7 @@ const STEPS = [
   { number: 5, label: 'Vos informations' },
 ]
 
-export default function FormPage({ project, sections, fields, publicId, initialClientInfo }: FormPageProps) {
+export default function FormPage({ project, sections, fields, publicId, initialClientInfo, freelancer }: FormPageProps) {
   const [currentStep, setCurrentStep] = useState(1)
   const [responses, setResponses] = useState<Record<string, unknown>>({})
   const [clientInfo, setClientInfo] = useState<ClientInfo>({
@@ -163,25 +171,26 @@ export default function FormPage({ project, sections, fields, publicId, initialC
   function isStepComplete(step: number): boolean {
     if (step === 1) return currentStep > 1
     if (step === 2) {
-      const questionFields = fields.filter(
+      const qFields = fields.filter(
         (f) =>
           f.type !== 'file' &&
           sections.find((s) => s.id === f.section_id)?.kind !== 'access'
       )
-      return questionFields
-        .filter((f) => f.required)
-        .every(
-          (f) =>
-            responses[f.id] !== undefined &&
-            responses[f.id] !== '' &&
-            responses[f.id] !== null
-        )
+      const required = qFields.filter((f) => f.required)
+      if (required.length === 0) return currentStep > 2
+      return required.every(
+        (f) =>
+          responses[f.id] !== undefined &&
+          responses[f.id] !== '' &&
+          responses[f.id] !== null
+      )
     }
     if (step === 3) {
       const docFields = fields.filter((f) => f.type === 'file' && f.required)
-      return docFields.every((f) => responses[f.id])
+      if (docFields.length === 0) return currentStep > 3
+      return docFields.every((f) => !!responses[f.id])
     }
-    if (step === 4) return true
+    if (step === 4) return currentStep > 4
     if (step === 5) {
       return !!(clientInfo.first_name && clientInfo.last_name && clientInfo.email)
     }
@@ -269,8 +278,32 @@ export default function FormPage({ project, sections, fields, publicId, initialC
     <div className="flex min-h-screen">
       {/* Sidebar */}
       <aside className="w-64 bg-gray-900 flex flex-col min-h-screen sticky top-0 h-screen">
+        {/* Freelancer branding */}
+        {(freelancer?.logo_url || freelancer?.avatar_url || freelancer?.name || freelancer?.company_name) && (
+          <div className="px-6 pt-6 pb-4 border-b border-white/10 flex items-center gap-3">
+            {(freelancer.logo_url ?? freelancer.avatar_url) ? (
+              <img
+                src={(freelancer.logo_url ?? freelancer.avatar_url)!}
+                alt={freelancer.company_name ?? freelancer.name ?? ''}
+                className="h-9 w-9 rounded-lg object-cover bg-white/10 shrink-0"
+              />
+            ) : (
+              <div className="h-9 w-9 rounded-lg bg-white/10 flex items-center justify-center text-white font-bold text-sm shrink-0">
+                {(freelancer.company_name ?? freelancer.name ?? '?').charAt(0).toUpperCase()}
+              </div>
+            )}
+            <div className="min-w-0">
+              <p className="text-white text-sm font-semibold truncate">
+                {freelancer.company_name ?? freelancer.name}
+              </p>
+              {freelancer.company_name && freelancer.name && (
+                <p className="text-gray-400 text-xs truncate">{freelancer.name}</p>
+              )}
+            </div>
+          </div>
+        )}
         {/* Top */}
-        <div className="px-6 pt-8 pb-6 border-b border-white/10">
+        <div className="px-6 pt-6 pb-5 border-b border-white/10">
           <p className="text-white font-bold text-base leading-tight">{project.name}</p>
           <p className="text-gray-400 text-sm mt-1">Onboarding</p>
         </div>
@@ -457,7 +490,7 @@ function StepWelcome({ projectName, settings }: { projectName: string; settings:
             Partagez vos fichiers, logo et éléments visuels
           </p>
         </div>
-        <div className="rounded-xl bg-orange-50 p-5">
+        <div className="rounded-xl bg-sky-50 p-5">
           <div className="text-2xl mb-2">🔐</div>
           <p className="font-semibold text-gray-800 text-sm">Accès & informations</p>
           <p className="text-xs text-gray-500 mt-1">
@@ -838,7 +871,7 @@ function SuccessScreen({ portalInvited: _portalInvited }: { portalInvited: boole
         <Link
           href="/client/signup"
           className={buttonVariants({ size: 'lg' }) + ' w-full justify-center text-base font-semibold'}
-          style={{ backgroundColor: 'oklch(0.611 0.196 26.9)', color: '#fff', borderColor: 'transparent' }}
+          style={{ backgroundColor: 'oklch(0.534 0.107 251)', color: '#fff', borderColor: 'transparent' }}
         >
           Créer mon espace client →
         </Link>

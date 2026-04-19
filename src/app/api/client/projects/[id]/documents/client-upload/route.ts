@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createNotification } from '@/lib/notify'
 import { z } from 'zod'
 
 const schema = z.object({
@@ -25,7 +26,7 @@ export async function POST(
 
     const { data: clientRecord } = await admin
       .from('clients')
-      .select('id')
+      .select('id, name')
       .eq('user_id', user.id)
       .single()
 
@@ -33,7 +34,7 @@ export async function POST(
 
     const { data: project } = await admin
       .from('projects')
-      .select('id')
+      .select('id, user_id, name')
       .eq('id', id)
       .eq('client_id', clientRecord.id)
       .single()
@@ -67,6 +68,16 @@ export async function POST(
     if (error || !doc) {
       return NextResponse.json({ error: 'Erreur lors de l\'enregistrement' }, { status: 500 })
     }
+
+    try {
+      await createNotification({
+        userId: project.user_id,
+        type: 'document_uploaded',
+        title: `Document déposé — ${project.name}`,
+        body: `${clientRecord.name} a déposé « ${parsed.data.name} » en attente de revue`,
+        projectId: id,
+      })
+    } catch { /* notification non bloquante */ }
 
     return NextResponse.json({ data: doc })
   } catch {

@@ -57,7 +57,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="fr">
-      <body className={`${inter.className} ${dmSans.variable} ${instrumentSerif.variable}`}>
+      <body className={`${inter.className} ${dmSans.variable} ${instrumentSerif.variable}`} suppressHydrationWarning>
         {children}
         <Toaster />
       </body>

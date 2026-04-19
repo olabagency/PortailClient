@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createNotification } from '@/lib/notify'
 import { z } from 'zod'
 
 const schema = z.object({
@@ -27,7 +28,7 @@ export async function POST(
     // Vérifier accès : le client doit être lié à ce projet
     const { data: clientRecord } = await admin
       .from('clients')
-      .select('id')
+      .select('id, name')
       .eq('user_id', user.id)
       .single()
 
@@ -35,7 +36,7 @@ export async function POST(
 
     const { data: project } = await admin
       .from('projects')
-      .select('id')
+      .select('id, user_id, name')
       .eq('id', id)
       .eq('client_id', clientRecord.id)
       .single()
@@ -78,6 +79,22 @@ export async function POST(
     if (insertError || !newFeedback) {
       return NextResponse.json({ error: 'Erreur lors de la création du feedback' }, { status: 500 })
     }
+
+    const typeLabel = parsed.data.type === 'modification_request'
+      ? 'Demande de modification'
+      : parsed.data.type === 'question'
+      ? 'Question'
+      : 'Retour'
+
+    try {
+      await createNotification({
+        userId: project.user_id,
+        type: 'feedback_received',
+        title: `${typeLabel} — ${project.name}`,
+        body: `${clientRecord.name} a soumis : « ${parsed.data.title} »`,
+        projectId: id,
+      })
+    } catch { /* notification non bloquante */ }
 
     return NextResponse.json({ data: newFeedback })
   } catch {

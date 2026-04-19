@@ -193,14 +193,14 @@ function LoginForm() {
 
 export default function ClientLoginPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-orange-50/20 to-slate-100 px-4 py-8">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-sky-50/20 to-slate-100 px-4 py-8">
       <div className="w-full max-w-sm">
 
         {/* Logo + title above card */}
         <div className="text-center mb-8">
           <div
             className="inline-flex items-center justify-center h-14 w-14 rounded-2xl mb-4 shadow-md"
-            style={{ background: 'linear-gradient(135deg, #E8553A, #c9402a)' }}
+            style={{ background: 'linear-gradient(135deg, #386FA4, #2d5e8e)' }}
           >
             <span className="text-white font-bold text-xl">{APP_CONFIG.name[0]}</span>
           </div>

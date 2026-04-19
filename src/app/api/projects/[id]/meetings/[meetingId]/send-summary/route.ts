@@ -69,7 +69,7 @@ export async function POST(
       subject: `Compte-rendu : ${meeting.title} — ${formattedDate}`,
       html: `
         <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">
-          <h2 style="color: #E8553A;">Compte-rendu de réunion</h2>
+          <h2 style="color: #386FA4;">Compte-rendu de réunion</h2>
           <p><strong>${meeting.title}</strong></p>
           <p style="color: #666;">${formattedDate} · ${meeting.duration_min} min</p>
           <hr style="border: none; border-top: 1px solid #eee; margin: 16px 0;" />

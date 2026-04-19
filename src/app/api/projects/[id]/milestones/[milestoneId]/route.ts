@@ -12,12 +12,19 @@ const milestoneUpdateSchema = z.object({
   start_date: z.string().optional().nullable(),
   order_index: z.number().int().min(0).optional(),
   visible_to_client: z.boolean().optional(),
-  reference_type: z.enum(['deliverable', 'document', 'onboarding']).optional().nullable(),
+  reference_type: z.enum(['deliverable', 'document', 'onboarding', 'meeting']).optional().nullable(),
   reference_id: z.string().max(200).optional().nullable(),
   priority: z.enum(['normal', 'high', 'urgent']).optional(),
   tags: z.array(z.string().max(50)).optional(),
   assigned_to: z.string().max(100).optional().nullable(),
   completion_note: z.string().max(500).optional().nullable(),
+  responsible: z.enum(['freelancer', 'client']).optional(),
+  subtasks: z.array(z.object({
+    id: z.string(),
+    title: z.string().max(200),
+    completed: z.boolean(),
+  })).optional(),
+  meeting_url: z.string().url().optional().nullable(),
 })
 
 // PUT /api/projects/[id]/milestones/[milestoneId]

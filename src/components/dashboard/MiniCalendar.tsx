@@ -4,7 +4,7 @@ import { useState } from 'react'
 import {
   startOfMonth, endOfMonth, startOfWeek, endOfWeek,
   eachDayOfInterval, isSameMonth, isToday,
-  addMonths, subMonths, format,
+  addMonths, subMonths, format, parseISO,
 } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
@@ -17,7 +17,8 @@ import Link from 'next/link'
 export interface CalendarEvent {
   id: string
   title: string
-  date: string             // YYYY-MM-DD
+  date: string             // YYYY-MM-DD (end date / main date)
+  range_start?: string     // YYYY-MM-DD — if set, event spans range_start → date
   type: 'milestone' | 'meeting' | 'onboarding'
   status?: 'pending' | 'in_progress' | 'completed' | 'validated'
   project_id: string
@@ -90,13 +91,31 @@ export function MiniCalendar({ events, milestones, fullViewHref }: MiniCalendarP
     project_color: m.project_color,
   }))
 
-  // Index events by date string (YYYY-MM-DD)
+  // Index events by date string (YYYY-MM-DD), expanding range events across all days
   const byDate: Record<string, CalendarEvent[]> = {}
   for (const e of normalizedEvents) {
     if (!e.date) continue
-    const key = e.date.slice(0, 10)
-    if (!byDate[key]) byDate[key] = []
-    byDate[key].push(e)
+
+    if (e.range_start) {
+      try {
+        const rangeStart = parseISO(e.range_start)
+        const rangeEnd = parseISO(e.date.slice(0, 10))
+        const rangeDays = eachDayOfInterval({ start: rangeStart, end: rangeEnd })
+        for (const d of rangeDays) {
+          const key = format(d, 'yyyy-MM-dd')
+          if (!byDate[key]) byDate[key] = []
+          byDate[key].push(e)
+        }
+      } catch {
+        const key = e.date.slice(0, 10)
+        if (!byDate[key]) byDate[key] = []
+        byDate[key].push(e)
+      }
+    } else {
+      const key = e.date.slice(0, 10)
+      if (!byDate[key]) byDate[key] = []
+      byDate[key].push(e)
+    }
   }
 
   const weekDays = ['L', 'M', 'M', 'J', 'V', 'S', 'D']

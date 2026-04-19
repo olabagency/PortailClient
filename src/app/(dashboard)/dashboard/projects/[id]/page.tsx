@@ -16,6 +16,7 @@ interface Project {
     company: string | null
     email: string
     website?: string | null
+    user_id?: string | null
   } | null
   created_at: string
 }
@@ -28,7 +29,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
 
   const { data: project, error } = await supabase
     .from('projects')
-    .select('*, clients(id, name, company, email, website)')
+    .select('*, clients(id, name, company, email, website, user_id)')
     .eq('id', id)
     .eq('user_id', user.id)
     .single()

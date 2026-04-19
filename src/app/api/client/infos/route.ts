@@ -18,6 +18,27 @@ const schema = z.object({
   project_id: z.string().uuid().optional().nullable(),
 })
 
+// GET /api/client/infos — retourne les infos actuelles du client
+export async function GET() {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+
+    const admin = createAdminClient()
+    const { data: client } = await admin
+      .from('clients')
+      .select('name, email, phone, company, address, vat_number')
+      .eq('user_id', user.id)
+      .single()
+
+    if (!client) return NextResponse.json({ error: 'Client introuvable' }, { status: 404 })
+    return NextResponse.json({ data: client })
+  } catch {
+    return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
+  }
+}
+
 // POST /api/client/infos
 export async function POST(request: NextRequest) {
   try {

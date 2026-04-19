@@ -176,7 +176,7 @@ export default function ProjectCalendarPage({ params }: { params: Promise<{ id: 
   }
 
   const weekDayLabels = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
-  const projectColor = project?.color ?? '#E8553A'
+  const projectColor = project?.color ?? '#386FA4'
   const totalEvents = milestones.length + meetings.length
 
   // ---------------------------------------------------------------------------
@@ -698,14 +698,14 @@ export default function ProjectCalendarPage({ params }: { params: Promise<{ id: 
               {/* Demande de retour */}
               <button
                 onClick={() => router.push(`/dashboard/projects/${id}/deliverables?tab=retours`)}
-                className="flex items-center gap-4 rounded-xl border-2 border-orange-200 bg-orange-50 hover:bg-orange-100 hover:border-orange-300 transition-all p-4 text-left group"
+                className="flex items-center gap-4 rounded-xl border-2 border-primary/20 bg-primary/5 hover:bg-primary/10 hover:border-primary/40 transition-all p-4 text-left group"
               >
-                <div className="h-10 w-10 rounded-lg bg-orange-500 flex items-center justify-center shrink-0 group-hover:bg-orange-600 transition-colors">
+                <div className="h-10 w-10 rounded-lg bg-primary flex items-center justify-center shrink-0 group-hover:bg-primary/90 transition-colors">
                   <MessageSquare className="h-5 w-5 text-white" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-orange-900">Demande de retour</p>
-                  <p className="text-xs text-orange-600 mt-0.5">Demander un feedback ou une validation</p>
+                  <p className="text-sm font-semibold text-foreground">Demande de retour</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Demander un feedback ou une validation</p>
                 </div>
               </button>
             </div>

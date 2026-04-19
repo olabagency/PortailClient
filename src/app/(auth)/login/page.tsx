@@ -119,7 +119,7 @@ export default function LoginPage() {
                 </Label>
                 <Link
                   href="/forgot-password"
-                  className="text-xs text-[#E8553A] hover:underline"
+                  className="text-xs text-[#386FA4] hover:underline"
                 >
                   Mot de passe oublié ?
                 </Link>
@@ -155,7 +155,7 @@ export default function LoginPage() {
 
             <Button
               type="submit"
-              className="w-full h-10 bg-[#E8553A] hover:bg-[#d44a30] text-white font-medium"
+              className="w-full h-10 bg-[#386FA4] hover:bg-[#2d5e8e] text-white font-medium"
               disabled={loading || googleLoading}
             >
               {loading ? 'Connexion...' : 'Se connecter'}
@@ -166,7 +166,7 @@ export default function LoginPage() {
           <div className="mt-4 space-y-2 text-center">
             <p className="text-sm text-gray-500">
               Pas de compte ?{' '}
-              <Link href="/signup" className="text-[#E8553A] hover:underline font-medium">
+              <Link href="/signup" className="text-[#386FA4] hover:underline font-medium">
                 S'inscrire gratuitement →
               </Link>
             </p>
