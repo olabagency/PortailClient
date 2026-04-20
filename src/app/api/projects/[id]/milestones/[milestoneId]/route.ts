@@ -24,7 +24,7 @@ const milestoneUpdateSchema = z.object({
     title: z.string().max(200),
     completed: z.boolean(),
   })).optional(),
-  meeting_url: z.string().url().optional().nullable(),
+  meeting_url: z.union([z.string().url(), z.literal('')]).optional().nullable().transform(v => v || null),
 })
 
 // PUT /api/projects/[id]/milestones/[milestoneId]
