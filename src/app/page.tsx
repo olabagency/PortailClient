@@ -80,86 +80,64 @@ export default function LandingPage() {
         }
 
         /* HERO */
+        @keyframes lp-pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
         .lp-hero {
-          padding: 140px 0 80px; text-align: center;
+          padding: 160px 0 110px; text-align: center;
+          background: linear-gradient(155deg, #0d2c40 0%, #133C55 30%, #1e4f75 62%, #386FA4 100%);
+          position: relative; overflow: hidden;
+        }
+        .lp-hero::before {
+          content:''; position:absolute; top:-20%; right:-10%; width:600px; height:600px; border-radius:50%;
+          background: radial-gradient(circle, rgba(89,165,216,0.18) 0%, transparent 70%); pointer-events:none;
+        }
+        .lp-hero::after {
+          content:''; position:absolute; bottom:-30%; left:-10%; width:500px; height:500px; border-radius:50%;
+          background: radial-gradient(circle, rgba(145,229,246,0.1) 0%, transparent 70%); pointer-events:none;
         }
         .lp-badge {
           display: inline-flex; align-items: center; gap: 8px;
-          background: #EBF4FB; color: #386FA4;
-          padding: 6px 16px; border-radius: 100px; font-size: 13px; font-weight: 500; margin-bottom: 32px;
+          background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
+          padding: 6px 16px; border-radius: 100px; font-size: 13px; font-weight: 500;
+          margin-bottom: 32px; color: rgba(255,255,255,0.9); backdrop-filter: blur(8px);
         }
-        .lp-badge::before {
-          content: ''; width: 6px; height: 6px; background: #386FA4; border-radius: 50%;
-          animation: lp-pulse 2s infinite;
-        }
-        @keyframes lp-pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+        .lp-badge-dot { width:6px; height:6px; border-radius:50%; background:#84D2F6; display:inline-block; animation: lp-pulse 2s infinite; }
         .lp-h1 {
           font-family: var(--font-instrument-serif, Georgia, serif);
-          font-size: clamp(40px, 6vw, 72px); line-height: 1.05;
-          letter-spacing: -2px; max-width: 820px; margin: 0 auto 24px; font-weight: 400;
+          font-size: clamp(40px, 6vw, 74px); line-height: 1.05;
+          letter-spacing: -2px; max-width: 860px; margin: 0 auto 24px; font-weight: 400; color: white;
         }
-        .lp-h1 em { color: #386FA4; font-style: italic; }
+        .lp-h1 em { color: #84D2F6; font-style: italic; }
         .lp-hero-sub {
-          font-size: 18px; color: #6B6B6B; max-width: 600px; margin: 0 auto 16px; line-height: 1.7;
+          font-size: 18px; color: rgba(255,255,255,0.7); max-width: 580px; margin: 0 auto 36px; line-height: 1.7;
         }
-        .lp-tools {
+        .lp-hero-pills {
           display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-bottom: 40px;
         }
-        .lp-tools span {
-          font-size: 12px; padding: 4px 12px; border-radius: 100px;
-          background: #F5F3EE; color: #6B6B6B; text-decoration: line-through; opacity: 0.7;
+        .lp-hero-pills span {
+          font-size: 12px; padding: 5px 14px; border-radius: 100px;
+          background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.15);
+          color: rgba(255,255,255,0.8); backdrop-filter: blur(4px);
         }
-        .lp-hero-cta {
-          display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 8px;
-        }
+        .lp-hero-cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 24px; }
         .lp-btn-hero {
-          font-size: 15px; font-weight: 600; font-family: var(--font-dm-sans, sans-serif);
-          color: white; text-decoration: none; padding: 14px 32px;
-          border-radius: 100px; background: #386FA4; transition: all 0.2s; white-space: nowrap;
+          font-size: 16px; font-weight: 700; font-family: var(--font-dm-sans, sans-serif);
+          color: #133C55; text-decoration: none; padding: 16px 36px;
+          border-radius: 100px; background: white; transition: all 0.2s; white-space: nowrap;
+          box-shadow: 0 4px 24px rgba(0,0,0,0.25);
         }
-        .lp-btn-hero:hover { background: #2d5e8e; transform: translateY(-1px); }
+        .lp-btn-hero:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
         .lp-btn-hero-outline {
           font-size: 15px; font-weight: 500; font-family: var(--font-dm-sans, sans-serif);
-          color: #1A1A1A; text-decoration: none; padding: 13px 32px;
-          border-radius: 100px; background: white; border: 1.5px solid #E5E2DB;
-          transition: all 0.2s; white-space: nowrap;
+          color: rgba(255,255,255,0.85); text-decoration: none; padding: 15px 28px;
+          border-radius: 100px; border: 1.5px solid rgba(255,255,255,0.25); transition: all 0.2s; white-space: nowrap;
         }
-        .lp-btn-hero-outline:hover { border-color: #1A1A1A; }
-        .lp-hero-note {
-          text-align: center; margin-top: 16px; font-size: 13px; color: #999;
-        }
-
-        /* MOCK UI */
-        .lp-hero-visual {
-          margin: 60px auto 0; max-width: 940px;
-          background: #0F1115; border-radius: 20px; padding: 28px;
-          position: relative; overflow: hidden;
-        }
-        .lp-hero-visual::before {
-          content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%;
-          background: radial-gradient(ellipse at 30% 20%, rgba(56,111,164,0.1) 0%, transparent 60%);
-          pointer-events: none;
-        }
-        .mock-bar { display: flex; gap: 6px; margin-bottom: 16px; }
-        .mock-dot { width: 10px; height: 10px; border-radius: 50%; }
-        .mock-ui { display: grid; grid-template-columns: 190px 1fr; gap: 12px; min-height: 340px; }
-        .mock-sidebar { background: #1A1D24; border-radius: 8px; padding: 14px; }
-        .mock-main { background: #1A1D24; border-radius: 8px; padding: 18px; }
-        .mock-kanban { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; }
-        .mock-col-header { font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: #444; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
-        .mock-col-count { background: #2A2D34; padding: 1px 6px; border-radius: 100px; font-size: 9px; color: #666; }
-        .mock-card { background: #22252D; border-radius: 6px; padding: 9px; margin-bottom: 6px; border-left: 3px solid transparent; }
-        .mock-card-title { font-size: 10.5px; color: #CCC; margin-bottom: 3px; }
-        .mock-card-meta { font-size: 9px; color: #444; }
-        .mock-card.done { border-left-color: #4ADE80; }
-        .mock-card.progress { border-left-color: #386FA4; }
-        .mock-card.review { border-left-color: #FBBF24; }
-        .mock-card.todo { border-left-color: #555; }
+        .lp-btn-hero-outline:hover { border-color: rgba(255,255,255,0.5); color: white; }
+        .lp-hero-trust { display: flex; justify-content: center; gap: 24px; flex-wrap: wrap; }
+        .lp-hero-trust span { font-size: 12px; color: rgba(255,255,255,0.5); display: flex; align-items: center; gap: 6px; }
+        .lp-hero-trust .ck { color: #84D2F6; }
         @media(max-width: 640px) {
-          .mock-ui { grid-template-columns: 1fr; }
-          .mock-sidebar { display: none; }
-          .mock-kanban { grid-template-columns: repeat(2,1fr); }
-          .lp-hero-visual { padding: 16px; margin-top: 40px; }
+          .lp-hero { padding: 130px 0 80px; }
+          .lp-hero-trust { gap: 12px; flex-direction: column; align-items: center; }
         }
 
         /* SECTION COMMON */
@@ -394,10 +372,28 @@ export default function LandingPage() {
         }
 
         /* FOOTER */
-        .lp-footer { padding: 40px 0; border-top: 1px solid #F0EDE6; text-align: center; }
-        .lp-footer p { font-size: 13px; color: #999; }
-        .lp-footer a { color: #6B6B6B; text-decoration: none; }
-        .lp-footer a:hover { color: #1A1A1A; }
+        .lp-footer { padding: 64px 0 0; border-top: 1px solid #F0EDE6; background: #FAFAF8; }
+        .lp-footer-grid {
+          display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 48px; padding-bottom: 48px;
+        }
+        .lp-footer-brand p { font-size: 13.5px; color: #6B6B6B; line-height: 1.7; margin-top: 12px; max-width: 260px; }
+        .lp-footer-badges { display: flex; gap: 8px; margin-top: 20px; flex-wrap: wrap; }
+        .lp-footer-badge {
+          font-size: 11px; padding: 4px 10px; border-radius: 100px;
+          background: #EBF4FB; color: #386FA4; border: 1px solid #D0E6F5; font-weight: 500;
+        }
+        .lp-footer-col h4 { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: #1A1A1A; margin-bottom: 16px; }
+        .lp-footer-col a { display: block; font-size: 13.5px; color: #6B6B6B; text-decoration: none; padding: 4px 0; transition: color 0.2s; }
+        .lp-footer-col a:hover { color: #1A1A1A; }
+        .lp-footer-bottom {
+          border-top: 1px solid #F0EDE6; padding: 20px 0;
+          display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+        }
+        .lp-footer-bottom p { font-size: 12px; color: #AAA; }
+        .lp-footer-bottom a { color: #AAA; text-decoration: none; }
+        .lp-footer-bottom a:hover { color: #6B6B6B; }
+        @media(max-width: 900px) { .lp-footer-grid { grid-template-columns: 1fr 1fr; } }
+        @media(max-width: 540px) { .lp-footer-grid { grid-template-columns: 1fr; gap: 32px; } .lp-footer-bottom { flex-direction: column; text-align: center; } }
 
         /* ANIMATIONS */
         .lp-fade-up { opacity: 0; transform: translateY(24px); transition: all 0.6s cubic-bezier(0.16,1,0.3,1); }
@@ -431,112 +427,31 @@ export default function LandingPage() {
 
         {/* HERO */}
         <section className="lp-hero">
-          <div className="lp-container">
-            <div className="lp-badge">Lancement — Bêta ouverte</div>
-            <h1 className="lp-h1">Un seul espace pour gérer vos projets clients <em>de A à Z</em></h1>
+          <div className="lp-container" style={{ position: "relative", zIndex: 1 }}>
+            <div className="lp-badge">
+              <span className="lp-badge-dot" />
+              Bêta ouverte · Gratuit sans carte bancaire
+            </div>
+            <h1 className="lp-h1">
+              Fini les allers-retours par email<br />
+              avec vos clients.
+            </h1>
             <p className="lp-hero-sub">
-              Onboarding, suivi de projet, validations, rendez-vous, facturation — arrêtez de jongler entre 6 outils. Vos clients méritent un portail pro. Vous méritez de gagner du temps.
+              Un portail professionnel pour chaque client : onboarding, suivi de projet, validations, documents. Tout centralisé. Zéro email de coordination.
             </p>
-            <div className="lp-tools">
-              <span>Google Drive</span>
-              <span>WeTransfer</span>
-              <span>Notion</span>
-              <span>Excel</span>
-              <span>Calendly</span>
-              <span>Gmail</span>
+            <div className="lp-hero-pills">
+              {["Onboarding client", "Kanban projet", "Portail dédié", "Gestion de fichiers", "Réunions & Meet"].map((f) => (
+                <span key={f}>{f}</span>
+              ))}
             </div>
             <div className="lp-hero-cta">
-              <Link href="/signup" className="lp-btn-hero">Créer mon compte gratuit</Link>
+              <Link href="/signup" className="lp-btn-hero">Créer mon compte — c&apos;est gratuit</Link>
               <Link href="/login" className="lp-btn-hero-outline">Se connecter</Link>
             </div>
-            <p className="lp-hero-note">Gratuit pour démarrer · Aucune carte bancaire requise</p>
-
-            {/* Mock UI */}
-            <div className="lp-hero-visual lp-fade-up">
-              <div className="mock-bar">
-                <div className="mock-dot" style={{ background: "#FF5F57" }}></div>
-                <div className="mock-dot" style={{ background: "#FEBC2E" }}></div>
-                <div className="mock-dot" style={{ background: "#28C840" }}></div>
-              </div>
-              <div className="mock-ui">
-                <div className="mock-sidebar">
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px 14px", borderBottom: "1px solid #2A2D34", marginBottom: 10 }}>
-                    <div style={{ width: 28, height: 28, borderRadius: 6, background: "#386FA4", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "white" }}>S</div>
-                    <div>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: "#DDD" }}>Studio Martin</div>
-                      <div style={{ fontSize: 9, color: "#555" }}>Plan Pro</div>
-                    </div>
-                  </div>
-                  <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: 1, color: "#444", padding: "2px 10px 6px" }}>Navigation</div>
-                  {[
-                    { label: "Dashboard", bg: "#2A4A3A", active: false },
-                    { label: "Clients", bg: "#2A3A4A", active: false, count: "12" },
-                    { label: "Projets", bg: "#2A2D34", active: true, count: "5" },
-                    { label: "Documents", bg: "#3A2A4A", active: false },
-                    { label: "Calendrier", bg: "#4A3A2A", active: false },
-                  ].map((item) => (
-                    <div key={item.label} style={{ padding: "7px 10px", borderRadius: 6, fontSize: 11.5, color: item.active ? "#386FA4" : "#555", marginBottom: 3, display: "flex", alignItems: "center", gap: 8, background: item.active ? "rgba(56,111,164,0.12)" : "transparent" }}>
-                      <div style={{ width: 14, height: 14, borderRadius: 3, background: item.active ? "rgba(56,111,164,0.3)" : item.bg, flexShrink: 0 }}></div>
-                      {item.label}
-                      {item.count && <span style={{ marginLeft: "auto", fontSize: 9, background: item.active ? "rgba(56,111,164,0.2)" : "#2A2D34", padding: "1px 6px", borderRadius: 100, color: item.active ? "#386FA4" : "#666" }}>{item.count}</span>}
-                    </div>
-                  ))}
-                  <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: 1, color: "#444", padding: "10px 10px 6px", borderTop: "1px solid #2A2D34", marginTop: 8 }}>Projet actif</div>
-                  {["Kanban", "Fichiers", "Validations", "Messages"].map((label) => (
-                    <div key={label} style={{ padding: "7px 10px", borderRadius: 6, fontSize: 11.5, color: "#666", marginBottom: 3, display: "flex", alignItems: "center", gap: 8 }}>
-                      <div style={{ width: 14, height: 14, borderRadius: 3, background: "#2A2D34", flexShrink: 0 }}></div>
-                      {label}
-                    </div>
-                  ))}
-                </div>
-                <div className="mock-main">
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
-                    <div>
-                      <div style={{ fontSize: 10, color: "#555", marginBottom: 2 }}>Projet client</div>
-                      <div style={{ fontSize: 15, fontWeight: 600, color: "#EEE" }}>Refonte site — Studio Berger</div>
-                      <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
-                        <span style={{ fontSize: 9, padding: "2px 8px", borderRadius: 100, background: "rgba(45,138,86,0.15)", color: "#4ADE80" }}>En cours</span>
-                        <span style={{ fontSize: 9, padding: "2px 8px", borderRadius: 100, background: "#2A2D34", color: "#777" }}>Deadline : 15 avril</span>
-                        <span style={{ fontSize: 9, padding: "2px 8px", borderRadius: 100, background: "#2A2D34", color: "#777" }}>Budget : 4 500€</span>
-                      </div>
-                    </div>
-                    <div style={{ textAlign: "right" }}>
-                      <div style={{ fontSize: 22, fontWeight: 700, color: "white" }}>72%</div>
-                      <div style={{ fontSize: 9, color: "#555" }}>complété</div>
-                    </div>
-                  </div>
-                  <div style={{ background: "#2A2D34", borderRadius: 100, height: 4, marginBottom: 16, overflow: "hidden" }}>
-                    <div style={{ background: "linear-gradient(90deg,#4ADE80,#386FA4)", width: "72%", height: "100%", borderRadius: 100 }}></div>
-                  </div>
-                  <div style={{ display: "flex", gap: 0, marginBottom: 16, borderBottom: "1px solid #2A2D34" }}>
-                    {["Kanban", "Liste", "Fichiers 14", "Messages 2"].map((tab, i) => (
-                      <div key={tab} style={{ padding: "6px 14px", fontSize: 11, color: i === 0 ? "#386FA4" : "#555", borderBottom: i === 0 ? "2px solid #386FA4" : "none", marginBottom: i === 0 ? -1 : 0 }}>{tab}</div>
-                    ))}
-                  </div>
-                  <div className="mock-kanban">
-                    <div>
-                      <div className="mock-col-header"><span style={{ width: 7, height: 7, borderRadius: "50%", background: "#4ADE80", display: "inline-block" }}></span> Terminé <span className="mock-col-count">3</span></div>
-                      <div className="mock-card done"><div className="mock-card-title">Onboarding client</div><div className="mock-card-meta">15 mars ✓</div></div>
-                      <div className="mock-card done"><div className="mock-card-title">Brief validé</div><div className="mock-card-meta">18 mars ✓</div></div>
-                      <div className="mock-card done"><div className="mock-card-title">Charte graphique</div><div className="mock-card-meta">22 mars ✓</div></div>
-                    </div>
-                    <div>
-                      <div className="mock-col-header"><span style={{ width: 7, height: 7, borderRadius: "50%", background: "#386FA4", display: "inline-block" }}></span> En cours <span className="mock-col-count">2</span></div>
-                      <div className="mock-card progress"><div className="mock-card-title">Intégration home</div><div className="mock-card-meta">En cours · J-3</div></div>
-                      <div className="mock-card progress"><div className="mock-card-title">Section services</div><div className="mock-card-meta">En cours</div></div>
-                    </div>
-                    <div>
-                      <div className="mock-col-header"><span style={{ width: 7, height: 7, borderRadius: "50%", background: "#FBBF24", display: "inline-block" }}></span> En validation <span className="mock-col-count">1</span></div>
-                      <div className="mock-card review"><div className="mock-card-title">Maquette mobile</div><div className="mock-card-meta">En attente client</div></div>
-                    </div>
-                    <div>
-                      <div className="mock-col-header"><span style={{ width: 7, height: 7, borderRadius: "50%", background: "#555", display: "inline-block" }}></span> À faire <span className="mock-col-count">4</span></div>
-                      <div className="mock-card todo"><div className="mock-card-title">Page contact</div><div className="mock-card-meta">Planifié</div></div>
-                      <div className="mock-card todo"><div className="mock-card-title">SEO & meta</div><div className="mock-card-meta">Planifié</div></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+            <div className="lp-hero-trust">
+              <span><span className="ck">✓</span> Sans carte bancaire</span>
+              <span><span className="ck">✓</span> Données hébergées en France</span>
+              <span><span className="ck">✓</span> 3 minutes pour démarrer</span>
             </div>
           </div>
         </section>
@@ -872,7 +787,7 @@ export default function LandingPage() {
               <div className="lp-pricing-card featured lp-fade-up">
                 <h3>Pro</h3>
                 <div className="lp-pricing-price">
-                  <span style={{ textDecoration: "line-through", color: "#999", fontSize: 22, fontFamily: "var(--font-instrument-serif, Georgia, serif)" }}>19€</span> 9€<span>/mois</span>
+                  14€<span>/mois</span>
                 </div>
                 <div className="lp-pricing-desc" style={{ color: "#386FA4", fontWeight: 500 }}>Tarif bêta-testeur garanti à vie</div>
                 <ul className="lp-pricing-list">
@@ -881,7 +796,7 @@ export default function LandingPage() {
                 <Link href="/signup" className="lp-pricing-cta lp-pricing-cta-primary">Démarrer l'essai gratuit</Link>
               </div>
             </div>
-            <p style={{ textAlign: "center", marginTop: 24, fontSize: 13, color: "#999" }}>Le tarif bêta-testeur à 9€/mois est garanti à vie pour les premiers inscrits.</p>
+            <p style={{ textAlign: "center", marginTop: 24, fontSize: 13, color: "#999" }}>Le tarif bêta-testeur à 14€/mois est garanti à vie pour les premiers inscrits.</p>
           </div>
         </section>
 
@@ -889,16 +804,16 @@ export default function LandingPage() {
         <section className="lp-cta-section">
           <div className="lp-container">
             <div className="lp-cta-box lp-fade-up">
-              <h2>Soyez parmi les premiers à l'utiliser</h2>
-              <p>Accès gratuit + tarif fondateur à vie pour les premiers inscrits. On construit ce produit avec vous.</p>
+              <h2>Commencez maintenant, c&apos;est gratuit.</h2>
+              <p>Créez votre premier projet en 3 minutes. Aucune carte bancaire, aucune installation — juste un compte et vous êtes prêt.</p>
               <div className="lp-cta-buttons">
-                <Link href="/signup" className="lp-btn-cta-primary">Créer mon compte gratuit</Link>
-                <Link href="/login" className="lp-btn-cta-outline">J'ai déjà un compte</Link>
+                <Link href="/signup" className="lp-btn-cta-primary">Créer mon compte gratuitement</Link>
+                <Link href="/login" className="lp-btn-cta-outline">J&apos;ai déjà un compte</Link>
               </div>
               <div className="lp-cta-perks">
-                <span><span className="check">✓</span> Accès gratuit immédiat</span>
-                <span><span className="check">✓</span> Tarif fondateur garanti</span>
-                <span><span className="check">✓</span> Vos retours façonnent le produit</span>
+                <span><span className="check">✓</span> Gratuit sans limite de durée</span>
+                <span><span className="check">✓</span> Sans carte bancaire</span>
+                <span><span className="check">✓</span> Données hébergées en France</span>
               </div>
             </div>
           </div>
@@ -907,21 +822,52 @@ export default function LandingPage() {
         {/* FOOTER */}
         <footer className="lp-footer">
           <div className="lp-container">
-            <p style={{ marginBottom: 8 }}>
-              <strong>{APP_CONFIG.name}</strong> — Conçu en France pour les freelances et agences qui veulent travailler mieux.
-            </p>
-            <p style={{ marginBottom: 12 }}>
-              100% des données hébergées en France · Souveraineté numérique garantie · Conforme RGPD
-            </p>
-            <p>
-              <Link href="/mentions-legales">Mentions légales</Link>
-              {" · "}
-              <Link href="/confidentialite">Politique de confidentialité</Link>
-              {" · "}
-              <Link href="/login">Connexion</Link>
-              {" · "}
-              <Link href="/signup">Inscription</Link>
-            </p>
+            <div className="lp-footer-grid">
+              {/* Brand */}
+              <div className="lp-footer-brand">
+                <a href="/" className="lp-logo" style={{ display: "block", marginBottom: 0 }}>{APP_CONFIG.name}</a>
+                <p>La plateforme de gestion de projet client tout-en-un pour les freelances et agences. Conçue en France.</p>
+                <div className="lp-footer-badges">
+                  <span className="lp-footer-badge">🇫🇷 Hébergé en France</span>
+                  <span className="lp-footer-badge">✓ RGPD</span>
+                  <span className="lp-footer-badge">🔒 Chiffré</span>
+                </div>
+              </div>
+              {/* Produit */}
+              <div className="lp-footer-col">
+                <h4>Produit</h4>
+                <a href="#features">Fonctionnalités</a>
+                <a href="#pricing">Tarifs</a>
+                <a href="#roadmap">Roadmap</a>
+                <a href="#gains">Avantages</a>
+                <a href="#features">Comment ça marche</a>
+              </div>
+              {/* Compte */}
+              <div className="lp-footer-col">
+                <h4>Compte</h4>
+                <Link href="/signup">Créer un compte</Link>
+                <Link href="/login">Se connecter</Link>
+                <Link href="/forgot-password">Mot de passe oublié</Link>
+                <Link href="/signup">Plan Gratuit</Link>
+                <Link href="/signup">Plan Pro — 14€/mois</Link>
+              </div>
+              {/* Légal */}
+              <div className="lp-footer-col">
+                <h4>Légal & Contact</h4>
+                <Link href="/mentions-legales">Mentions légales</Link>
+                <Link href="/confidentialite">Politique de confidentialité</Link>
+                <Link href="/confidentialite">Politique de cookies</Link>
+                <a href="mailto:hello@clientflow.fr">hello@clientflow.fr</a>
+              </div>
+            </div>
+            <div className="lp-footer-bottom">
+              <p>© {new Date().getFullYear()} {APP_CONFIG.name}. Tous droits réservés. Conçu et hébergé en France 🇫🇷</p>
+              <p>
+                <Link href="/mentions-legales">Mentions légales</Link>
+                {" · "}
+                <Link href="/confidentialite">Confidentialité</Link>
+              </p>
+            </div>
           </div>
         </footer>
       </div>

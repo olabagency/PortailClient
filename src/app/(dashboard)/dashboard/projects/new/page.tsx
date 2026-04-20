@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge'
 import {
   ArrowLeft, Check, Plus, ClipboardList, Users,
   GitBranch, ChevronRight, CheckCircle2, Clock, Circle, Sparkles,
+  Lock, Crown, FolderKanban,
 } from 'lucide-react'
 import { ClientModal } from '@/components/dashboard/ClientModal'
 import { cn } from '@/lib/utils'
@@ -602,11 +603,21 @@ function NewProjectForm() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Load clients on mount
+  // Plan gate
+  const [planGate, setPlanGate] = useState<{
+    loading: boolean; allowed: boolean; planName: string; count: number; limit: number | null
+  }>({ loading: true, allowed: true, planName: 'Gratuit', count: 0, limit: null })
+
+  // Load clients + check plan limit on mount
   useEffect(() => {
     fetch('/api/clients')
       .then(r => r.json())
       .then(({ data }) => setClients(data ?? []))
+
+    fetch('/api/projects/check')
+      .then(r => r.json())
+      .then(d => setPlanGate({ loading: false, allowed: d.allowed ?? true, planName: d.planName ?? 'Gratuit', count: d.count ?? 0, limit: d.limit ?? null }))
+      .catch(() => setPlanGate(g => ({ ...g, loading: false })))
   }, [])
 
   // Load onboarding templates when reaching step 3
@@ -703,6 +714,82 @@ function NewProjectForm() {
     'Template onboarding (optionnel)',
     'Template timeline (optionnel)',
   ]
+
+  // ── Gate : chargement ──────────────────────────────────────────────────────
+  if (planGate.loading) {
+    return (
+      <div className="min-h-screen bg-gray-50/50 flex items-center justify-center">
+        <div className="h-8 w-8 rounded-full border-2 border-[#386FA4] border-t-transparent animate-spin" />
+      </div>
+    )
+  }
+
+  // ── Gate : limite atteinte ──────────────────────────────────────────────────
+  if (!planGate.allowed) {
+    return (
+      <div className="min-h-screen bg-gray-50/50 flex items-center justify-center px-4">
+        <div className="max-w-md w-full">
+          <div className="bg-white rounded-2xl border shadow-sm overflow-hidden">
+            {/* Bandeau coloré */}
+            <div className="h-2 w-full bg-gradient-to-r from-[#133C55] to-[#386FA4]" />
+            <div className="p-8 text-center space-y-4">
+              <div className="mx-auto h-16 w-16 rounded-2xl bg-[#EBF4FB] flex items-center justify-center">
+                <Lock className="h-7 w-7 text-[#386FA4]" />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold text-gray-900">Limite du forfait Gratuit atteinte</h1>
+                <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+                  Le forfait <strong>Gratuit</strong> permet de gérer{' '}
+                  <strong>1 projet à la fois</strong>. Vous avez actuellement{' '}
+                  <strong>{planGate.count} projet{planGate.count > 1 ? 's' : ''}</strong> actif{planGate.count > 1 ? 's' : ''}.
+                </p>
+              </div>
+
+              {/* Différence plans */}
+              <div className="rounded-xl border bg-gray-50 p-4 text-left space-y-2.5 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground flex items-center gap-2">
+                    <FolderKanban className="h-4 w-4" /> Projets actifs
+                  </span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-gray-400 line-through text-xs">1 max</span>
+                    <span className="text-[#386FA4] font-semibold">Illimité</span>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground flex items-center gap-2">
+                    <Crown className="h-4 w-4" /> Plan Pro
+                  </span>
+                  <span className="font-semibold text-[#133C55]">14€ / mois</span>
+                </div>
+              </div>
+
+              <div className="space-y-2 pt-1">
+                <a
+                  href="/dashboard/settings/billing"
+                  className="flex items-center justify-center gap-2 w-full bg-[#386FA4] hover:bg-[#133C55] text-white font-semibold text-sm px-5 py-3 rounded-xl transition-colors"
+                >
+                  <Crown className="h-4 w-4" />
+                  Passer au Plan Pro
+                </a>
+                <button
+                  type="button"
+                  onClick={() => router.push('/dashboard/projects')}
+                  className="flex items-center justify-center gap-2 w-full border border-gray-200 hover:bg-gray-50 text-gray-700 text-sm px-5 py-2.5 rounded-xl transition-colors"
+                >
+                  <FolderKanban className="h-4 w-4" />
+                  Gérer mes projets existants
+                </button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Vous pouvez aussi archiver ou supprimer un projet existant pour en créer un nouveau.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gray-50/50">

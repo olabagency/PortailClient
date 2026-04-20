@@ -8,7 +8,7 @@ export const APP_CONFIG = {
   plans: {
     free: {
       name: "Gratuit",
-      maxProjects: 3,
+      maxProjects: 1,
       maxClientsPerProject: 1,
       maxFormFields: 10,
       maxStorageGB: 1,

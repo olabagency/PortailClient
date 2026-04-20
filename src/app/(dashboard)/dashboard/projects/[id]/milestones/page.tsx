@@ -1034,6 +1034,13 @@ export default function MilestonesPage({
   const [editingMilestone, setEditingMilestone] = useState<Milestone | null>(null)
   const [form, setForm] = useState<MilestoneFormData>(defaultForm())
 
+  // New meeting inline creation state
+  const [meetingMode, setMeetingMode] = useState<'existing' | 'new'>('existing')
+  const [newMeetingTitle, setNewMeetingTitle] = useState('')
+  const [newMeetingDate, setNewMeetingDate] = useState('')
+  const [newMeetingTime, setNewMeetingTime] = useState('')
+  const [newMeetingLink, setNewMeetingLink] = useState('')
+
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -1318,9 +1325,18 @@ export default function MilestonesPage({
   // Dialog helpers
   // -------------------------------------------------------------------------
 
+  function resetNewMeetingForm() {
+    setMeetingMode('existing')
+    setNewMeetingTitle('')
+    setNewMeetingDate('')
+    setNewMeetingTime('')
+    setNewMeetingLink('')
+  }
+
   function openAddDialog() {
     setEditingMilestone(null)
     setForm(defaultForm())
+    resetNewMeetingForm()
     setDialogOpen(true)
   }
 
@@ -1341,6 +1357,7 @@ export default function MilestonesPage({
       subtasks: m.subtasks ?? [],
       meeting_url: m.meeting_url ?? '',
     })
+    resetNewMeetingForm()
     setDialogOpen(true)
   }
 
@@ -1348,6 +1365,7 @@ export default function MilestonesPage({
     setDialogOpen(false)
     setEditingMilestone(null)
     setForm(defaultForm())
+    resetNewMeetingForm()
   }
 
   // -------------------------------------------------------------------------
@@ -1361,6 +1379,38 @@ export default function MilestonesPage({
     }
     setSaving(true)
     try {
+      let resolvedReferenceId = (form.reference_type && form.reference_type !== 'onboarding')
+        ? (form.reference_id.trim() || null)
+        : null
+      let resolvedMeetingUrl = form.meeting_url.trim() || null
+
+      // Si l'utilisateur crée une nouvelle réunion inline
+      if (form.reference_type === 'meeting' && meetingMode === 'new') {
+        if (!newMeetingTitle.trim() || !newMeetingDate || !newMeetingTime) {
+          toast.error('Titre, date et heure de la réunion sont requis')
+          setSaving(false)
+          return
+        }
+        const scheduledAt = new Date(`${newMeetingDate}T${newMeetingTime}`).toISOString()
+        const meetingRes = await fetch(`/api/projects/${projectId}/meetings`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: newMeetingTitle.trim(),
+            scheduled_at: scheduledAt,
+            meeting_link: newMeetingLink.trim() || null,
+          }),
+        })
+        if (!meetingRes.ok) {
+          const errJson = await meetingRes.json().catch(() => ({})) as { error?: string }
+          throw new Error(errJson.error ?? 'Erreur lors de la création de la réunion')
+        }
+        const meetingJson = (await meetingRes.json()) as { data: { id: string; title: string; scheduled_at: string; meeting_link: string | null } }
+        resolvedReferenceId = meetingJson.data.id
+        resolvedMeetingUrl = meetingJson.data.meeting_link ?? resolvedMeetingUrl
+        setMeetings(prev => [...prev, meetingJson.data])
+      }
+
       const payload = {
         title: form.title.trim(),
         description: form.description.trim() || null,
@@ -1369,14 +1419,12 @@ export default function MilestonesPage({
         start_date: form.start_date || null,
         visible_to_client: form.visible_to_client,
         reference_type: form.reference_type || null,
-        reference_id: (form.reference_type && form.reference_type !== 'onboarding')
-          ? (form.reference_id.trim() || null)
-          : null,
+        reference_id: resolvedReferenceId,
         priority: form.priority,
         completion_note: form.completion_note.trim() || null,
         responsible: form.responsible,
         subtasks: form.subtasks,
-        meeting_url: form.meeting_url.trim() || null,
+        meeting_url: resolvedMeetingUrl,
       }
 
       if (editingMilestone) {
@@ -1384,7 +1432,10 @@ export default function MilestonesPage({
           `/api/projects/${projectId}/milestones/${editingMilestone.id}`,
           { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) },
         )
-        if (!res.ok) throw new Error()
+        if (!res.ok) {
+          const errJson = await res.json().catch(() => ({})) as { error?: string }
+          throw new Error(errJson.error ?? 'Erreur serveur')
+        }
         const json = (await res.json()) as { data: Milestone }
         setMilestones(prev =>
           prev.map(m => m.id === editingMilestone.id ? json.data : m),
@@ -1396,15 +1447,18 @@ export default function MilestonesPage({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         })
-        if (!res.ok) throw new Error()
+        if (!res.ok) {
+          const errJson = await res.json().catch(() => ({})) as { error?: string }
+          throw new Error(errJson.error ?? 'Erreur serveur')
+        }
         const json = (await res.json()) as { data: Milestone }
         setMilestones(prev => [...prev, json.data])
         toast.success('Étape ajoutée')
       }
 
       closeDialog()
-    } catch {
-      toast.error('Erreur lors de la sauvegarde')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erreur lors de la sauvegarde')
     } finally {
       setSaving(false)
     }
@@ -2007,12 +2061,15 @@ export default function MilestonesPage({
                 <Label htmlFor="ms-ref-type">Type</Label>
                 <Select
                   value={form.reference_type}
-                  onValueChange={(v: string) => setForm(f => ({
-                    ...f,
-                    reference_type: v ?? '',
-                    reference_id: '',
-                    meeting_url: v !== 'meeting' && f.reference_type === 'meeting' ? '' : f.meeting_url,
-                  }))}
+                  onValueChange={(v: string) => {
+                    setForm(f => ({
+                      ...f,
+                      reference_type: v ?? '',
+                      reference_id: '',
+                      meeting_url: v !== 'meeting' && f.reference_type === 'meeting' ? '' : f.meeting_url,
+                    }))
+                    resetNewMeetingForm()
+                  }}
                 >
                   <SelectTrigger id="ms-ref-type"><SelectValue placeholder="Aucune" /></SelectTrigger>
                   <SelectContent>
@@ -2026,42 +2083,124 @@ export default function MilestonesPage({
               </div>
 
               {form.reference_type === 'meeting' && (
-                <div className="space-y-1.5">
-                  <Label>Réunion associée</Label>
-                  {meetings.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">Aucune réunion sur ce projet.</p>
+                <div className="space-y-3">
+                  {/* Toggle existing / new */}
+                  <div className="flex gap-1.5 rounded-lg border bg-muted/30 p-1">
+                    <button
+                      type="button"
+                      onClick={() => setMeetingMode('existing')}
+                      className={cn(
+                        'flex-1 text-xs font-medium py-1.5 rounded-md transition-all',
+                        meetingMode === 'existing'
+                          ? 'bg-background text-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground',
+                      )}
+                    >
+                      Réunion existante
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMeetingMode('new')}
+                      className={cn(
+                        'flex-1 text-xs font-medium py-1.5 rounded-md transition-all',
+                        meetingMode === 'new'
+                          ? 'bg-background text-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground',
+                      )}
+                    >
+                      <Plus className="inline h-3 w-3 mr-1" />
+                      Créer une réunion
+                    </button>
+                  </div>
+
+                  {meetingMode === 'existing' ? (
+                    <div className="space-y-1.5">
+                      <Label>Réunion associée</Label>
+                      {meetings.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">
+                          Aucune réunion sur ce projet — utilisez &quot;Créer une réunion&quot; ci-dessus.
+                        </p>
+                      ) : (
+                        <div className="space-y-1.5 max-h-48 overflow-y-auto rounded-lg border bg-muted/20 p-1.5">
+                          {meetings.map(m => (
+                            <button
+                              key={m.id}
+                              type="button"
+                              onClick={() => {
+                                setForm(f => ({
+                                  ...f,
+                                  reference_id: m.id,
+                                  meeting_url: m.meeting_link ?? f.meeting_url,
+                                }))
+                              }}
+                              className={cn(
+                                'w-full flex items-start gap-2.5 rounded-md px-2.5 py-2 text-left text-sm transition-colors',
+                                form.reference_id === m.id
+                                  ? 'bg-primary/10 text-primary font-medium'
+                                  : 'hover:bg-muted',
+                              )}
+                            >
+                              <Video className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                              <div className="min-w-0">
+                                <p className="truncate font-medium">{m.title}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {format(new Date(m.scheduled_at), 'd MMM yyyy à HH:mm', { locale: fr })}
+                                </p>
+                                {m.meeting_link && (
+                                  <p className="text-[11px] text-emerald-600 mt-0.5">✓ Lien disponible — sera auto-rempli</p>
+                                )}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   ) : (
-                    <div className="space-y-1.5 max-h-48 overflow-y-auto rounded-lg border bg-muted/20 p-1.5">
-                      {meetings.map(m => (
-                        <button
-                          key={m.id}
-                          type="button"
-                          onClick={() => {
-                            setForm(f => ({
-                              ...f,
-                              reference_id: m.id,
-                              meeting_url: m.meeting_link ?? f.meeting_url,
-                            }))
-                          }}
-                          className={cn(
-                            'w-full flex items-start gap-2.5 rounded-md px-2.5 py-2 text-left text-sm transition-colors',
-                            form.reference_id === m.id
-                              ? 'bg-primary/10 text-primary font-medium'
-                              : 'hover:bg-muted',
-                          )}
-                        >
-                          <Video className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                          <div className="min-w-0">
-                            <p className="truncate font-medium">{m.title}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {format(new Date(m.scheduled_at), 'd MMM yyyy à HH:mm', { locale: fr })}
-                            </p>
-                            {m.meeting_link && (
-                              <p className="text-[11px] text-emerald-600 mt-0.5">✓ Lien disponible — sera auto-rempli</p>
-                            )}
-                          </div>
-                        </button>
-                      ))}
+                    /* Formulaire nouvelle réunion */
+                    <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
+                      <p className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                        <CalendarCheck className="h-3.5 w-3.5" />
+                        Nouvelle réunion — sera créée à la sauvegarde
+                      </p>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="nm-title">Titre <span className="text-destructive">*</span></Label>
+                        <Input
+                          id="nm-title"
+                          placeholder="Ex : Réunion de lancement"
+                          value={newMeetingTitle}
+                          onChange={e => setNewMeetingTitle(e.target.value)}
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          <Label htmlFor="nm-date">Date <span className="text-destructive">*</span></Label>
+                          <Input
+                            id="nm-date"
+                            type="date"
+                            value={newMeetingDate}
+                            onChange={e => setNewMeetingDate(e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="nm-time">Heure <span className="text-destructive">*</span></Label>
+                          <Input
+                            id="nm-time"
+                            type="time"
+                            value={newMeetingTime}
+                            onChange={e => setNewMeetingTime(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="nm-link">Lien de la réunion (optionnel)</Label>
+                        <Input
+                          id="nm-link"
+                          type="url"
+                          placeholder="https://meet.google.com/…"
+                          value={newMeetingLink}
+                          onChange={e => setNewMeetingLink(e.target.value)}
+                        />
+                      </div>
                     </div>
                   )}
                 </div>

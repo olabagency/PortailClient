@@ -44,15 +44,16 @@ export default async function DashboardPage() {
   const { data: userProjects } = await supabase.from('projects').select('id').eq('user_id', user.id)
   const projectIds = (userProjects ?? []).map((p) => p.id)
 
-  // Réunions du jour
-  const todayStart = new Date(); todayStart.setHours(0,0,0,0)
+  // Réunions du jour : de (maintenant - 1h) jusqu'à minuit
+  const now        = new Date()
+  const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000)
   const todayEnd   = new Date(); todayEnd.setHours(23,59,59,999)
   const { data: todayMeetingsRaw } = projectIds.length > 0
     ? await supabase
         .from('project_meetings')
         .select('id, title, scheduled_at, meeting_link, project_id, projects(name)')
         .in('project_id', projectIds)
-        .gte('scheduled_at', todayStart.toISOString())
+        .gte('scheduled_at', oneHourAgo.toISOString())
         .lte('scheduled_at', todayEnd.toISOString())
         .order('scheduled_at', { ascending: true })
     : { data: [] }
@@ -374,33 +375,51 @@ export default async function DashboardPage() {
           {todayMeetings.length > 0 && (
             <div>
               <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-2">
-                <CalendarCheck className="h-3.5 w-3.5 text-violet-500" />
+                <CalendarCheck className="h-3.5 w-3.5 text-[#386FA4]" />
                 Réunions du jour
               </h2>
               <div className="space-y-2">
-                {todayMeetings.map(m => (
-                  <div key={m.id} className="rounded-xl border border-violet-100 bg-violet-50 px-4 py-3 flex items-center justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-violet-900 truncate">{m.title}</p>
-                      <p className="text-xs text-violet-600 mt-0.5">
-                        {new Date(m.scheduled_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-                        {m.projects?.name ? ` · ${m.projects.name}` : ''}
-                      </p>
+                {todayMeetings.map(m => {
+                  const isLate = new Date(m.scheduled_at) < now
+                  return (
+                    <div
+                      key={m.id}
+                      className={cn(
+                        'rounded-xl border px-4 py-3 flex items-center justify-between gap-3',
+                        isLate
+                          ? 'border-red-200 bg-red-50/60'
+                          : 'border-[#59A5D8]/30 bg-[#91E5F6]/10',
+                      )}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-semibold text-[#133C55] truncate">{m.title}</p>
+                          {isLate && (
+                            <span className="shrink-0 text-[10px] font-semibold text-red-600 bg-red-100 border border-red-200 rounded-full px-2 py-0.5">
+                              En retard
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-[#386FA4] mt-0.5">
+                          {new Date(m.scheduled_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                          {m.projects?.name ? ` · ${m.projects.name}` : ''}
+                        </p>
+                      </div>
+                      {m.meeting_link && (
+                        <a
+                          href={m.meeting_link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="shrink-0 inline-flex items-center gap-1.5 bg-[#386FA4] text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-[#133C55] transition-colors"
+                        >
+                          <Video className="h-3.5 w-3.5" />
+                          Rejoindre
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      )}
                     </div>
-                    {m.meeting_link && (
-                      <a
-                        href={m.meeting_link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="shrink-0 inline-flex items-center gap-1.5 bg-violet-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-violet-700 transition-colors"
-                      >
-                        <Video className="h-3.5 w-3.5" />
-                        Rejoindre
-                        <ExternalLink className="h-3 w-3" />
-                      </a>
-                    )}
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           )}
