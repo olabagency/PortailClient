@@ -760,7 +760,7 @@ function NewProjectForm() {
                   <span className="text-muted-foreground flex items-center gap-2">
                     <Crown className="h-4 w-4" /> Plan Pro
                   </span>
-                  <span className="font-semibold text-[#133C55]">9€ / mois</span>
+                  <span className="font-semibold text-[#133C55]">14€ / mois</span>
                 </div>
               </div>
 

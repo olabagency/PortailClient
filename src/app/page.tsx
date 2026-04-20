@@ -787,7 +787,7 @@ export default function LandingPage() {
               <div className="lp-pricing-card featured lp-fade-up">
                 <h3>Pro</h3>
                 <div className="lp-pricing-price">
-                  <span style={{ textDecoration: "line-through", color: "#999", fontSize: 22, fontFamily: "var(--font-instrument-serif, Georgia, serif)" }}>19€</span> 9€<span>/mois</span>
+                  14€<span>/mois</span>
                 </div>
                 <div className="lp-pricing-desc" style={{ color: "#386FA4", fontWeight: 500 }}>Tarif bêta-testeur garanti à vie</div>
                 <ul className="lp-pricing-list">
@@ -796,7 +796,7 @@ export default function LandingPage() {
                 <Link href="/signup" className="lp-pricing-cta lp-pricing-cta-primary">Démarrer l'essai gratuit</Link>
               </div>
             </div>
-            <p style={{ textAlign: "center", marginTop: 24, fontSize: 13, color: "#999" }}>Le tarif bêta-testeur à 9€/mois est garanti à vie pour les premiers inscrits.</p>
+            <p style={{ textAlign: "center", marginTop: 24, fontSize: 13, color: "#999" }}>Le tarif bêta-testeur à 14€/mois est garanti à vie pour les premiers inscrits.</p>
           </div>
         </section>
 
@@ -849,7 +849,7 @@ export default function LandingPage() {
                 <Link href="/login">Se connecter</Link>
                 <Link href="/forgot-password">Mot de passe oublié</Link>
                 <Link href="/signup">Plan Gratuit</Link>
-                <Link href="/signup">Plan Pro — 9€/mois</Link>
+                <Link href="/signup">Plan Pro — 14€/mois</Link>
               </div>
               {/* Légal */}
               <div className="lp-footer-col">
