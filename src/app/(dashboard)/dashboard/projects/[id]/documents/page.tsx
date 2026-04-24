@@ -24,12 +24,20 @@ import {
   Eye, EyeOff, MoreHorizontal, Trash2, Pencil,
   FolderInput, Loader2, ChevronRight, Search,
   FolderPlus, CheckCircle2, LayoutGrid, LayoutList,
-  X, FolderSymlink,
+  X, FolderSymlink, GripVertical, HardDrive,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { cn } from '@/lib/utils'
+import {
+  DndContext,
+  DragEndEvent,
+  DragOverlay,
+  DragStartEvent,
+  useDraggable,
+  useDroppable,
+} from '@dnd-kit/core'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -58,10 +66,19 @@ interface Document {
   created_at: string
 }
 
+interface StorageInfo {
+  used_bytes: number
+  max_bytes: number
+  plan: string
+  plan_name: string
+  max_storage_gb: number
+}
+
 type TabFilter = 'all' | 'admin' | 'client'
 type ViewMode = 'list' | 'grid'
 
 const FOLDER_COLORS = ['#6B7280', '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899']
+const MAX_FILE_SIZE = 100 * 1024 * 1024 // 100 Mo
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -69,7 +86,8 @@ function formatBytes(bytes: number | null): string {
   if (!bytes) return '—'
   if (bytes < 1024) return `${bytes} o`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} Ko`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} Go`
 }
 
 function getFileIcon(doc: Document, size: 'sm' | 'md' | 'lg' = 'md') {
@@ -94,6 +112,7 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
   // Data
   const [folders, setFolders] = useState<Folder[]>([])
   const [documents, setDocuments] = useState<Document[]>([])
+  const [storageInfo, setStorageInfo] = useState<StorageInfo | null>(null)
 
   // UI
   const [search, setSearch] = useState('')
@@ -106,6 +125,11 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
   const [bulkMoveOpen, setBulkMoveOpen] = useState(false)
   const [bulkMoveFolderId, setBulkMoveFolderId] = useState<string>('root')
   const [savingBulkMove, setSavingBulkMove] = useState(false)
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
+  const [deletingBulk, setDeletingBulk] = useState(false)
+
+  // DnD
+  const [activeDocId, setActiveDocId] = useState<string | null>(null)
 
   // Loading
   const [loadingFolders, setLoadingFolders] = useState(true)
@@ -174,10 +198,19 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
     }
   }, [id])
 
+  const fetchStorageInfo = useCallback(async () => {
+    try {
+      const res = await fetch('/api/storage')
+      const json = await res.json()
+      if (res.ok) setStorageInfo(json.data)
+    } catch { /* silencieux */ }
+  }, [])
+
   useEffect(() => { void fetchFolders() }, [fetchFolders])
+  useEffect(() => { void fetchStorageInfo() }, [fetchStorageInfo])
   useEffect(() => {
     void fetchDocuments(currentFolderId)
-    setSelectedDocIds(new Set()) // reset selection on folder change
+    setSelectedDocIds(new Set())
   }, [fetchDocuments, currentFolderId])
 
   // ─── Computed ──────────────────────────────────────────────────────────────
@@ -193,6 +226,12 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
 
   const allSelected = filteredDocuments.length > 0 && filteredDocuments.every(d => selectedDocIds.has(d.id))
   const someSelected = selectedDocIds.size > 0
+
+  const storagePercent = storageInfo
+    ? Math.min(100, Math.round((storageInfo.used_bytes / storageInfo.max_bytes) * 100))
+    : 0
+
+  const activeDoc = activeDocId ? documents.find(d => d.id === activeDocId) ?? null : null
 
   // ─── Selection helpers ─────────────────────────────────────────────────────
 
@@ -244,12 +283,23 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
     const file = e.target.files?.[0]
     if (!file) return
     e.target.value = ''
+
+    if (file.size > MAX_FILE_SIZE) {
+      toast.error('Fichier trop lourd (max 100 Mo)')
+      return
+    }
+
     setUploading(true)
     try {
       const presignRes = await fetch(`/api/projects/${id}/documents/presign`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename: file.name, content_type: file.type, folder_id: currentFolderId }),
+        body: JSON.stringify({
+          filename: file.name,
+          content_type: file.type,
+          folder_id: currentFolderId,
+          file_size: file.size,
+        }),
       })
       const presignJson = await presignRes.json()
       if (!presignRes.ok) { toast.error(presignJson.error ?? 'Erreur presign'); return }
@@ -271,6 +321,7 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
       if (!docRes.ok) { toast.error(docJson.error ?? 'Erreur enregistrement'); return }
       setDocuments(prev => [docJson.data, ...prev])
       void fetchFolders()
+      void fetchStorageInfo()
       toast.success('Fichier ajouté')
     } catch { toast.error('Erreur inattendue') }
     finally { setUploading(false) }
@@ -354,6 +405,7 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
       setDocuments(prev => prev.filter(d => d.id !== doc.id))
       setSelectedDocIds(prev => { const n = new Set(prev); n.delete(doc.id); return n })
       void fetchFolders()
+      void fetchStorageInfo()
       toast.success('Document supprimé')
     } else toast.error('Erreur')
   }
@@ -365,6 +417,32 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
       if (currentFolderId === folder.id) setCurrentFolderId(null)
       toast.success('Dossier supprimé')
     } else toast.error('Erreur')
+  }
+
+  // ─── Bulk delete ───────────────────────────────────────────────────────────
+
+  async function handleBulkDelete() {
+    if (selectedDocIds.size === 0) return
+    setDeletingBulk(true)
+    try {
+      const results = await Promise.all(
+        Array.from(selectedDocIds).map(docId =>
+          fetch(`/api/projects/${id}/documents/${docId}`, { method: 'DELETE' })
+        )
+      )
+      const allOk = results.every(r => r.ok)
+      if (allOk) {
+        const deleted = new Set(selectedDocIds)
+        setDocuments(prev => prev.filter(d => !deleted.has(d.id)))
+        void fetchFolders()
+        void fetchStorageInfo()
+        setBulkDeleteOpen(false)
+        clearSelection()
+        toast.success(`${deleted.size} document${deleted.size > 1 ? 's' : ''} supprimé${deleted.size > 1 ? 's' : ''}`)
+      } else {
+        toast.error('Certaines suppressions ont échoué')
+      }
+    } finally { setDeletingBulk(false) }
   }
 
   // ─── Rename doc ────────────────────────────────────────────────────────────
@@ -457,6 +535,41 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
     } finally { setSavingRenameFolder(false) }
   }
 
+  // ─── Drag & drop ───────────────────────────────────────────────────────────
+
+  function handleDragStart(event: DragStartEvent) {
+    setActiveDocId(event.active.id as string)
+  }
+
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    setActiveDocId(null)
+    if (!over) return
+
+    const docId = active.id as string
+    const targetFolderId = over.id === 'root' ? null : over.id as string
+
+    const doc = documents.find(d => d.id === docId)
+    if (!doc) return
+    if (doc.folder_id === targetFolderId) return
+
+    try {
+      const res = await fetch(`/api/projects/${id}/documents/${docId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folder_id: targetFolderId }),
+      })
+      if (res.ok) {
+        setDocuments(prev => prev.map(d => d.id === docId ? { ...d, folder_id: targetFolderId } : d))
+        void fetchFolders()
+        const target = targetFolderId ? folders.find(f => f.id === targetFolderId)?.name : 'la racine'
+        toast.success(`Déplacé vers ${target ?? 'la racine'}`)
+      } else {
+        toast.error('Déplacement échoué')
+      }
+    } catch { toast.error('Erreur réseau') }
+  }
+
   // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -471,7 +584,7 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button className="gap-2" disabled={uploading}>
+            <Button className="gap-2" disabled={uploading || storagePercent >= 100}>
               {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
               Nouveau
             </Button>
@@ -493,22 +606,68 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
         <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileSelect} />
       </div>
 
+      {/* ── Storage bar ── */}
+      {storageInfo && (
+        <div className="mb-4 px-3 py-2.5 rounded-xl border bg-muted/20">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <HardDrive className="h-3.5 w-3.5" />
+              <span>Stockage</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground tabular-nums">
+                {formatBytes(storageInfo.used_bytes)} / {storageInfo.max_storage_gb} Go
+              </span>
+              <span className={cn(
+                'text-[10px] font-medium px-1.5 py-0.5 rounded border',
+                storagePercent >= 90 ? 'bg-red-50 text-red-600 border-red-200' :
+                storagePercent >= 70 ? 'bg-amber-50 text-amber-600 border-amber-200' :
+                'bg-muted text-muted-foreground border-border'
+              )}>
+                {storagePercent}%
+              </span>
+              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded border bg-muted text-muted-foreground border-border">
+                Plan {storageInfo.plan_name}
+              </span>
+            </div>
+          </div>
+          <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+            <div
+              className={cn(
+                'h-full rounded-full transition-all duration-500',
+                storagePercent >= 90 ? 'bg-red-500' :
+                storagePercent >= 70 ? 'bg-amber-500' :
+                'bg-[#386FA4]'
+              )}
+              style={{ width: `${storagePercent}%` }}
+            />
+          </div>
+          {storagePercent >= 100 && (
+            <p className="text-xs text-red-600 mt-1.5 font-medium">
+              Quota atteint. Passez à un plan supérieur pour continuer à importer des fichiers.
+            </p>
+          )}
+        </div>
+      )}
+
       {/* ── Toolbar ── */}
       <div className="flex items-center gap-3 mb-4 flex-wrap">
         {/* Breadcrumb */}
         <nav className="flex items-center gap-1 text-sm flex-1 min-w-0">
-          <button
-            onClick={() => setCurrentFolderId(null)}
-            className={cn(
-              'flex items-center gap-1.5 px-2 py-1 rounded-md transition-colors',
-              currentFolderId === null
-                ? 'text-foreground font-medium'
-                : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-            )}
-          >
-            <FolderOpen className="h-4 w-4" />
-            Mes documents
-          </button>
+          <DroppableRoot isActive={currentFolderId !== null}>
+            <button
+              onClick={() => setCurrentFolderId(null)}
+              className={cn(
+                'flex items-center gap-1.5 px-2 py-1 rounded-md transition-colors',
+                currentFolderId === null
+                  ? 'text-foreground font-medium'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+              )}
+            >
+              <FolderOpen className="h-4 w-4" />
+              Mes documents
+            </button>
+          </DroppableRoot>
           {currentFolder && (
             <>
               <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
@@ -577,88 +736,113 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
         </div>
       </div>
 
-      {/* ── Folders grid (root only) ── */}
-      {currentFolderId === null && (
-        <div className="mb-6">
-          {loadingFolders ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-              {[1, 2, 3].map(i => <Skeleton key={i} className="h-24 rounded-xl" />)}
-            </div>
-          ) : folders.length > 0 ? (
-            <>
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-                Dossiers · {folders.length}
-              </p>
+      {/* ── DnD Context wraps folders + documents ── */}
+      <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+
+        {/* ── Folders grid (root only) ── */}
+        {currentFolderId === null && (
+          <div className="mb-6">
+            {loadingFolders ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                {folders.map(folder => (
-                  <FolderCard
-                    key={folder.id}
-                    folder={folder}
-                    onClick={() => setCurrentFolderId(folder.id)}
-                    onRename={() => {
-                      setSelectedFolder(folder)
-                      setRenameFolderName(folder.name)
-                      setRenameFolderOpen(true)
-                    }}
-                    onDelete={() => handleDeleteFolder(folder)}
+                {[1, 2, 3].map(i => <Skeleton key={i} className="h-24 rounded-xl" />)}
+              </div>
+            ) : folders.length > 0 ? (
+              <>
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+                  Dossiers · {folders.length}
+                  {activeDocId && <span className="ml-2 text-[#386FA4]">— Déposez sur un dossier pour déplacer</span>}
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                  {folders.map(folder => (
+                    <FolderCard
+                      key={folder.id}
+                      folder={folder}
+                      isDragActive={!!activeDocId}
+                      onClick={() => { if (!activeDocId) setCurrentFolderId(folder.id) }}
+                      onRename={() => {
+                        setSelectedFolder(folder)
+                        setRenameFolderName(folder.name)
+                        setRenameFolderOpen(true)
+                      }}
+                      onDelete={() => handleDeleteFolder(folder)}
+                    />
+                  ))}
+                </div>
+              </>
+            ) : null}
+          </div>
+        )}
+
+        {/* ── Documents ── */}
+        <div className="flex-1 min-h-0">
+          {loadingDocs ? (
+            <div className="space-y-2">
+              {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-12 rounded-lg" />)}
+            </div>
+          ) : filteredDocuments.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-center gap-3">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted">
+                <FolderOpen className="h-7 w-7 text-muted-foreground" />
+              </div>
+              <div>
+                <p className="font-medium">Aucun document</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {search ? 'Aucun résultat pour cette recherche.' : 'Importez un fichier ou ajoutez un lien.'}
+                </p>
+              </div>
+              {!search && (
+                <div className="flex gap-2 mt-1">
+                  <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setAddLinkOpen(true)}>
+                    <LinkIcon className="h-3.5 w-3.5" /> Ajouter un lien
+                  </Button>
+                  <Button size="sm" className="gap-1.5" onClick={() => fileInputRef.current?.click()} disabled={uploading || storagePercent >= 100}>
+                    <Upload className="h-3.5 w-3.5" /> Importer un fichier
+                  </Button>
+                </div>
+              )}
+            </div>
+          ) : viewMode === 'list' ? (
+            /* ── LIST VIEW ── */
+            <div className="rounded-xl border overflow-hidden">
+              <div className="grid grid-cols-[auto_auto_1fr_auto_auto_auto_auto] gap-3 items-center px-4 py-2 bg-muted/40 border-b text-xs font-medium text-muted-foreground">
+                <span className="w-4" />
+                <label className="flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={toggleAll}
+                    className="h-3.5 w-3.5 rounded border-border accent-primary cursor-pointer"
+                  />
+                </label>
+                <span>Nom</span>
+                <span className="w-24 text-center">Visibilité</span>
+                <span className="w-16 text-right">Taille</span>
+                <span className="w-20 text-right">Ajouté</span>
+                <span className="w-8" />
+              </div>
+              <div className="divide-y">
+                {filteredDocuments.map(doc => (
+                  <DocRow
+                    key={doc.id}
+                    doc={doc}
+                    selected={selectedDocIds.has(doc.id)}
+                    onToggleSelect={() => toggleDoc(doc.id)}
+                    opening={openingDocId === doc.id}
+                    onOpen={() => handleOpenDoc(doc)}
+                    onToggleVisibility={() => handleToggleVisibility(doc)}
+                    onAcknowledge={() => handleAcknowledge(doc)}
+                    onRename={() => { setSelectedDoc(doc); setRenameDocName(doc.name); setRenameDocOpen(true) }}
+                    onMove={() => { setSelectedDoc(doc); setMoveDocFolderId(doc.folder_id ?? 'root'); setMoveFolderOpen(true) }}
+                    onDelete={() => handleDeleteDocument(doc)}
                   />
                 ))}
               </div>
-            </>
-          ) : null}
-        </div>
-      )}
-
-      {/* ── Documents ── */}
-      <div className="flex-1 min-h-0">
-        {loadingDocs ? (
-          <div className="space-y-2">
-            {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-12 rounded-lg" />)}
-          </div>
-        ) : filteredDocuments.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center gap-3">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted">
-              <FolderOpen className="h-7 w-7 text-muted-foreground" />
             </div>
-            <div>
-              <p className="font-medium">Aucun document</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                {search ? 'Aucun résultat pour cette recherche.' : 'Importez un fichier ou ajoutez un lien.'}
-              </p>
-            </div>
-            {!search && (
-              <div className="flex gap-2 mt-1">
-                <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setAddLinkOpen(true)}>
-                  <LinkIcon className="h-3.5 w-3.5" /> Ajouter un lien
-                </Button>
-                <Button size="sm" className="gap-1.5" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-                  <Upload className="h-3.5 w-3.5" /> Importer un fichier
-                </Button>
-              </div>
-            )}
-          </div>
-        ) : viewMode === 'list' ? (
-          /* ── LIST VIEW ── */
-          <div className="rounded-xl border overflow-hidden">
-            <div className="grid grid-cols-[auto_1fr_auto_auto_auto_auto] gap-3 items-center px-4 py-2 bg-muted/40 border-b text-xs font-medium text-muted-foreground">
-              {/* Select all checkbox */}
-              <label className="flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  onChange={toggleAll}
-                  className="h-3.5 w-3.5 rounded border-border accent-primary cursor-pointer"
-                />
-              </label>
-              <span>Nom</span>
-              <span className="w-24 text-center">Visibilité</span>
-              <span className="w-16 text-right">Taille</span>
-              <span className="w-20 text-right">Ajouté</span>
-              <span className="w-8" />
-            </div>
-            <div className="divide-y">
+          ) : (
+            /* ── GRID VIEW ── */
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
               {filteredDocuments.map(doc => (
-                <DocRow
+                <DocCard
                   key={doc.id}
                   doc={doc}
                   selected={selectedDocIds.has(doc.id)}
@@ -673,28 +857,20 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
                 />
               ))}
             </div>
-          </div>
-        ) : (
-          /* ── GRID VIEW ── */
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-            {filteredDocuments.map(doc => (
-              <DocCard
-                key={doc.id}
-                doc={doc}
-                selected={selectedDocIds.has(doc.id)}
-                onToggleSelect={() => toggleDoc(doc.id)}
-                opening={openingDocId === doc.id}
-                onOpen={() => handleOpenDoc(doc)}
-                onToggleVisibility={() => handleToggleVisibility(doc)}
-                onAcknowledge={() => handleAcknowledge(doc)}
-                onRename={() => { setSelectedDoc(doc); setRenameDocName(doc.name); setRenameDocOpen(true) }}
-                onMove={() => { setSelectedDoc(doc); setMoveDocFolderId(doc.folder_id ?? 'root'); setMoveFolderOpen(true) }}
-                onDelete={() => handleDeleteDocument(doc)}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+
+        {/* ── DragOverlay ── */}
+        <DragOverlay>
+          {activeDoc && (
+            <div className="flex items-center gap-2 bg-foreground text-background rounded-xl px-3 py-2 shadow-2xl text-sm font-medium max-w-[220px] pointer-events-none">
+              {getFileIcon(activeDoc, 'sm')}
+              <span className="truncate">{activeDoc.name}</span>
+            </div>
+          )}
+        </DragOverlay>
+
+      </DndContext>
 
       {/* ── Bulk action bar ── */}
       {someSelected && (
@@ -710,6 +886,14 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
             <FolderSymlink className="h-4 w-4" />
             Déplacer
           </button>
+          <div className="w-px h-4 bg-background/20" />
+          <button
+            onClick={() => setBulkDeleteOpen(true)}
+            className="flex items-center gap-1.5 text-sm font-medium hover:text-red-400 transition-colors"
+          >
+            <Trash2 className="h-4 w-4" />
+            Supprimer
+          </button>
           <button
             onClick={clearSelection}
             className="flex items-center justify-center h-6 w-6 rounded-full bg-background/10 hover:bg-background/20 transition-colors ml-1"
@@ -720,6 +904,30 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
       )}
 
       {/* ── Dialogs ── */}
+
+      {/* Bulk delete confirm */}
+      <Dialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Supprimer {selectedDocIds.size} document{selectedDocIds.size > 1 ? 's' : ''} ?</DialogTitle>
+            <DialogDescription>
+              Cette action est irréversible. Les fichiers seront définitivement supprimés du stockage.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => setBulkDeleteOpen(false)}>Annuler</Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={deletingBulk}
+              onClick={handleBulkDelete}
+            >
+              {deletingBulk && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              Supprimer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Create folder */}
       <Dialog open={createFolderOpen} onOpenChange={setCreateFolderOpen}>
@@ -900,23 +1108,53 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
   )
 }
 
+// ─── DroppableRoot ────────────────────────────────────────────────────────────
+
+function DroppableRoot({ children, isActive }: { children: React.ReactNode; isActive: boolean }) {
+  const { setNodeRef, isOver } = useDroppable({ id: 'root' })
+  return (
+    <div ref={setNodeRef} className={cn(
+      'rounded-md transition-colors',
+      isOver && isActive && 'bg-[#91E5F6]/40 ring-1 ring-[#59A5D8]/50'
+    )}>
+      {children}
+    </div>
+  )
+}
+
 // ─── FolderCard ───────────────────────────────────────────────────────────────
 
-function FolderCard({ folder, onClick, onRename, onDelete }: {
+function FolderCard({ folder, isDragActive, onClick, onRename, onDelete }: {
   folder: Folder
+  isDragActive: boolean
   onClick: () => void
   onRename: () => void
   onDelete: () => void
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
+  const { setNodeRef, isOver } = useDroppable({ id: folder.id })
 
   return (
-    <div className="relative group">
+    <div
+      ref={setNodeRef}
+      className={cn(
+        'relative group transition-all',
+        isOver && isDragActive && 'scale-[1.03]'
+      )}
+    >
       <button
         onClick={onClick}
-        className="flex flex-col items-start gap-2 w-full rounded-xl border bg-card p-3.5 text-left hover:border-border/80 hover:shadow-sm transition-all"
+        className={cn(
+          'flex flex-col items-start gap-2 w-full rounded-xl border bg-card p-3.5 text-left transition-all',
+          isOver && isDragActive
+            ? 'border-[#59A5D8] bg-[#91E5F6]/20 shadow-md ring-1 ring-[#59A5D8]/40'
+            : 'hover:border-border/80 hover:shadow-sm'
+        )}
       >
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg" style={{ backgroundColor: `${folder.color}20` }}>
+        <div
+          className="flex h-10 w-10 items-center justify-center rounded-lg transition-colors"
+          style={{ backgroundColor: isOver && isDragActive ? `${folder.color}35` : `${folder.color}20` }}
+        >
           <FolderClosed className="h-5 w-5" style={{ color: folder.color }} />
         </div>
         <div className="w-full min-w-0 pr-4">
@@ -927,6 +1165,11 @@ function FolderCard({ folder, onClick, onRename, onDelete }: {
             </p>
           )}
         </div>
+        {isOver && isDragActive && (
+          <span className="absolute bottom-2 right-2 text-[10px] font-medium text-[#386FA4]">
+            Déposer ici
+          </span>
+        )}
       </button>
       <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
         <DropdownMenuTrigger
@@ -966,13 +1209,28 @@ function DocRow({ doc, selected, onToggleSelect, opening, onOpen, onToggleVisibi
   onDelete: () => void
 }) {
   const isClientPending = doc.source === 'client' && doc.client_doc_status === 'pending_review'
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: doc.id })
 
   return (
-    <div className={cn(
-      'grid grid-cols-[auto_1fr_auto_auto_auto_auto] gap-3 items-center px-4 py-2.5 hover:bg-muted/30 transition-colors group',
-      selected && 'bg-primary/5 hover:bg-primary/8',
-      isClientPending && !selected && 'bg-amber-50/50 hover:bg-amber-50/70',
-    )}>
+    <div
+      ref={setNodeRef}
+      className={cn(
+        'grid grid-cols-[auto_auto_1fr_auto_auto_auto_auto] gap-3 items-center px-4 py-2.5 hover:bg-muted/30 transition-colors group',
+        selected && 'bg-primary/5 hover:bg-primary/8',
+        isClientPending && !selected && 'bg-amber-50/50 hover:bg-amber-50/70',
+        isDragging && 'opacity-40'
+      )}
+    >
+      {/* Drag handle */}
+      <button
+        {...listeners}
+        {...attributes}
+        className="flex items-center justify-center h-5 w-4 text-muted-foreground/40 hover:text-muted-foreground transition-colors cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100"
+        tabIndex={-1}
+      >
+        <GripVertical className="h-3.5 w-3.5" />
+      </button>
+
       {/* Checkbox */}
       <label className="flex items-center cursor-pointer">
         <input
@@ -1073,13 +1331,28 @@ function DocCard({ doc, selected, onToggleSelect, opening, onOpen, onToggleVisib
 }) {
   const isClientPending = doc.source === 'client' && doc.client_doc_status === 'pending_review'
   const [menuOpen, setMenuOpen] = useState(false)
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: doc.id })
 
   return (
-    <div className={cn(
-      'relative group rounded-xl border bg-card transition-all hover:shadow-sm',
-      selected ? 'border-primary ring-1 ring-primary/30 bg-primary/5' : 'hover:border-border/80',
-      isClientPending && !selected && 'border-amber-200 bg-amber-50/30',
-    )}>
+    <div
+      ref={setNodeRef}
+      className={cn(
+        'relative group rounded-xl border bg-card transition-all hover:shadow-sm',
+        selected ? 'border-primary ring-1 ring-primary/30 bg-primary/5' : 'hover:border-border/80',
+        isClientPending && !selected && 'border-amber-200 bg-amber-50/30',
+        isDragging && 'opacity-40'
+      )}
+    >
+      {/* Drag handle */}
+      <button
+        {...listeners}
+        {...attributes}
+        className="absolute top-2 left-8 z-10 h-6 w-5 inline-flex items-center justify-center text-muted-foreground/40 hover:text-muted-foreground transition-opacity cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100"
+        tabIndex={-1}
+      >
+        <GripVertical className="h-3.5 w-3.5" />
+      </button>
+
       {/* Checkbox overlay */}
       <label className={cn(
         'absolute top-2.5 left-2.5 z-10 flex items-center justify-center cursor-pointer transition-opacity',
@@ -1151,6 +1424,9 @@ function DocCard({ doc, selected, onToggleSelect, opening, onOpen, onToggleVisib
             </span>
           )}
         </div>
+        <p className="text-[10px] text-muted-foreground">
+          {format(new Date(doc.created_at), 'd MMM yyyy', { locale: fr })}
+        </p>
       </div>
     </div>
   )

@@ -48,8 +48,8 @@ export async function POST(request: NextRequest) {
       customer: customerId,
       mode: 'subscription',
       line_items: [{ price: parsed.data.priceId, quantity: 1 }],
-      success_url: `${APP_CONFIG.url}/dashboard/settings/billing?success=1`,
-      cancel_url: `${APP_CONFIG.url}/dashboard/settings/billing?canceled=1`,
+      success_url: `${APP_CONFIG.url}/dashboard/account?tab=forfaits&success=1`,
+      cancel_url: `${APP_CONFIG.url}/dashboard/account?tab=forfaits&canceled=1`,
       metadata: { supabase_user_id: user.id },
       subscription_data: {
         trial_period_days: APP_CONFIG.stripe.trialDays,

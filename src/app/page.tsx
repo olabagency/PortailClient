@@ -637,7 +637,7 @@ export default function LandingPage() {
         {/* ── NAVBAR ─────────────────────────────────────────── */}
         <nav className="lp-nav">
           <div className="lp-container lp-nav-inner">
-            <a href="/" className="lp-logo">Client<span>Flow</span></a>
+            <a href="/" className="lp-logo">Hub<span>lio</span></a>
             <div className="lp-nav-links">
               <a href="#features">Fonctionnalités</a>
               <a href="#pricing">Tarifs</a>
@@ -1080,7 +1080,7 @@ export default function LandingPage() {
                 <Link href="/mentions-legales">Mentions légales</Link>
                 <Link href="/confidentialite">Confidentialité</Link>
                 <Link href="/confidentialite">Cookies</Link>
-                <a href="mailto:hello@clientflow.fr">hello@clientflow.fr</a>
+                <a href="mailto:hello@hublio.fr">hello@hublio.fr</a>
               </div>
             </div>
             <div className="lp-footer-bottom">

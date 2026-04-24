@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { z } from 'zod'
+import { logActivity } from '@/lib/activity'
 
 const documentCreateSchema = z.discriminatedUnion('type', [
   z.object({
@@ -114,6 +115,17 @@ export async function POST(
       .single()
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    void logActivity({
+      supabase,
+      userId: user.id,
+      action: 'document_uploaded',
+      projectId: id,
+      entityType: 'document',
+      entityId: data.id,
+      entityName: data.name,
+      metadata: { type: data.type, size_bytes: data.size_bytes ?? 0 },
+    })
 
     return NextResponse.json({ data }, { status: 201 })
   } catch {

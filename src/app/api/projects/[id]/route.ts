@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createNotification } from '@/lib/notify'
 import { z } from 'zod'
 import { nanoid } from 'nanoid'
+import { logActivity } from '@/lib/activity'
 
 const projectUpdateSchema = z.object({
   name: z.string().min(1).max(100).optional(),
@@ -91,6 +92,16 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       }
     }
 
+    void logActivity({
+      supabase,
+      userId: user.id,
+      action: 'project_updated',
+      projectId: id,
+      entityType: 'project',
+      entityId: id,
+      entityName: data.name,
+    })
+
     return NextResponse.json({ data })
   } catch {
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
@@ -105,6 +116,13 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
 
+    const { data: projectBefore } = await supabase
+      .from('projects')
+      .select('name')
+      .eq('id', id)
+      .eq('user_id', user.id)
+      .single()
+
     const { error } = await supabase
       .from('projects')
       .delete()
@@ -112,6 +130,16 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
       .eq('user_id', user.id)
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    void logActivity({
+      supabase,
+      userId: user.id,
+      action: 'project_deleted',
+      projectId: null,
+      entityType: 'project',
+      entityId: id,
+      entityName: projectBefore?.name ?? undefined,
+    })
 
     return NextResponse.json({ data: { success: true } })
   } catch {

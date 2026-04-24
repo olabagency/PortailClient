@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { z } from 'zod'
 import { getValidAccessToken, updateGoogleCalendarEvent, deleteGoogleCalendarEvent } from '@/lib/google'
+import { logActivity } from '@/lib/activity'
 
 const meetingUpdateSchema = z.object({
   title: z.string().min(1).max(200).optional(),
@@ -12,6 +13,7 @@ const meetingUpdateSchema = z.object({
   notes: z.string().optional().nullable(),
   summary: z.string().optional().nullable(),
   attendees: z.array(z.string()).optional(),
+  status: z.enum(['planifiee', 'confirmee', 'annulee']).optional(),
 })
 
 async function checkOwnership(supabase: Awaited<ReturnType<typeof createClient>>, projectId: string, userId: string) {
@@ -87,6 +89,17 @@ export async function PUT(
       }
     }
 
+    const action = parsed.data.status === 'annulee' ? 'meeting_canceled' : 'meeting_updated'
+    void logActivity({
+      supabase,
+      userId: user.id,
+      action,
+      projectId: id,
+      entityType: 'meeting',
+      entityId: meetingId,
+      entityName: data.title,
+    })
+
     return NextResponse.json({ data })
   } catch {
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
@@ -109,7 +122,7 @@ export async function DELETE(
 
     const { data: meeting } = await supabase
       .from('project_meetings')
-      .select('google_event_id')
+      .select('google_event_id, title')
       .eq('id', meetingId)
       .eq('project_id', id)
       .single()
@@ -143,6 +156,16 @@ export async function DELETE(
         }
       }
     }
+
+    void logActivity({
+      supabase,
+      userId: user.id,
+      action: 'meeting_deleted',
+      projectId: id,
+      entityType: 'meeting',
+      entityId: meetingId,
+      entityName: meeting?.title ?? undefined,
+    })
 
     return NextResponse.json({ data: { success: true } })
   } catch {

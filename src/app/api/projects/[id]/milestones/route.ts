@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { z } from 'zod'
+import { logActivity } from '@/lib/activity'
 
 const milestoneCreateSchema = z.object({
   title: z.string().min(1).max(200),
@@ -122,6 +123,16 @@ export async function POST(
       .single()
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    void logActivity({
+      supabase,
+      userId: user.id,
+      action: 'milestone_created',
+      projectId: id,
+      entityType: 'milestone',
+      entityId: data.id,
+      entityName: data.title,
+    })
 
     return NextResponse.json({ data }, { status: 201 })
   } catch {

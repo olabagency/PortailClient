@@ -34,6 +34,9 @@ export async function POST(request: NextRequest) {
         const currentPeriodEnd = firstItem?.current_period_end
           ? new Date(firstItem.current_period_end * 1000).toISOString()
           : null
+        const trialEnd = subscription.trial_end
+          ? new Date(subscription.trial_end * 1000).toISOString()
+          : null
 
         let plan = 'free'
         if (priceId === process.env.STRIPE_PRO_PRICE_ID) plan = 'pro'
@@ -48,6 +51,7 @@ export async function POST(request: NextRequest) {
             stripe_subscription_id: subscription.id,
             stripe_subscription_status: status,
             stripe_current_period_end: currentPeriodEnd,
+            trial_ends_at: trialEnd,
           })
           .eq('stripe_customer_id', customerId)
         break
@@ -62,7 +66,20 @@ export async function POST(request: NextRequest) {
           .update({
             plan: 'free',
             stripe_subscription_status: 'canceled',
+            stripe_subscription_id: null,
+            trial_ends_at: null,
           })
+          .eq('stripe_customer_id', customerId)
+        break
+      }
+
+      case 'invoice.payment_failed': {
+        const invoice = event.data.object as Stripe.Invoice
+        const customerId = invoice.customer as string
+
+        await supabase
+          .from('profiles')
+          .update({ stripe_subscription_status: 'past_due' })
           .eq('stripe_customer_id', customerId)
         break
       }
@@ -82,7 +99,6 @@ export async function POST(request: NextRequest) {
       }
 
       default:
-        // Ignorer les autres events
         break
     }
   } catch (err) {

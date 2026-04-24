@@ -81,7 +81,7 @@ export async function createGoogleCalendarEvent(
       attendees,
       conferenceData: {
         createRequest: {
-          requestId: `clientflow-${Date.now()}`,
+          requestId: `hublio-${Date.now()}`,
           conferenceSolutionKey: { type: 'hangoutsMeet' },
         },
       },

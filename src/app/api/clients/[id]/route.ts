@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { z } from 'zod'
+import { logActivity } from '@/lib/activity'
 
 const clientUpdateSchema = z.object({
   name: z.string().min(1).max(100).optional(),
@@ -66,6 +67,15 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     if (error || !data) return NextResponse.json({ error: 'Client introuvable' }, { status: 404 })
 
+    void logActivity({
+      supabase,
+      userId: user.id,
+      action: 'client_updated',
+      entityType: 'client',
+      entityId: id,
+      entityName: data.name,
+    })
+
     return NextResponse.json({ data })
   } catch {
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
@@ -87,6 +97,14 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
       .eq('user_id', user.id)
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    void logActivity({
+      supabase,
+      userId: user.id,
+      action: 'client_deleted',
+      entityType: 'client',
+      entityId: id,
+    })
 
     return NextResponse.json({ data: { success: true } })
   } catch {
