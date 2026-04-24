@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { z } from 'zod'
+import { getValidAccessToken, createGoogleCalendarEvent } from '@/lib/google'
 
 const meetingCreateSchema = z.object({
   title: z.string().min(1, 'Le titre est requis').max(200),
@@ -10,6 +11,7 @@ const meetingCreateSchema = z.object({
   meeting_link: z.string().url('Lien invalide').optional().nullable().or(z.literal('')),
   notes: z.string().optional().nullable(),
   attendees: z.array(z.string()).optional().default([]),
+  sync_google: z.boolean().optional().default(false),
 })
 
 // GET /api/projects/[id]/meetings
@@ -23,7 +25,6 @@ export async function GET(
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
 
-    // Check project ownership
     const { data: project, error: projectError } = await supabase
       .from('projects')
       .select('id')
@@ -60,7 +61,6 @@ export async function POST(
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
 
-    // Check project ownership
     const { data: project, error: projectError } = await supabase
       .from('projects')
       .select('id')
@@ -78,6 +78,40 @@ export async function POST(
       return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
     }
 
+    let googleEventId: string | null = null
+    let finalMeetingLink = parsed.data.meeting_link || null
+
+    if (parsed.data.sync_google) {
+      const { data: integration } = await supabase
+        .from('google_integrations')
+        .select('access_token, refresh_token, expires_at')
+        .eq('user_id', user.id)
+        .single()
+
+      if (integration) {
+        try {
+          const accessToken = await getValidAccessToken(
+            integration.access_token,
+            integration.refresh_token,
+            integration.expires_at,
+          )
+          const result = await createGoogleCalendarEvent(accessToken, {
+            title: parsed.data.title,
+            description: parsed.data.notes ?? null,
+            startAt: parsed.data.scheduled_at,
+            durationMin: parsed.data.duration_min,
+            attendeeEmails: parsed.data.attendees,
+          })
+          googleEventId = result.eventId
+          if (result.meetLink && !finalMeetingLink) {
+            finalMeetingLink = result.meetLink
+          }
+        } catch (err) {
+          console.error('[meetings/post] Google Calendar sync error:', err)
+        }
+      }
+    }
+
     const { data, error } = await supabase
       .from('project_meetings')
       .insert({
@@ -86,9 +120,10 @@ export async function POST(
         scheduled_at: parsed.data.scheduled_at,
         duration_min: parsed.data.duration_min,
         location: parsed.data.location ?? null,
-        meeting_link: parsed.data.meeting_link || null,
+        meeting_link: finalMeetingLink,
         notes: parsed.data.notes ?? null,
         attendees: parsed.data.attendees,
+        google_event_id: googleEventId,
       })
       .select('*')
       .single()

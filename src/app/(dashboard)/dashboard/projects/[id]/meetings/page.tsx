@@ -542,6 +542,10 @@ function MeetingsPageInner({
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
+  // Google Calendar integration
+  const [googleConnected, setGoogleConnected] = useState(false)
+  const [syncGoogle, setSyncGoogle] = useState(false)
+
   // Past meetings: show all or only last 3 per month group
   const [pastExpanded, setPastExpanded] = useState(false)
 
@@ -584,6 +588,13 @@ function MeetingsPageInner({
   useEffect(() => {
     void fetchMeetings()
   }, [fetchMeetings])
+
+  useEffect(() => {
+    fetch('/api/integrations/google/status')
+      .then(r => r.json())
+      .then(({ connected }: { connected: boolean }) => setGoogleConnected(connected))
+      .catch(() => {})
+  }, [])
 
   // Auto-open meeting from ?open= query param (e.g. from calendar click)
   useEffect(() => {
@@ -675,6 +686,7 @@ function MeetingsPageInner({
     setDialogOpen(false)
     setEditingMeeting(null)
     setForm(defaultForm())
+    setSyncGoogle(false)
   }
 
   async function handleSave() {
@@ -688,7 +700,7 @@ function MeetingsPageInner({
     }
     setSaving(true)
     try {
-      const payload = {
+      const basePayload = {
         title: form.title.trim(),
         scheduled_at: new Date(form.scheduled_at).toISOString(),
         duration_min: parseInt(form.duration_min, 10),
@@ -704,7 +716,7 @@ function MeetingsPageInner({
         const res = await fetch(`/api/projects/${projectId}/meetings/${editingMeeting.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
+          body: JSON.stringify(basePayload),
         })
         if (!res.ok) throw new Error()
         const json = (await res.json()) as { data: Meeting }
@@ -714,12 +726,12 @@ function MeetingsPageInner({
         const res = await fetch(`/api/projects/${projectId}/meetings`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
+          body: JSON.stringify({ ...basePayload, sync_google: syncGoogle }),
         })
         if (!res.ok) throw new Error()
         const json = (await res.json()) as { data: Meeting }
         setMeetings(prev => [...prev, json.data])
-        toast.success('Réunion créée')
+        toast.success(syncGoogle ? 'Réunion créée et ajoutée à Google Calendar' : 'Réunion créée')
       }
 
       closeDialog()
@@ -1174,6 +1186,22 @@ function MeetingsPageInner({
                 onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
               />
             </div>
+
+            {/* Sync Google Calendar — création uniquement, plan pro/agency */}
+            {!editingMeeting && googleConnected && (
+              <div className="flex items-center gap-3 rounded-lg border border-[#59A5D8]/40 bg-[#91E5F6]/10 px-4 py-3">
+                <input
+                  type="checkbox"
+                  id="sync-google"
+                  checked={syncGoogle}
+                  onChange={e => setSyncGoogle(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 accent-[#386FA4] cursor-pointer"
+                />
+                <label htmlFor="sync-google" className="text-sm font-medium text-[#133C55] cursor-pointer select-none">
+                  Ajouter à Google Calendar &amp; créer un lien Meet
+                </label>
+              </div>
+            )}
           </div>
 
           <DialogFooter>
