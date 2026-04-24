@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { z } from 'zod'
 import { deleteS3Object, generatePresignedDownloadUrl } from '@/lib/s3'
+import { logActivity } from '@/lib/activity'
 
 // GET /api/projects/[id]/documents/[docId]?action=download
 export async function GET(
@@ -97,6 +98,20 @@ export async function PUT(
 
     if (error || !data) return NextResponse.json({ error: 'Document introuvable' }, { status: 404 })
 
+    // Log document_moved si le dossier a changé
+    if ('folder_id' in parsed.data) {
+      void logActivity({
+        supabase,
+        userId: user.id,
+        action: 'document_moved',
+        projectId: id,
+        entityType: 'document',
+        entityId: docId,
+        entityName: data.name,
+        metadata: { folder_id: data.folder_id ?? null },
+      })
+    }
+
     return NextResponse.json({ data })
   } catch {
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
@@ -124,10 +139,10 @@ export async function DELETE(
 
     if (!project) return NextResponse.json({ error: 'Projet introuvable' }, { status: 404 })
 
-    // Récupérer le document pour obtenir la clé S3 éventuelle
+    // Récupérer le document pour obtenir la clé S3 et le nom
     const { data: doc } = await supabase
       .from('project_documents')
-      .select('s3_key')
+      .select('s3_key, name')
       .eq('id', docId)
       .eq('project_id', id)
       .single()
@@ -148,6 +163,16 @@ export async function DELETE(
         console.error('[documents/delete] S3 delete failed:', err)
       )
     }
+
+    void logActivity({
+      supabase,
+      userId: user.id,
+      action: 'document_deleted',
+      projectId: id,
+      entityType: 'document',
+      entityId: docId,
+      entityName: doc.name,
+    })
 
     return NextResponse.json({ data: { success: true } })
   } catch {

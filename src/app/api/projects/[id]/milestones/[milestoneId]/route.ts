@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { z } from 'zod'
 import { sendEmail, milestoneCompletedEmail } from '@/lib/email'
 import { APP_CONFIG } from '@/config/app.config'
+import { logActivity } from '@/lib/activity'
 
 const milestoneUpdateSchema = z.object({
   title: z.string().min(1).max(200).optional(),
@@ -96,6 +97,17 @@ export async function PUT(
       }
     }
 
+    const action = wasCompleted ? 'milestone_completed' : 'milestone_updated'
+    void logActivity({
+      supabase,
+      userId: user.id,
+      action,
+      projectId: id,
+      entityType: 'milestone',
+      entityId: milestoneId,
+      entityName: data.title,
+    })
+
     return NextResponse.json({ data })
   } catch {
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
@@ -129,6 +141,15 @@ export async function DELETE(
       .eq('project_id', id)
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    void logActivity({
+      supabase,
+      userId: user.id,
+      action: 'milestone_deleted',
+      projectId: id,
+      entityType: 'milestone',
+      entityId: milestoneId,
+    })
 
     return NextResponse.json({ data: { success: true } })
   } catch {

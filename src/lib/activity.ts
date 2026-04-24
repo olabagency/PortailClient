@@ -2,12 +2,12 @@ import { SupabaseClient } from '@supabase/supabase-js'
 
 export type ActivityAction =
   | 'project_created' | 'project_updated' | 'project_deleted'
-  | 'milestone_created' | 'milestone_updated' | 'milestone_deleted'
+  | 'milestone_created' | 'milestone_updated' | 'milestone_deleted' | 'milestone_completed'
   | 'deliverable_sent' | 'deliverable_validated' | 'deliverable_revised'
-  | 'document_uploaded' | 'document_deleted'
-  | 'client_created' | 'client_updated'
+  | 'document_uploaded' | 'document_deleted' | 'document_moved'
+  | 'client_created' | 'client_updated' | 'client_deleted'
   | 'feedback_treated'
-  | 'meeting_created' | 'meeting_updated'
+  | 'meeting_created' | 'meeting_updated' | 'meeting_canceled' | 'meeting_deleted'
   | 'onboarding_form_responded'
   | 'template_created'
   | 'task_created' | 'task_moved' | 'task_completed' | 'task_deleted'
@@ -66,19 +66,24 @@ const ACTION_LABELS: Record<string, string> = {
   project_created: 'Projet créé',
   project_updated: 'Projet modifié',
   project_deleted: 'Projet supprimé',
-  milestone_created: 'Étape ajoutée',
-  milestone_updated: 'Étape mise à jour',
-  milestone_deleted: 'Étape supprimée',
+  milestone_created: 'Étape de timeline ajoutée',
+  milestone_updated: 'Étape de timeline mise à jour',
+  milestone_completed: 'Étape de timeline terminée',
+  milestone_deleted: 'Étape de timeline supprimée',
   deliverable_sent: 'Livrable envoyé',
   deliverable_validated: 'Livrable validé par le client',
   deliverable_revised: 'Révision demandée par le client',
-  document_uploaded: 'Document uploadé',
+  document_uploaded: 'Document ajouté',
   document_deleted: 'Document supprimé',
+  document_moved: 'Document déplacé',
   client_created: 'Client créé',
-  client_updated: 'Client modifié',
+  client_updated: 'Fiche client modifiée',
+  client_deleted: 'Client supprimé',
   feedback_treated: 'Retour traité',
   meeting_created: 'Réunion planifiée',
-  meeting_updated: 'Réunion mise à jour',
+  meeting_updated: 'Réunion modifiée',
+  meeting_canceled: 'Réunion annulée',
+  meeting_deleted: 'Réunion supprimée',
   onboarding_form_responded: 'Onboarding complété par le client',
   template_created: 'Template sauvegardé',
   task_created: 'Tâche créée',

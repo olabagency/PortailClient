@@ -1,5 +1,5 @@
 export const APP_CONFIG = {
-  name: "ClientFlow",
+  name: "Hublio",
   tagline: "Gérez vos projets clients de A à Z",
   description: "Plateforme de gestion de projet client tout-en-un pour freelances et agences.",
   url: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",

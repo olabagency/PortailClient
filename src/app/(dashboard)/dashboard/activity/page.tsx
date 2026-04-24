@@ -11,12 +11,12 @@ import { formatActivityLabel, ActivityEntry } from '@/lib/activity'
 import {
   FolderPlus, FolderOpen, FolderX,
   CheckSquare, ArrowRight, Trash2, LayoutList,
-  UserPlus, UserCog,
+  UserPlus, UserCog, UserX,
   BookmarkPlus,
-  GitBranch,
+  GitBranch, GitMerge,
   PackageCheck, PackageOpen, RotateCcw,
-  FileUp, FileX,
-  CalendarPlus, CalendarCog,
+  FileUp, FileX, FolderInput,
+  CalendarPlus, CalendarCog, CalendarX,
   MessageSquare,
   ClipboardCheck,
   ExternalLink,
@@ -36,18 +36,23 @@ function activityIcon(action: string) {
     case 'project_updated':           return <FolderOpen className={cls} />
     case 'project_deleted':           return <FolderX className={cls} />
     case 'milestone_created':
-    case 'milestone_updated':
+    case 'milestone_updated':         return <GitBranch className={cls} />
+    case 'milestone_completed':       return <GitMerge className={cls} />
     case 'milestone_deleted':         return <GitBranch className={cls} />
     case 'deliverable_sent':          return <PackageOpen className={cls} />
     case 'deliverable_validated':     return <PackageCheck className={cls} />
     case 'deliverable_revised':       return <RotateCcw className={cls} />
     case 'document_uploaded':         return <FileUp className={cls} />
     case 'document_deleted':          return <FileX className={cls} />
+    case 'document_moved':            return <FolderInput className={cls} />
     case 'client_created':            return <UserPlus className={cls} />
     case 'client_updated':            return <UserCog className={cls} />
+    case 'client_deleted':            return <UserX className={cls} />
     case 'feedback_treated':          return <MessageSquare className={cls} />
     case 'meeting_created':           return <CalendarPlus className={cls} />
     case 'meeting_updated':           return <CalendarCog className={cls} />
+    case 'meeting_canceled':          return <CalendarX className={cls} />
+    case 'meeting_deleted':           return <CalendarX className={cls} />
     case 'onboarding_form_responded': return <ClipboardCheck className={cls} />
     case 'template_created':          return <BookmarkPlus className={cls} />
     case 'task_created':              return <LayoutList className={cls} />
@@ -68,9 +73,16 @@ function activityColor(action: string): string {
   if (action === 'deliverable_revised')       return 'bg-orange-100 text-orange-600'
   if (action === 'document_uploaded')         return 'bg-slate-100 text-slate-600'
   if (action === 'document_deleted')          return 'bg-red-100 text-red-500'
-  if (action.startsWith('client'))            return 'bg-teal-100 text-teal-600'
+  if (action === 'document_moved')            return 'bg-slate-100 text-slate-500'
+  if (action === 'client_created')            return 'bg-teal-100 text-teal-600'
+  if (action === 'client_updated')            return 'bg-teal-50 text-teal-500'
+  if (action === 'client_deleted')            return 'bg-red-100 text-red-600'
   if (action === 'feedback_treated')          return 'bg-cyan-100 text-cyan-600'
-  if (action.startsWith('meeting'))           return 'bg-violet-100 text-violet-600'
+  if (action === 'meeting_created')           return 'bg-violet-100 text-violet-600'
+  if (action === 'meeting_updated')           return 'bg-violet-50 text-violet-500'
+  if (action === 'meeting_canceled')          return 'bg-orange-100 text-orange-600'
+  if (action === 'meeting_deleted')           return 'bg-red-100 text-red-500'
+  if (action === 'milestone_completed')       return 'bg-green-100 text-green-600'
   if (action === 'onboarding_form_responded') return 'bg-emerald-100 text-emerald-600'
   if (action === 'template_created')          return 'bg-sky-100 text-sky-700'
   if (action === 'task_completed')            return 'bg-green-100 text-green-600'

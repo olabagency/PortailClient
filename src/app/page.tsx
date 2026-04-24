@@ -1,21 +1,18 @@
 "use client"
 
 import Link from "next/link"
-import { useEffect, useRef } from "react"
+import { useEffect } from "react"
 import { APP_CONFIG } from "@/config/app.config"
 
 export default function LandingPage() {
-  // Fade-up animation via IntersectionObserver
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add("lp-visible")
-          }
+          if (entry.isIntersecting) entry.target.classList.add("lp-visible")
         })
       },
-      { threshold: 0.1, rootMargin: "0px 0px -40px 0px" }
+      { threshold: 0.08, rootMargin: "0px 0px -40px 0px" }
     )
     document.querySelectorAll(".lp-fade-up").forEach((el) => observer.observe(el))
     return () => observer.disconnect()
@@ -24,477 +21,774 @@ export default function LandingPage() {
   return (
     <>
       <style>{`
+        /* ─── BASE ─────────────────────────────────────────── */
         .lp-root {
-          font-family: var(--font-dm-sans, 'DM Sans', -apple-system, sans-serif);
-          background: #FAFAF8;
-          color: #1A1A1A;
-          line-height: 1.6;
-          -webkit-font-smoothing: antialiased;
+          font-family: var(--font-dm-sans,'DM Sans',-apple-system,sans-serif);
+          background:#FAFAF8; color:#1A1A1A; line-height:1.6;
+          -webkit-font-smoothing:antialiased;
         }
-        .lp-display {
-          font-family: var(--font-instrument-serif, Georgia, serif);
-        }
-        .lp-container {
-          max-width: 1140px;
-          margin: 0 auto;
-          padding: 0 24px;
-        }
-        /* NAV */
+        .lp-display { font-family:var(--font-instrument-serif,Georgia,serif); }
+        .lp-container { max-width:1140px; margin:0 auto; padding:0 24px; }
+
+        /* ─── ANIMATIONS ────────────────────────────────────── */
+        @keyframes lp-pulse    { 0%,100%{opacity:1} 50%{opacity:.4} }
+        @keyframes lp-float    { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
+        @keyframes lp-shimmer  { 0%{background-position:-200% center} 100%{background-position:200% center} }
+        @keyframes lp-glow     { 0%,100%{box-shadow:0 0 20px rgba(89,165,216,.3)} 50%{box-shadow:0 0 40px rgba(89,165,216,.6)} }
+        @keyframes lp-spin-slow{ 0%{transform:rotate(0deg)} 100%{transform:rotate(360deg)} }
+        @keyframes lp-tick     { 0%{stroke-dashoffset:24} 100%{stroke-dashoffset:0} }
+        .lp-fade-up  { opacity:0; transform:translateY(28px); transition:all .65s cubic-bezier(.16,1,.3,1); }
+        .lp-visible  { opacity:1; transform:translateY(0); }
+
+        /* ─── NAVBAR ────────────────────────────────────────── */
         .lp-nav {
-          position: fixed; top: 0; left: 0; right: 0; z-index: 100;
-          background: rgba(250,250,248,0.88);
-          backdrop-filter: blur(12px);
-          border-bottom: 1px solid #F0EDE6;
+          position:fixed; top:0; left:0; right:0; z-index:100;
+          background:rgba(250,250,248,.88); backdrop-filter:blur(14px);
+          border-bottom:1px solid rgba(240,237,230,.8);
         }
-        .lp-nav-inner {
-          display: flex; align-items: center; justify-content: space-between; height: 64px;
-        }
+        .lp-nav-inner { display:flex; align-items:center; justify-content:space-between; height:64px; }
         .lp-logo {
-          font-family: var(--font-instrument-serif, Georgia, serif);
-          font-size: 24px; color: #1A1A1A; text-decoration: none; letter-spacing: -0.5px;
+          font-family:var(--font-instrument-serif,Georgia,serif);
+          font-size:22px; color:#1A1A1A; text-decoration:none; letter-spacing:-.5px;
         }
-        .lp-logo span { color: #386FA4; }
-        .lp-nav-links {
-          display: flex; gap: 32px; align-items: center;
-        }
-        .lp-nav-links a {
-          font-size: 14px; color: #6B6B6B; text-decoration: none; transition: color 0.2s;
-        }
-        .lp-nav-links a:hover { color: #1A1A1A; }
-        .lp-nav-actions { display: flex; gap: 10px; align-items: center; }
+        .lp-logo span { color:#386FA4; }
+        .lp-nav-links { display:flex; gap:28px; align-items:center; }
+        .lp-nav-links a { font-size:14px; color:#6B6B6B; text-decoration:none; transition:color .2s; }
+        .lp-nav-links a:hover { color:#1A1A1A; }
+        .lp-nav-actions { display:flex; gap:10px; align-items:center; }
         .lp-btn-ghost {
-          font-size: 14px; font-family: var(--font-dm-sans, sans-serif);
-          color: #6B6B6B; text-decoration: none; padding: 9px 18px;
-          border-radius: 100px; transition: all 0.2s; border: 1px solid #E5E2DB;
-          background: white;
+          font-size:14px; color:#6B6B6B; text-decoration:none; padding:8px 18px;
+          border-radius:100px; border:1px solid #E5E2DB; background:white; transition:all .2s;
         }
-        .lp-btn-ghost:hover { color: #1A1A1A; border-color: #1A1A1A; }
-        .lp-btn-primary {
-          font-size: 14px; font-weight: 600; font-family: var(--font-dm-sans, sans-serif);
-          color: white; text-decoration: none; padding: 9px 20px;
-          border-radius: 100px; background: #386FA4; transition: all 0.2s;
+        .lp-btn-ghost:hover { color:#1A1A1A; border-color:#1A1A1A; }
+        .lp-btn-nav {
+          font-size:14px; font-weight:600; color:white; text-decoration:none; padding:9px 20px;
+          border-radius:100px;
+          background:linear-gradient(135deg,#386FA4,#133C55);
+          transition:all .2s;
         }
-        .lp-btn-primary:hover { background: #2d5e8e; transform: translateY(-1px); }
-        @media(max-width: 768px) {
-          .lp-nav-links { display: none; }
-        }
+        .lp-btn-nav:hover { transform:translateY(-1px); box-shadow:0 4px 16px rgba(56,111,164,.4); }
+        @media(max-width:768px){ .lp-nav-links{display:none} }
 
-        /* HERO */
-        @keyframes lp-pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+        /* ─── HERO ──────────────────────────────────────────── */
         .lp-hero {
-          padding: 160px 0 110px; text-align: center;
-          background: linear-gradient(155deg, #0d2c40 0%, #133C55 30%, #1e4f75 62%, #386FA4 100%);
-          position: relative; overflow: hidden;
+          padding:120px 0 80px;
+          background:linear-gradient(155deg,#0a2033 0%,#133C55 35%,#1a4a6e 65%,#25608a 100%);
+          position:relative; overflow:hidden;
         }
-        .lp-hero::before {
-          content:''; position:absolute; top:-20%; right:-10%; width:600px; height:600px; border-radius:50%;
-          background: radial-gradient(circle, rgba(89,165,216,0.18) 0%, transparent 70%); pointer-events:none;
+        /* Orbs décoratifs */
+        .lp-orb {
+          position:absolute; border-radius:50%; pointer-events:none;
+          filter:blur(80px); opacity:.25;
         }
-        .lp-hero::after {
-          content:''; position:absolute; bottom:-30%; left:-10%; width:500px; height:500px; border-radius:50%;
-          background: radial-gradient(circle, rgba(145,229,246,0.1) 0%, transparent 70%); pointer-events:none;
+        .lp-orb-1 { width:600px; height:600px; top:-200px; right:-150px; background:#59A5D8; }
+        .lp-orb-2 { width:400px; height:400px; bottom:-150px; left:-100px; background:#84D2F6; opacity:.15; }
+        .lp-orb-3 { width:200px; height:200px; top:40%; left:40%; background:#91E5F6; opacity:.1;
+          animation:lp-float 6s ease-in-out infinite; }
+
+        /* Layout hero 2 colonnes */
+        .lp-hero-inner {
+          display:grid; grid-template-columns:1fr 1fr; gap:64px; align-items:center;
+          position:relative; z-index:2;
         }
+        @media(max-width:900px){ .lp-hero-inner{grid-template-columns:1fr; gap:48px;} }
+
+        /* Colonne texte */
         .lp-badge {
-          display: inline-flex; align-items: center; gap: 8px;
-          background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
-          padding: 6px 16px; border-radius: 100px; font-size: 13px; font-weight: 500;
-          margin-bottom: 32px; color: rgba(255,255,255,0.9); backdrop-filter: blur(8px);
+          display:inline-flex; align-items:center; gap:8px;
+          background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.15);
+          padding:5px 14px; border-radius:100px; font-size:12px; font-weight:500;
+          margin-bottom:24px; color:rgba(255,255,255,.85); backdrop-filter:blur(8px);
         }
-        .lp-badge-dot { width:6px; height:6px; border-radius:50%; background:#84D2F6; display:inline-block; animation: lp-pulse 2s infinite; }
+        .lp-badge-dot {
+          width:6px; height:6px; border-radius:50%; background:#84D2F6;
+          display:inline-block; animation:lp-pulse 2s infinite;
+        }
         .lp-h1 {
-          font-family: var(--font-instrument-serif, Georgia, serif);
-          font-size: clamp(40px, 6vw, 74px); line-height: 1.05;
-          letter-spacing: -2px; max-width: 860px; margin: 0 auto 24px; font-weight: 400; color: white;
+          font-family:var(--font-instrument-serif,Georgia,serif);
+          font-size:clamp(36px,5vw,64px); line-height:1.06;
+          letter-spacing:-2px; margin:0 0 20px; font-weight:400; color:white;
         }
-        .lp-h1 em { color: #84D2F6; font-style: italic; }
+        .lp-h1 em { color:#84D2F6; font-style:italic; }
         .lp-hero-sub {
-          font-size: 18px; color: rgba(255,255,255,0.7); max-width: 580px; margin: 0 auto 36px; line-height: 1.7;
-        }
-        .lp-hero-pills {
-          display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-bottom: 40px;
-        }
-        .lp-hero-pills span {
-          font-size: 12px; padding: 5px 14px; border-radius: 100px;
-          background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.15);
-          color: rgba(255,255,255,0.8); backdrop-filter: blur(4px);
-        }
-        .lp-hero-cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 24px; }
-        .lp-btn-hero {
-          font-size: 16px; font-weight: 700; font-family: var(--font-dm-sans, sans-serif);
-          color: #133C55; text-decoration: none; padding: 16px 36px;
-          border-radius: 100px; background: white; transition: all 0.2s; white-space: nowrap;
-          box-shadow: 0 4px 24px rgba(0,0,0,0.25);
-        }
-        .lp-btn-hero:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
-        .lp-btn-hero-outline {
-          font-size: 15px; font-weight: 500; font-family: var(--font-dm-sans, sans-serif);
-          color: rgba(255,255,255,0.85); text-decoration: none; padding: 15px 28px;
-          border-radius: 100px; border: 1.5px solid rgba(255,255,255,0.25); transition: all 0.2s; white-space: nowrap;
-        }
-        .lp-btn-hero-outline:hover { border-color: rgba(255,255,255,0.5); color: white; }
-        .lp-hero-trust { display: flex; justify-content: center; gap: 24px; flex-wrap: wrap; }
-        .lp-hero-trust span { font-size: 12px; color: rgba(255,255,255,0.5); display: flex; align-items: center; gap: 6px; }
-        .lp-hero-trust .ck { color: #84D2F6; }
-        @media(max-width: 640px) {
-          .lp-hero { padding: 130px 0 80px; }
-          .lp-hero-trust { gap: 12px; flex-direction: column; align-items: center; }
+          font-size:17px; color:rgba(255,255,255,.65); max-width:500px; margin:0 0 32px; line-height:1.7;
         }
 
-        /* SECTION COMMON */
+        /* CTA hero */
+        .lp-hero-cta { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:28px; }
+        .lp-btn-hero {
+          position:relative; overflow:hidden;
+          font-size:16px; font-weight:700; color:#133C55; text-decoration:none;
+          padding:16px 36px; border-radius:100px;
+          background:linear-gradient(90deg,#ffffff,#e8f5ff,#ffffff);
+          background-size:200% auto;
+          animation:lp-shimmer 4s linear infinite;
+          box-shadow:0 4px 28px rgba(0,0,0,.3); white-space:nowrap; transition:transform .2s;
+        }
+        .lp-btn-hero:hover { transform:translateY(-2px) scale(1.02); box-shadow:0 8px 36px rgba(0,0,0,.35); }
+        .lp-btn-hero-ghost {
+          font-size:15px; font-weight:500; color:rgba(255,255,255,.8); text-decoration:none;
+          padding:15px 28px; border-radius:100px;
+          border:1.5px solid rgba(255,255,255,.2); transition:all .2s; white-space:nowrap;
+        }
+        .lp-btn-hero-ghost:hover { border-color:rgba(255,255,255,.45); color:white; }
+
+        /* Trust row */
+        .lp-trust { display:flex; gap:20px; flex-wrap:wrap; }
+        .lp-trust span {
+          font-size:12px; color:rgba(255,255,255,.5);
+          display:flex; align-items:center; gap:5px;
+        }
+        .lp-trust .ck { color:#84D2F6; font-size:13px; }
+
+        /* ─── TIMELINE PREVIEW (côté droit du héro) ─────────── */
+        .lp-preview {
+          background:rgba(255,255,255,.06); backdrop-filter:blur(20px);
+          border:1px solid rgba(255,255,255,.12); border-radius:20px;
+          padding:24px; animation:lp-float 7s ease-in-out infinite;
+        }
+        .lp-preview-header {
+          display:flex; align-items:center; justify-content:space-between;
+          margin-bottom:20px;
+        }
+        .lp-preview-title {
+          font-size:14px; font-weight:600; color:white; display:flex; align-items:center; gap:8px;
+        }
+        .lp-preview-dots { display:flex; gap:5px; }
+        .lp-preview-dot { width:8px; height:8px; border-radius:50%; }
+        .lp-preview-dot-r { background:#FF6B6B; }
+        .lp-preview-dot-y { background:#FFD93D; }
+        .lp-preview-dot-g { background:#6BCB77; }
+
+        /* Barre de progression */
+        .lp-preview-prog-wrap { margin-bottom:20px; }
+        .lp-preview-prog-label {
+          display:flex; justify-content:space-between; margin-bottom:6px;
+          font-size:11px; color:rgba(255,255,255,.5);
+        }
+        .lp-preview-prog-bar {
+          height:5px; border-radius:100px; background:rgba(255,255,255,.1); overflow:hidden;
+        }
+        .lp-preview-prog-fill {
+          height:100%; border-radius:100px; width:60%;
+          background:linear-gradient(90deg,#59A5D8,#91E5F6);
+        }
+
+        /* Items jalon */
+        .lp-milestone-item {
+          display:flex; align-items:center; gap:12px; padding:10px 12px;
+          border-radius:10px; margin-bottom:6px; transition:background .2s;
+        }
+        .lp-milestone-item:last-child { margin-bottom:0; }
+        .lp-ms-done  { background:rgba(107,203,119,.08); }
+        .lp-ms-active{ background:rgba(89,165,216,.12); }
+        .lp-ms-wait  { background:rgba(255,255,255,.03); }
+        .lp-ms-icon {
+          width:24px; height:24px; border-radius:50%; flex-shrink:0;
+          display:flex; align-items:center; justify-content:center; font-size:12px;
+        }
+        .lp-ms-icon-done  { background:rgba(107,203,119,.2); color:#6BCB77; }
+        .lp-ms-icon-active{ background:rgba(89,165,216,.2); color:#84D2F6;
+          animation:lp-glow 2.5s ease-in-out infinite; }
+        .lp-ms-icon-wait  { background:rgba(255,255,255,.05); color:rgba(255,255,255,.3); }
+        .lp-ms-label { flex:1; }
+        .lp-ms-name  { font-size:12px; font-weight:500; color:rgba(255,255,255,.85); margin-bottom:1px; }
+        .lp-ms-meta  { font-size:10px; color:rgba(255,255,255,.35); }
+        .lp-ms-badge {
+          font-size:10px; padding:2px 8px; border-radius:100px; font-weight:600; flex-shrink:0;
+        }
+        .lp-ms-badge-done   { background:rgba(107,203,119,.15); color:#6BCB77; }
+        .lp-ms-badge-active { background:rgba(89,165,216,.15); color:#84D2F6; }
+
+        /* Notification flottante */
+        .lp-notif {
+          display:flex; align-items:center; gap:10px; margin-top:16px;
+          background:rgba(107,203,119,.1); border:1px solid rgba(107,203,119,.2);
+          border-radius:10px; padding:10px 12px;
+        }
+        .lp-notif-icon { font-size:16px; flex-shrink:0; }
+        .lp-notif-text { font-size:11px; color:rgba(255,255,255,.7); line-height:1.4; }
+        .lp-notif-text strong { color:#6BCB77; }
+
+        /* ─── SOCIAL PROOF BAR ──────────────────────────────── */
+        .lp-proof {
+          padding:32px 0; background:#F5F3EE;
+          border-top:1px solid #EAE7E0; border-bottom:1px solid #EAE7E0;
+        }
+        .lp-proof-inner {
+          display:flex; align-items:center; justify-content:center; gap:48px; flex-wrap:wrap;
+        }
+        .lp-proof-item { display:flex; align-items:center; gap:10px; }
+        .lp-proof-icon { font-size:20px; }
+        .lp-proof-label { font-size:13px; color:#6B6B6B; }
+        .lp-proof-label strong { color:#1A1A1A; display:block; font-size:15px; }
+        @media(max-width:640px){ .lp-proof-inner{gap:24px;} }
+
+        /* ─── SECTION HELPERS ───────────────────────────────── */
         .lp-section-label {
-          font-size: 12px; text-transform: uppercase; letter-spacing: 2px;
-          color: #386FA4; font-weight: 600; margin-bottom: 12px;
+          font-size:11px; text-transform:uppercase; letter-spacing:2.5px;
+          color:#386FA4; font-weight:700; margin-bottom:10px;
         }
         .lp-section-title {
-          font-family: var(--font-instrument-serif, Georgia, serif);
-          font-size: clamp(32px, 4vw, 48px); line-height: 1.1;
-          letter-spacing: -1px; margin-bottom: 16px; font-weight: 400;
+          font-family:var(--font-instrument-serif,Georgia,serif);
+          font-size:clamp(30px,4vw,46px); line-height:1.1;
+          letter-spacing:-1px; margin-bottom:14px; font-weight:400;
         }
-        .lp-section-subtitle {
-          font-size: 17px; color: #6B6B6B; max-width: 560px; line-height: 1.6;
-        }
+        .lp-section-sub { font-size:16px; color:#6B6B6B; max-width:540px; line-height:1.65; }
 
-        /* BEFORE / AFTER */
-        .lp-before-after { padding: 100px 0; }
+        /* ─── BEFORE / AFTER ────────────────────────────────── */
+        .lp-ba { padding:100px 0; }
         .lp-ba-grid {
-          display: grid; grid-template-columns: 1fr auto 1fr; gap: 24px;
-          align-items: stretch; margin-top: 48px;
+          display:grid; grid-template-columns:1fr auto 1fr; gap:24px;
+          align-items:stretch; margin-top:48px;
         }
-        .lp-ba-card { border-radius: 16px; padding: 32px; }
-        .lp-ba-before { background: white; border: 1px solid #E5E2DB; }
-        .lp-ba-after { background: #0F1115; color: white; }
-        .lp-ba-arrow { display: flex; align-items: center; justify-content: center; font-size: 32px; color: #386FA4; }
-        .lp-ba-title { font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 20px; display: flex; align-items: center; gap: 8px; }
-        .lp-ba-before .lp-ba-title { color: #6B6B6B; }
-        .lp-ba-after .lp-ba-title { color: #386FA4; }
-        .lp-ba-item { padding: 10px 0; border-bottom: 1px solid rgba(128,128,128,0.15); font-size: 14px; display: flex; align-items: flex-start; gap: 10px; line-height: 1.5; }
-        .lp-ba-item:last-child { border-bottom: none; }
-        .lp-ba-before .lp-ba-item { color: #6B6B6B; }
-        .lp-ba-after .lp-ba-item { color: #CCC; }
-        .lp-ba-icon { flex-shrink: 0; width: 20px; text-align: center; font-size: 14px; margin-top: 2px; }
-        @media(max-width: 768px) {
-          .lp-ba-grid { grid-template-columns: 1fr; }
-          .lp-ba-arrow { transform: rotate(90deg); padding: 8px 0; }
+        .lp-ba-card { border-radius:18px; padding:32px; }
+        .lp-ba-before { background:white; border:1px solid #E5E2DB; }
+        .lp-ba-after  {
+          background:linear-gradient(145deg,#0a1e2d,#133C55);
+          border:1px solid rgba(89,165,216,.2); color:white;
         }
+        .lp-ba-arrow {
+          display:flex; align-items:center; justify-content:center;
+          font-size:28px; color:#59A5D8;
+        }
+        .lp-ba-head {
+          font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:1px;
+          margin-bottom:20px; display:flex; align-items:center; gap:8px;
+        }
+        .lp-ba-before .lp-ba-head { color:#999; }
+        .lp-ba-after  .lp-ba-head { color:#59A5D8; }
+        .lp-ba-item {
+          padding:9px 0; border-bottom:1px solid rgba(128,128,128,.12);
+          font-size:14px; display:flex; align-items:flex-start; gap:10px; line-height:1.5;
+        }
+        .lp-ba-item:last-child { border-bottom:none; }
+        .lp-ba-before .lp-ba-item { color:#6B6B6B; }
+        .lp-ba-after  .lp-ba-item { color:rgba(255,255,255,.65); }
+        .lp-ba-ico { flex-shrink:0; width:20px; text-align:center; font-size:14px; margin-top:2px; }
+        @media(max-width:768px){ .lp-ba-grid{grid-template-columns:1fr;} .lp-ba-arrow{transform:rotate(90deg);} }
 
-        /* FEATURES */
-        .lp-features { padding: 100px 0; }
-        .lp-features-header { text-align: center; margin-bottom: 64px; }
-        .lp-features-megagrid { display: flex; flex-direction: column; gap: 16px; }
-        .lp-feature-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
-        .lp-feature-card {
-          background: white; border: 1px solid #F0EDE6; border-radius: 16px;
-          padding: 28px; transition: all 0.3s; position: relative; overflow: hidden;
+        /* ─── TIMELINE FEATURE ──────────────────────────────── */
+        .lp-timeline-section { padding:100px 0; background:#0a1e2d; overflow:hidden; }
+        .lp-timeline-inner {
+          display:grid; grid-template-columns:1fr 1fr; gap:80px; align-items:center;
         }
-        .lp-feature-card:hover { border-color: #E5E2DB; transform: translateY(-2px); }
-        .lp-feature-card.highlight { border: 1.5px solid #386FA4; }
-        .lp-feature-card.highlight::after {
-          content: 'Cœur du produit'; position: absolute; top: 12px; right: 12px;
-          font-size: 10px; font-weight: 600; padding: 3px 10px; border-radius: 100px;
-          background: #EBF4FB; color: #386FA4;
-        }
-        .lp-feature-icon-row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
-        .lp-feature-emoji { font-size: 28px; line-height: 1; }
-        .lp-feature-card h3 { font-size: 17px; font-weight: 600; margin-bottom: 6px; color: #1A1A1A; }
-        .lp-feature-card p { font-size: 13.5px; color: #6B6B6B; line-height: 1.65; }
-        .lp-feature-bullets { list-style: none; margin-top: 10px; padding: 0; }
-        .lp-feature-bullets li {
-          font-size: 12.5px; color: #6B6B6B; padding: 3px 0; padding-left: 18px; position: relative;
-        }
-        .lp-feature-bullets li::before {
-          content: ''; position: absolute; left: 0; top: 10px;
-          width: 6px; height: 6px; border-radius: 50%; background: #E5E2DB;
-        }
+        @media(max-width:900px){ .lp-timeline-inner{grid-template-columns:1fr; gap:48px;} }
 
-        /* JOURNEY / ROADMAP */
-        .lp-journey { padding: 100px 0; background: #0F1115; color: white; }
-        .lp-journey .lp-section-subtitle { color: #777; }
-        .lp-journey-timeline { margin-top: 56px; position: relative; }
-        .lp-journey-timeline::before {
-          content: ''; position: absolute; left: 32px; top: 0; bottom: 0;
-          width: 2px; background: linear-gradient(to bottom, #386FA4, #333);
+        /* Texte côté */
+        .lp-timeline-section .lp-section-title { color:white; }
+        .lp-timeline-section .lp-section-sub   { color:rgba(255,255,255,.5); }
+        .lp-timeline-section .lp-section-label { color:#59A5D8; }
+        .lp-tl-points { list-style:none; padding:0; margin-top:28px; }
+        .lp-tl-points li {
+          font-size:14px; color:rgba(255,255,255,.65); padding:8px 0;
+          display:flex; align-items:flex-start; gap:10px;
         }
-        .lp-journey-item { display: flex; gap: 24px; margin-bottom: 40px; position: relative; }
-        .lp-journey-item:last-child { margin-bottom: 0; }
-        .lp-journey-dot {
-          width: 64px; height: 64px; border-radius: 50%;
-          display: flex; align-items: center; justify-content: center;
-          font-size: 14px; font-weight: 700; flex-shrink: 0;
-          position: relative; z-index: 2;
-        }
-        .lp-dot-active { background: #386FA4; color: white; box-shadow: 0 0 0 6px rgba(56,111,164,0.2); }
-        .lp-dot-next { background: #1A1D24; border: 2px solid #333; color: #555; }
-        .lp-journey-content { padding-top: 8px; flex: 1; }
-        .lp-journey-content h3 { font-size: 20px; font-weight: 600; margin-bottom: 4px; color: white; }
-        .lp-j-version { font-size: 12px; color: #386FA4; font-weight: 600; margin-bottom: 6px; display: inline-block; }
-        .lp-journey-content p { font-size: 14px; color: #888; line-height: 1.7; max-width: 520px; }
-        .lp-j-features { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-        .lp-j-tag {
-          font-size: 11px; padding: 3px 10px; border-radius: 100px;
-          background: #1A1D24; border: 1px solid #2A2D34; color: #888;
-        }
-        @media(max-width: 768px) {
-          .lp-journey-timeline::before { left: 20px; }
-          .lp-journey-dot { width: 40px; height: 40px; font-size: 12px; }
-        }
+        .lp-tl-points .arrow { color:#59A5D8; font-weight:700; flex-shrink:0; }
 
-        /* HOW IT WORKS */
-        .lp-how { padding: 100px 0; }
-        .lp-how-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 32px; margin-top: 48px; }
-        .lp-how-number {
-          font-family: var(--font-instrument-serif, Georgia, serif);
-          font-size: 56px; color: #E5E2DB; line-height: 1; margin-bottom: 12px;
+        /* Visual timeline demo */
+        .lp-tl-demo {
+          background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08);
+          border-radius:20px; padding:28px; position:relative;
         }
-        .lp-how-step h3 { font-size: 17px; font-weight: 600; margin-bottom: 6px; color: #1A1A1A; }
-        .lp-how-step p { font-size: 14px; color: #6B6B6B; line-height: 1.6; }
+        .lp-tl-demo-title {
+          font-size:13px; font-weight:600; color:rgba(255,255,255,.5);
+          text-transform:uppercase; letter-spacing:1.5px; margin-bottom:24px;
+        }
+        /* Ligne verticale */
+        .lp-tl-steps { position:relative; padding-left:36px; }
+        .lp-tl-steps::before {
+          content:''; position:absolute; left:11px; top:16px; bottom:16px;
+          width:2px;
+          background:linear-gradient(to bottom,#386FA4,rgba(56,111,164,.1));
+        }
+        .lp-tl-step { position:relative; margin-bottom:20px; }
+        .lp-tl-step:last-child { margin-bottom:0; }
+        .lp-tl-node {
+          position:absolute; left:-36px; top:0;
+          width:24px; height:24px; border-radius:50%;
+          display:flex; align-items:center; justify-content:center;
+          font-size:11px; font-weight:700; flex-shrink:0;
+        }
+        .lp-tl-node-done   { background:#6BCB77; color:#0a1e2d; }
+        .lp-tl-node-active {
+          background:#386FA4; color:white;
+          box-shadow:0 0 0 4px rgba(56,111,164,.25);
+          animation:lp-glow 2.5s ease-in-out infinite;
+        }
+        .lp-tl-node-wait   { background:rgba(255,255,255,.08); border:1.5px solid rgba(255,255,255,.15); color:rgba(255,255,255,.3); }
+        .lp-tl-step-content {
+          background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.06);
+          border-radius:10px; padding:12px 14px;
+          transition:background .2s;
+        }
+        .lp-tl-step-content:hover { background:rgba(255,255,255,.07); }
+        .lp-tl-step-top {
+          display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;
+        }
+        .lp-tl-step-name { font-size:13px; font-weight:600; color:rgba(255,255,255,.85); }
+        .lp-tl-step-tag {
+          font-size:10px; font-weight:600; padding:2px 8px; border-radius:100px;
+        }
+        .lp-tl-tag-done   { background:rgba(107,203,119,.15); color:#6BCB77; }
+        .lp-tl-tag-active { background:rgba(56,111,164,.2); color:#84D2F6; }
+        .lp-tl-tag-wait   { background:rgba(255,255,255,.05); color:rgba(255,255,255,.3); }
+        .lp-tl-step-sub { font-size:11px; color:rgba(255,255,255,.35); }
+        .lp-tl-step-sub span { color:#59A5D8; margin-right:4px; }
 
-        /* GAINS */
-        .lp-gains { padding: 80px 0 100px; }
-        .lp-gains-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin-top: 48px; }
+        /* ─── FEATURES GRID ─────────────────────────────────── */
+        .lp-features { padding:100px 0; }
+        .lp-features-header { text-align:center; margin-bottom:64px; }
+        .lp-feat-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+        @media(max-width:900px){ .lp-feat-grid{grid-template-columns:repeat(2,1fr);} }
+        @media(max-width:600px){ .lp-feat-grid{grid-template-columns:1fr;} }
+
+        .lp-feat-card {
+          background:white; border:1px solid #F0EDE6; border-radius:18px;
+          padding:28px; transition:all .3s; position:relative; overflow:hidden;
+        }
+        .lp-feat-card:hover { border-color:#D0E6F5; transform:translateY(-3px); box-shadow:0 8px 32px rgba(56,111,164,.08); }
+        .lp-feat-card.star {
+          border:1.5px solid #59A5D8;
+          background:linear-gradient(145deg,#f8fcff,white);
+        }
+        .lp-feat-card.star::after {
+          content:'⭐ Cœur du produit'; position:absolute; top:12px; right:12px;
+          font-size:10px; font-weight:600; padding:3px 10px; border-radius:100px;
+          background:#EBF4FB; color:#386FA4;
+        }
+        .lp-feat-emoji { font-size:30px; margin-bottom:14px; display:block; }
+        .lp-feat-card h3 { font-size:16px; font-weight:700; margin-bottom:6px; color:#1A1A1A; }
+        .lp-feat-card p  { font-size:13.5px; color:#6B6B6B; line-height:1.65; }
+        .lp-feat-list { list-style:none; padding:0; margin-top:10px; }
+        .lp-feat-list li { font-size:12px; color:#888; padding:3px 0 3px 16px; position:relative; }
+        .lp-feat-list li::before {
+          content:''; position:absolute; left:0; top:10px;
+          width:5px; height:5px; border-radius:50%; background:#D0E6F5;
+        }
+        .lp-feat-wide { grid-column:span 2; }
+        @media(max-width:600px){ .lp-feat-wide{grid-column:span 1;} }
+
+        /* ─── HOW IT WORKS ──────────────────────────────────── */
+        .lp-how { padding:100px 0; background:#F5F3EE; }
+        .lp-how-steps {
+          display:grid; grid-template-columns:repeat(4,1fr); gap:0;
+          margin-top:56px; position:relative;
+        }
+        .lp-how-steps::after {
+          content:''; position:absolute; top:28px; left:12%; right:12%;
+          height:2px; background:linear-gradient(90deg,#E5E2DB,#D0E6F5,#E5E2DB);
+          z-index:0;
+        }
+        .lp-how-step { position:relative; z-index:1; padding:0 16px; text-align:center; }
+        .lp-how-num {
+          width:56px; height:56px; border-radius:50%; border:2px solid #D0E6F5;
+          background:white; color:#386FA4; font-size:18px; font-weight:700;
+          display:flex; align-items:center; justify-content:center; margin:0 auto 16px;
+          box-shadow:0 4px 16px rgba(56,111,164,.1);
+        }
+        .lp-how-step h3 { font-size:15px; font-weight:700; margin-bottom:6px; color:#1A1A1A; }
+        .lp-how-step p  { font-size:13px; color:#6B6B6B; line-height:1.6; }
+        @media(max-width:768px){
+          .lp-how-steps{grid-template-columns:1fr 1fr; gap:32px;}
+          .lp-how-steps::after{display:none;}
+        }
+        @media(max-width:480px){ .lp-how-steps{grid-template-columns:1fr;} }
+
+        /* ─── GAINS ─────────────────────────────────────────── */
+        .lp-gains { padding:80px 0; }
+        .lp-gains-grid {
+          display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-top:48px;
+        }
+        @media(max-width:640px){ .lp-gains-grid{grid-template-columns:1fr 1fr;} }
         .lp-gain-card {
-          background: white; border: 1px solid #F0EDE6; border-radius: 16px;
-          padding: 28px 20px; text-align: center;
+          background:white; border:1px solid #F0EDE6; border-radius:18px;
+          padding:28px 24px; text-align:center; transition:all .3s;
         }
-        .lp-gain-number {
-          font-family: var(--font-instrument-serif, Georgia, serif);
-          font-size: 48px; color: #386FA4; line-height: 1; margin-bottom: 6px;
+        .lp-gain-card:hover { border-color:#D0E6F5; transform:translateY(-2px); }
+        .lp-gain-n {
+          font-family:var(--font-instrument-serif,Georgia,serif);
+          font-size:46px; color:#386FA4; line-height:1; margin-bottom:6px;
         }
-        .lp-gain-label { font-size: 13px; color: #6B6B6B; line-height: 1.4; }
+        .lp-gain-l { font-size:13px; color:#6B6B6B; line-height:1.45; }
 
-        /* AUDIENCE */
-        .lp-audience { padding: 80px 0; background: #F5F3EE; }
-        .lp-audience-grid {
-          display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;
-          margin-top: 40px; max-width: 840px; margin-left: auto; margin-right: auto;
+        /* ─── AUDIENCE ──────────────────────────────────────── */
+        .lp-audience { padding:80px 0; background:#F5F3EE; }
+        .lp-aud-grid {
+          display:grid; grid-template-columns:repeat(3,1fr); gap:16px;
+          margin-top:40px; max-width:860px; margin-left:auto; margin-right:auto;
         }
-        .lp-audience-card { background: white; border-radius: 16px; padding: 24px; text-align: center; }
-        .lp-audience-emoji { font-size: 36px; margin-bottom: 12px; }
-        .lp-audience-card h3 { font-size: 15px; font-weight: 600; margin-bottom: 4px; color: #1A1A1A; }
-        .lp-audience-card p { font-size: 13px; color: #6B6B6B; }
-        @media(max-width: 640px) {
-          .lp-audience-grid { grid-template-columns: 1fr; max-width: 320px; }
+        .lp-aud-card {
+          background:white; border-radius:16px; padding:24px; text-align:center;
+          transition:all .3s; border:1px solid transparent;
         }
+        .lp-aud-card:hover { border-color:#D0E6F5; transform:translateY(-2px); }
+        .lp-aud-emoji { font-size:34px; margin-bottom:12px; }
+        .lp-aud-card h3 { font-size:15px; font-weight:700; margin-bottom:4px; color:#1A1A1A; }
+        .lp-aud-card p  { font-size:13px; color:#6B6B6B; line-height:1.55; }
+        @media(max-width:640px){ .lp-aud-grid{grid-template-columns:1fr 1fr;} }
 
-        /* SOVEREIGNTY */
-        .lp-sovereignty { padding: 80px 0; }
-        .lp-sov-box { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center; }
-        .lp-sov-visual {
-          background: #0F1115; border-radius: 16px; padding: 40px; text-align: center;
-          position: relative; overflow: hidden;
+        /* ─── SOVEREIGNTY ───────────────────────────────────── */
+        .lp-sovereignty { padding:80px 0; }
+        .lp-sov-box { display:grid; grid-template-columns:1fr 1fr; gap:48px; align-items:center; }
+        .lp-sov-vis {
+          background:linear-gradient(145deg,#0a1e2d,#133C55);
+          border-radius:20px; padding:40px; text-align:center; position:relative; overflow:hidden;
         }
-        .lp-sov-visual::before {
-          content: ''; position: absolute; top: -30%; right: -30%;
-          width: 300px; height: 300px;
-          background: radial-gradient(circle, rgba(37,99,235,0.1) 0%, transparent 70%);
-          pointer-events: none;
+        .lp-sov-vis::before {
+          content:''; position:absolute; top:-30%; right:-30%;
+          width:300px; height:300px;
+          background:radial-gradient(circle,rgba(89,165,216,.15) 0%,transparent 70%);
         }
-        .lp-sov-flag { font-size: 64px; margin-bottom: 16px; position: relative; }
-        .lp-sov-visual h3 { font-size: 20px; font-weight: 600; color: white; margin-bottom: 8px; position: relative; }
-        .lp-sov-visual p { font-size: 13px; color: #666; position: relative; }
-        .lp-sov-text h3 { font-size: 24px; font-weight: 600; margin-bottom: 12px; color: #1A1A1A; }
-        .lp-sov-text > p { font-size: 15px; color: #6B6B6B; line-height: 1.7; margin-bottom: 16px; }
-        .lp-sov-points { list-style: none; padding: 0; }
-        .lp-sov-points li { font-size: 14px; padding: 8px 0; display: flex; align-items: flex-start; gap: 10px; color: #1A1A1A; }
-        .lp-sov-points li span { color: #2563EB; font-weight: 600; flex-shrink: 0; }
-        @media(max-width: 768px) { .lp-sov-box { grid-template-columns: 1fr; } }
+        .lp-sov-flag { font-size:60px; margin-bottom:14px; position:relative; }
+        .lp-sov-vis h3 { font-size:18px; font-weight:600; color:white; margin-bottom:8px; position:relative; }
+        .lp-sov-vis p  { font-size:13px; color:rgba(255,255,255,.4); position:relative; }
+        .lp-sov-txt h3 { font-size:22px; font-weight:700; margin-bottom:10px; }
+        .lp-sov-txt > p { font-size:15px; color:#6B6B6B; line-height:1.7; margin-bottom:16px; }
+        .lp-sov-pts { list-style:none; padding:0; }
+        .lp-sov-pts li { font-size:14px; padding:7px 0; display:flex; align-items:flex-start; gap:10px; }
+        .lp-sov-pts .arr { color:#386FA4; font-weight:700; flex-shrink:0; }
+        @media(max-width:768px){ .lp-sov-box{grid-template-columns:1fr;} }
 
-        /* PRICING */
-        .lp-pricing { padding: 80px 0; background: #F5F3EE; }
+        /* ─── PRICING ───────────────────────────────────────── */
+        .lp-pricing { padding:80px 0; background:#F5F3EE; }
         .lp-pricing-cards {
-          display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;
-          margin-top: 40px; max-width: 700px; margin-left: auto; margin-right: auto;
+          display:grid; grid-template-columns:repeat(3,1fr); gap:16px;
+          margin-top:40px;
         }
-        .lp-pricing-card { background: white; border: 1px solid #F0EDE6; border-radius: 16px; padding: 32px; text-align: center; }
-        .lp-pricing-card.featured { border: 2px solid #386FA4; position: relative; }
+        @media(max-width:768px){ .lp-pricing-cards{grid-template-columns:1fr; max-width:420px; margin-left:auto; margin-right:auto;} }
+        .lp-pricing-card {
+          background:white; border:1px solid #F0EDE6; border-radius:20px; padding:32px;
+        }
+        .lp-pricing-card.featured {
+          border:2px solid #386FA4; position:relative;
+          background:linear-gradient(145deg,#f8fcff,white);
+        }
         .lp-pricing-card.featured::before {
-          content: 'Le plus populaire'; position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
-          font-size: 11px; font-weight: 600; padding: 4px 14px; border-radius: 100px;
-          background: #386FA4; color: white; white-space: nowrap;
+          content:'⭐ Le plus populaire'; position:absolute; top:-13px; left:50%; transform:translateX(-50%);
+          font-size:11px; font-weight:700; padding:4px 16px; border-radius:100px;
+          background:linear-gradient(90deg,#386FA4,#133C55); color:white; white-space:nowrap;
         }
-        .lp-pricing-card h3 { font-size: 20px; font-weight: 600; margin-bottom: 4px; color: #1A1A1A; }
+        .lp-pricing-card h3 { font-size:20px; font-weight:700; margin-bottom:4px; }
         .lp-pricing-price {
-          font-family: var(--font-instrument-serif, Georgia, serif);
-          font-size: 40px; color: #1A1A1A; margin: 12px 0 4px;
+          font-family:var(--font-instrument-serif,Georgia,serif);
+          font-size:42px; color:#1A1A1A; margin:12px 0 4px;
         }
-        .lp-pricing-price span { font-size: 16px; color: #6B6B6B; font-family: var(--font-dm-sans, sans-serif); }
-        .lp-pricing-desc { font-size: 13px; color: #6B6B6B; margin-bottom: 20px; }
-        .lp-pricing-list { list-style: none; text-align: left; padding: 0; margin-bottom: 24px; }
-        .lp-pricing-list li { font-size: 13px; padding: 5px 0; display: flex; align-items: flex-start; gap: 8px; color: #6B6B6B; }
-        .lp-pricing-list li::before { content: '✓'; color: #2D8A56; font-weight: 600; flex-shrink: 0; }
+        .lp-pricing-price span { font-size:15px; color:#6B6B6B; font-family:var(--font-dm-sans,sans-serif); }
+        .lp-pricing-desc { font-size:13px; color:#6B6B6B; margin-bottom:20px; }
+        .lp-pricing-list { list-style:none; text-align:left; padding:0; margin-bottom:24px; }
+        .lp-pricing-list li {
+          font-size:13px; padding:5px 0; display:flex; align-items:flex-start; gap:8px; color:#6B6B6B;
+        }
+        .lp-pricing-list li::before { content:'✓'; color:#2D8A56; font-weight:700; flex-shrink:0; }
         .lp-pricing-cta {
-          display: block; text-align: center; text-decoration: none; font-weight: 600;
-          font-family: var(--font-dm-sans, sans-serif); padding: 12px 24px; border-radius: 100px;
-          font-size: 14px; transition: all 0.2s;
+          display:block; text-align:center; text-decoration:none; font-weight:700;
+          padding:13px 24px; border-radius:100px; font-size:14px; transition:all .2s;
         }
-        .lp-pricing-cta-outline { border: 1.5px solid #E5E2DB; color: #1A1A1A; }
-        .lp-pricing-cta-outline:hover { border-color: #1A1A1A; }
-        .lp-pricing-cta-primary { background: #386FA4; color: white; }
-        .lp-pricing-cta-primary:hover { background: #2d5e8e; transform: translateY(-1px); }
+        .lp-pricing-cta-outline { border:1.5px solid #E5E2DB; color:#1A1A1A; }
+        .lp-pricing-cta-outline:hover { border-color:#386FA4; color:#386FA4; }
+        .lp-pricing-cta-primary {
+          background:linear-gradient(135deg,#386FA4,#133C55); color:white;
+          box-shadow:0 4px 16px rgba(56,111,164,.3);
+        }
+        .lp-pricing-cta-primary:hover { transform:translateY(-1px); box-shadow:0 6px 24px rgba(56,111,164,.4); }
+        .lp-pricing-cta-agency {
+          background:#0a1e2d; color:rgba(255,255,255,.8);
+        }
+        .lp-pricing-cta-agency:hover { background:#133C55; color:white; }
 
-        /* CTA SECTION */
-        .lp-cta-section { padding: 100px 0; text-align: center; }
+        /* ─── CTA FINALE ─────────────────────────────────────── */
+        .lp-cta-section { padding:0 0 100px; background:#F5F3EE; }
         .lp-cta-box {
-          background: #0F1115; border-radius: 24px; padding: 64px 40px;
-          position: relative; overflow: hidden;
+          position:relative; overflow:hidden;
+          background:linear-gradient(135deg,#0a1e2d 0%,#133C55 40%,#1a4a6e 75%,#25608a 100%);
+          border-radius:28px; padding:80px 48px; text-align:center;
         }
-        .lp-cta-box::before {
-          content: ''; position: absolute; bottom: -40%; right: -20%;
-          width: 500px; height: 500px;
-          background: radial-gradient(circle, rgba(56,111,164,0.12) 0%, transparent 70%);
-          pointer-events: none;
+        /* Orbs internes */
+        .lp-cta-orb {
+          position:absolute; border-radius:50%; pointer-events:none; filter:blur(60px);
         }
-        .lp-cta-box h2 {
-          font-family: var(--font-instrument-serif, Georgia, serif);
-          font-size: clamp(32px, 4vw, 48px); color: white; margin-bottom: 16px;
-          font-weight: 400; letter-spacing: -1px; position: relative;
+        .lp-cta-orb-1 { width:400px; height:400px; top:-150px; right:-100px; background:#59A5D8; opacity:.15; }
+        .lp-cta-orb-2 { width:300px; height:300px; bottom:-120px; left:-80px;  background:#84D2F6; opacity:.1; }
+        /* Cercle décoratif animé */
+        .lp-cta-ring {
+          position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+          width:500px; height:500px; border-radius:50%;
+          border:1px solid rgba(89,165,216,.08);
+          animation:lp-spin-slow 30s linear infinite;
+          pointer-events:none;
         }
-        .lp-cta-box p { color: #888; font-size: 16px; margin-bottom: 32px; max-width: 480px; margin-left: auto; margin-right: auto; position: relative; }
-        .lp-cta-buttons { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; position: relative; margin-bottom: 24px; }
-        .lp-btn-cta-primary {
-          font-size: 15px; font-weight: 600; font-family: var(--font-dm-sans, sans-serif);
-          color: white; text-decoration: none; padding: 14px 32px;
-          border-radius: 100px; background: #386FA4; transition: all 0.2s; white-space: nowrap;
+        .lp-cta-ring-2 {
+          position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+          width:700px; height:700px; border-radius:50%;
+          border:1px solid rgba(89,165,216,.05);
+          animation:lp-spin-slow 50s linear infinite reverse;
+          pointer-events:none;
         }
-        .lp-btn-cta-primary:hover { background: #2d5e8e; transform: translateY(-1px); }
-        .lp-btn-cta-outline {
-          font-size: 15px; font-weight: 500; font-family: var(--font-dm-sans, sans-serif);
-          color: white; text-decoration: none; padding: 13px 32px;
-          border-radius: 100px; background: transparent; border: 1.5px solid #333;
-          transition: all 0.2s; white-space: nowrap;
+        .lp-cta-content { position:relative; z-index:2; }
+        .lp-cta-tag {
+          display:inline-flex; align-items:center; gap:8px;
+          background:rgba(89,165,216,.1); border:1px solid rgba(89,165,216,.2);
+          padding:5px 16px; border-radius:100px; font-size:12px; font-weight:600;
+          color:#84D2F6; margin-bottom:24px; text-transform:uppercase; letter-spacing:1.5px;
         }
-        .lp-btn-cta-outline:hover { border-color: #666; }
-        .lp-cta-perks { display: flex; justify-content: center; gap: 24px; position: relative; }
-        .lp-cta-perks span { font-size: 12px; color: #555; display: flex; align-items: center; gap: 6px; }
-        .lp-cta-perks .check { color: #386FA4; }
-        @media(max-width: 768px) {
-          .lp-cta-box { padding: 40px 24px; }
-          .lp-cta-perks { flex-direction: column; align-items: center; gap: 8px; }
+        .lp-cta-h2 {
+          font-family:var(--font-instrument-serif,Georgia,serif);
+          font-size:clamp(34px,5vw,62px); color:white; margin-bottom:16px;
+          font-weight:400; letter-spacing:-1.5px; line-height:1.07;
+        }
+        .lp-cta-h2 em { color:#84D2F6; font-style:italic; }
+        .lp-cta-sub {
+          color:rgba(255,255,255,.55); font-size:17px; margin-bottom:40px;
+          max-width:480px; margin-left:auto; margin-right:auto; line-height:1.65;
+        }
+        .lp-cta-buttons { display:flex; gap:14px; justify-content:center; flex-wrap:wrap; margin-bottom:32px; }
+
+        /* Bouton CTA principal — wow effect */
+        .lp-btn-cta {
+          position:relative; overflow:hidden;
+          font-size:17px; font-weight:800; color:#0a1e2d; text-decoration:none;
+          padding:18px 48px; border-radius:100px;
+          background:linear-gradient(90deg,#ffffff 0%,#e8f5ff 30%,#84D2F6 50%,#e8f5ff 70%,#ffffff 100%);
+          background-size:300% auto;
+          animation:lp-shimmer 3.5s linear infinite;
+          box-shadow:0 6px 40px rgba(0,0,0,.4); white-space:nowrap;
+          transition:transform .2s, box-shadow .2s;
+          letter-spacing:-.3px;
+        }
+        .lp-btn-cta:hover { transform:translateY(-3px) scale(1.03); box-shadow:0 12px 48px rgba(0,0,0,.45); }
+        .lp-btn-cta-ghost {
+          font-size:15px; font-weight:500; color:rgba(255,255,255,.7); text-decoration:none;
+          padding:17px 32px; border-radius:100px;
+          border:1.5px solid rgba(255,255,255,.15); transition:all .2s; white-space:nowrap;
+        }
+        .lp-btn-cta-ghost:hover { border-color:rgba(255,255,255,.4); color:white; }
+        /* Perks */
+        .lp-cta-perks { display:flex; justify-content:center; gap:28px; flex-wrap:wrap; }
+        .lp-cta-perks span { font-size:13px; color:rgba(255,255,255,.4); display:flex; align-items:center; gap:6px; }
+        .lp-cta-perks .ck { color:#6BCB77; font-size:15px; }
+        @media(max-width:768px){
+          .lp-cta-box{padding:56px 24px;}
+          .lp-cta-perks{flex-direction:column; align-items:center; gap:10px;}
+          .lp-cta-ring,.lp-cta-ring-2{display:none;}
         }
 
-        /* FOOTER */
-        .lp-footer { padding: 64px 0 0; border-top: 1px solid #F0EDE6; background: #FAFAF8; }
-        .lp-footer-grid {
-          display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 48px; padding-bottom: 48px;
+        /* ─── ROADMAP ────────────────────────────────────────── */
+        .lp-roadmap { padding:100px 0; background:#0a1e2d; }
+        .lp-roadmap .lp-section-title { color:white; }
+        .lp-roadmap .lp-section-sub   { color:rgba(255,255,255,.4); }
+        .lp-roadmap .lp-section-label { color:#59A5D8; }
+        .lp-roadmap-timeline { margin-top:56px; position:relative; }
+        .lp-roadmap-timeline::before {
+          content:''; position:absolute; left:31px; top:0; bottom:0;
+          width:2px; background:linear-gradient(to bottom,#386FA4,rgba(56,111,164,.1));
         }
-        .lp-footer-brand p { font-size: 13.5px; color: #6B6B6B; line-height: 1.7; margin-top: 12px; max-width: 260px; }
-        .lp-footer-badges { display: flex; gap: 8px; margin-top: 20px; flex-wrap: wrap; }
+        .lp-roadmap-item { display:flex; gap:24px; margin-bottom:40px; position:relative; }
+        .lp-roadmap-item:last-child { margin-bottom:0; }
+        .lp-roadmap-dot {
+          width:62px; height:62px; border-radius:50%;
+          display:flex; align-items:center; justify-content:center;
+          font-size:13px; font-weight:800; flex-shrink:0; position:relative; z-index:2;
+        }
+        .lp-dot-on  { background:linear-gradient(135deg,#386FA4,#133C55); color:white; box-shadow:0 0 0 6px rgba(56,111,164,.15); }
+        .lp-dot-off { background:#111a26; border:2px solid #1e2d3d; color:#334; }
+        .lp-roadmap-content { padding-top:8px; flex:1; }
+        .lp-roadmap-content h3 { font-size:19px; font-weight:700; margin-bottom:4px; color:white; }
+        .lp-r-ver { font-size:11px; color:#59A5D8; font-weight:700; margin-bottom:5px; display:inline-block; text-transform:uppercase; letter-spacing:1px; }
+        .lp-roadmap-content p { font-size:14px; color:rgba(255,255,255,.45); line-height:1.7; max-width:520px; }
+        .lp-r-tags { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+        .lp-r-tag { font-size:11px; padding:3px 10px; border-radius:100px; background:#111a26; border:1px solid #1e2d3d; color:rgba(255,255,255,.4); }
+
+        /* ─── FOOTER ─────────────────────────────────────────── */
+        .lp-footer { padding:64px 0 0; border-top:1px solid #F0EDE6; background:#FAFAF8; }
+        .lp-footer-grid { display:grid; grid-template-columns:2fr 1fr 1fr 1fr; gap:48px; padding-bottom:48px; }
+        .lp-footer-brand p { font-size:13.5px; color:#6B6B6B; line-height:1.7; margin-top:12px; max-width:260px; }
+        .lp-footer-badges { display:flex; gap:8px; margin-top:18px; flex-wrap:wrap; }
         .lp-footer-badge {
-          font-size: 11px; padding: 4px 10px; border-radius: 100px;
-          background: #EBF4FB; color: #386FA4; border: 1px solid #D0E6F5; font-weight: 500;
+          font-size:11px; padding:4px 10px; border-radius:100px;
+          background:#EBF4FB; color:#386FA4; border:1px solid #D0E6F5; font-weight:600;
         }
-        .lp-footer-col h4 { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: #1A1A1A; margin-bottom: 16px; }
-        .lp-footer-col a { display: block; font-size: 13.5px; color: #6B6B6B; text-decoration: none; padding: 4px 0; transition: color 0.2s; }
-        .lp-footer-col a:hover { color: #1A1A1A; }
+        .lp-footer-col h4 { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:1.5px; color:#1A1A1A; margin-bottom:16px; }
+        .lp-footer-col a  { display:block; font-size:13.5px; color:#6B6B6B; text-decoration:none; padding:4px 0; transition:color .2s; }
+        .lp-footer-col a:hover { color:#1A1A1A; }
         .lp-footer-bottom {
-          border-top: 1px solid #F0EDE6; padding: 20px 0;
-          display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+          border-top:1px solid #F0EDE6; padding:20px 0;
+          display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;
         }
-        .lp-footer-bottom p { font-size: 12px; color: #AAA; }
-        .lp-footer-bottom a { color: #AAA; text-decoration: none; }
-        .lp-footer-bottom a:hover { color: #6B6B6B; }
-        @media(max-width: 900px) { .lp-footer-grid { grid-template-columns: 1fr 1fr; } }
-        @media(max-width: 540px) { .lp-footer-grid { grid-template-columns: 1fr; gap: 32px; } .lp-footer-bottom { flex-direction: column; text-align: center; } }
+        .lp-footer-bottom p { font-size:12px; color:#AAA; }
+        .lp-footer-bottom a { color:#AAA; text-decoration:none; }
+        .lp-footer-bottom a:hover { color:#6B6B6B; }
+        @media(max-width:900px){ .lp-footer-grid{grid-template-columns:1fr 1fr;} }
+        @media(max-width:540px){
+          .lp-footer-grid{grid-template-columns:1fr; gap:32px;}
+          .lp-footer-bottom{flex-direction:column; text-align:center;}
+        }
 
-        /* ANIMATIONS */
-        .lp-fade-up { opacity: 0; transform: translateY(24px); transition: all 0.6s cubic-bezier(0.16,1,0.3,1); }
-        .lp-visible { opacity: 1; transform: translateY(0); }
-
-        /* RESPONSIVE */
-        @media(max-width: 768px) {
-          .lp-before-after, .lp-features, .lp-gains, .lp-cta-section, .lp-how, .lp-audience { padding: 64px 0; }
-          .lp-journey { padding: 64px 0; }
-          .lp-hero { padding: 120px 0 60px; }
+        /* ─── GLOBAL RESPONSIVE ─────────────────────────────── */
+        @media(max-width:768px){
+          .lp-ba,.lp-features,.lp-gains,.lp-how,.lp-audience,.lp-sovereignty,.lp-cta-section { padding:64px 0; }
+          .lp-roadmap,.lp-timeline-section { padding:64px 0; }
+          .lp-hero { padding:100px 0 60px; }
         }
       `}</style>
 
       <div className="lp-root">
-        {/* NAV */}
+
+        {/* ── NAVBAR ─────────────────────────────────────────── */}
         <nav className="lp-nav">
           <div className="lp-container lp-nav-inner">
-            <a href="/" className="lp-logo">Client<span>Flow</span></a>
+            <a href="/" className="lp-logo">Hub<span>lio</span></a>
             <div className="lp-nav-links">
               <a href="#features">Fonctionnalités</a>
-              <a href="#roadmap">Roadmap</a>
               <a href="#pricing">Tarifs</a>
-              <a href="#gains">Avantages</a>
             </div>
             <div className="lp-nav-actions">
               <Link href="/login" className="lp-btn-ghost">Se connecter</Link>
-              <Link href="/signup" className="lp-btn-primary">Commencer gratuitement</Link>
+              <Link href="/signup" className="lp-btn-nav">Essayer gratuitement →</Link>
             </div>
           </div>
         </nav>
 
-        {/* HERO */}
+        {/* ── HERO ───────────────────────────────────────────── */}
         <section className="lp-hero">
-          <div className="lp-container" style={{ position: "relative", zIndex: 1 }}>
-            <div className="lp-badge">
-              <span className="lp-badge-dot" />
-              Bêta ouverte · Gratuit sans carte bancaire
-            </div>
-            <h1 className="lp-h1">
-              Fini les allers-retours par email<br />
-              avec vos clients.
-            </h1>
-            <p className="lp-hero-sub">
-              Un portail professionnel pour chaque client : onboarding, suivi de projet, validations, documents. Tout centralisé. Zéro email de coordination.
-            </p>
-            <div className="lp-hero-pills">
-              {["Onboarding client", "Kanban projet", "Portail dédié", "Gestion de fichiers", "Réunions & Meet"].map((f) => (
-                <span key={f}>{f}</span>
-              ))}
-            </div>
-            <div className="lp-hero-cta">
-              <Link href="/signup" className="lp-btn-hero">Créer mon compte — c&apos;est gratuit</Link>
-              <Link href="/login" className="lp-btn-hero-outline">Se connecter</Link>
-            </div>
-            <div className="lp-hero-trust">
-              <span><span className="ck">✓</span> Sans carte bancaire</span>
-              <span><span className="ck">✓</span> Données hébergées en France</span>
-              <span><span className="ck">✓</span> 3 minutes pour démarrer</span>
+          <div className="lp-orb lp-orb-1" />
+          <div className="lp-orb lp-orb-2" />
+          <div className="lp-orb lp-orb-3" />
+          <div className="lp-container">
+            <div className="lp-hero-inner">
+
+              {/* Texte */}
+              <div>
+                <div className="lp-badge">
+                  <span className="lp-badge-dot" />
+                  Bêta ouverte · Gratuit sans carte bancaire
+                </div>
+                <h1 className="lp-h1">
+                  Vos projets clients,<br />
+                  <em>enfin pilotés</em><br />
+                  sans effort.
+                </h1>
+                <p className="lp-hero-sub">
+                  Onboarding, timeline de jalons, portail client dédié, documents — tout centralisé en un seul endroit. Zéro email de coordination.
+                </p>
+                <div className="lp-hero-cta">
+                  <Link href="/signup" className="lp-btn-hero">
+                    Démarrer gratuitement — sans CB ✦
+                  </Link>
+                </div>
+                <div className="lp-trust">
+                  <span><span className="ck">✓</span> Sans carte bancaire</span>
+                  <span><span className="ck">✓</span> Hébergé en France</span>
+                  <span><span className="ck">✓</span> 3 min pour démarrer</span>
+                </div>
+              </div>
+
+              {/* Aperçu timeline */}
+              <div className="lp-preview">
+                <div className="lp-preview-header">
+                  <div className="lp-preview-title">
+                    📂 Site vitrine — 5 jalons
+                  </div>
+                  <div className="lp-preview-dots">
+                    <div className="lp-preview-dot lp-preview-dot-r" />
+                    <div className="lp-preview-dot lp-preview-dot-y" />
+                    <div className="lp-preview-dot lp-preview-dot-g" />
+                  </div>
+                </div>
+                <div className="lp-preview-prog-wrap">
+                  <div className="lp-preview-prog-label">
+                    <span>Avancement</span><span>60%</span>
+                  </div>
+                  <div className="lp-preview-prog-bar">
+                    <div className="lp-preview-prog-fill" />
+                  </div>
+                </div>
+                {[
+                  { icon:"✓", cls:"lp-ms-done",   ico:"lp-ms-icon-done",   label:"Brief & onboarding",      meta:"Complété le 14 avr.",  badge:"Terminé",    bc:"lp-ms-badge-done" },
+                  { icon:"✓", cls:"lp-ms-done",   ico:"lp-ms-icon-done",   label:"Maquettes wireframes",    meta:"Validé par le client", badge:"Terminé",    bc:"lp-ms-badge-done" },
+                  { icon:"⟳", cls:"lp-ms-active", ico:"lp-ms-icon-active", label:"Design UI — écrans clés", meta:"En cours · J-3",       badge:"En cours",   bc:"lp-ms-badge-active" },
+                  { icon:"○", cls:"lp-ms-wait",   ico:"lp-ms-icon-wait",   label:"Intégration & dev",       meta:"Planifié",             badge:"À venir",    bc:"" },
+                  { icon:"○", cls:"lp-ms-wait",   ico:"lp-ms-icon-wait",   label:"Mise en ligne",           meta:"Planifié",             badge:"À venir",    bc:"" },
+                ].map((m) => (
+                  <div key={m.label} className={`lp-milestone-item ${m.cls}`}>
+                    <div className={`lp-ms-icon ${m.ico}`}>{m.icon}</div>
+                    <div className="lp-ms-label">
+                      <div className="lp-ms-name">{m.label}</div>
+                      <div className="lp-ms-meta">{m.meta}</div>
+                    </div>
+                    {m.bc && <span className={`lp-ms-badge ${m.bc}`}>{m.badge}</span>}
+                  </div>
+                ))}
+                <div className="lp-notif">
+                  <span className="lp-notif-icon">🔔</span>
+                  <div className="lp-notif-text">
+                    <strong>Sophie M.</strong> a validé les maquettes — il y a 2h
+                  </div>
+                </div>
+              </div>
+
             </div>
           </div>
         </section>
 
-        {/* BEFORE / AFTER */}
-        <section className="lp-before-after" id="features">
+        {/* ── SOCIAL PROOF ──────────────────────────────────── */}
+        <div className="lp-proof">
           <div className="lp-container">
-            <div style={{ textAlign: "center" }}>
+            <div className="lp-proof-inner">
+              {[
+                { icon:"⚡", label:<><strong>3 minutes</strong>pour onboarder un client</> },
+                { icon:"🇫🇷", label:<><strong>100% France</strong>données hébergées à Paris</> },
+                { icon:"🔒", label:<><strong>RGPD natif</strong>chiffrement AES-256</> },
+                { icon:"🎁", label:<><strong>Gratuit</strong>sans carte bancaire</> },
+              ].map((p,i) => (
+                <div key={i} className="lp-proof-item">
+                  <span className="lp-proof-icon">{p.icon}</span>
+                  <span className="lp-proof-label">{p.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* ── BEFORE / AFTER ────────────────────────────────── */}
+        <section className="lp-ba" id="features">
+          <div className="lp-container">
+            <div style={{textAlign:"center"}}>
               <div className="lp-section-label">Avant / Après</div>
               <div className="lp-section-title">Fini le chaos d'outils</div>
-              <p className="lp-section-subtitle" style={{ margin: "0 auto" }}>Comparez votre quotidien actuel avec ce que {APP_CONFIG.name} vous apporte.</p>
+              <p className="lp-section-sub" style={{margin:"0 auto"}}>
+                Comparez votre quotidien actuel avec ce que {APP_CONFIG.name} vous apporte.
+              </p>
             </div>
             <div className="lp-ba-grid">
               <div className="lp-ba-card lp-ba-before lp-fade-up">
-                <div className="lp-ba-title">😰 Avant</div>
+                <div className="lp-ba-head">😰 Avant</div>
                 {[
-                  { icon: "📧", text: "Onboarding par email : vous relancez, perdez des fichiers, reformattez des infos" },
-                  { icon: "📊", text: "Suivi projet sur un Google Sheet que personne ne lit vraiment" },
-                  { icon: "📁", text: "Fichiers éparpillés : WeTransfer, Drive, Dropbox, email… impossible à retrouver" },
-                  { icon: "📅", text: "Allers-retours pour caler une réunion, liens Meet à générer à la main" },
-                  { icon: "🧾", text: "Devis et factures en PDF envoyés par email, statuts jamais à jour" },
-                  { icon: "😤", text: "Le client vous relance pour avoir des nouvelles — vous perdez 30 min à répondre" },
-                ].map((item, i) => (
+                  {i:"📧",t:"Onboarding par email : vous relancez, perdez des fichiers, reformattez des infos"},
+                  {i:"📊",t:"Suivi projet sur un Google Sheet que personne ne lit vraiment"},
+                  {i:"📁",t:"Fichiers éparpillés : WeTransfer, Drive, Dropbox, email… impossible à retrouver"},
+                  {i:"📅",t:"Allers-retours pour caler une réunion, liens Meet à générer à la main"},
+                  {i:"🧾",t:"Devis et factures en PDF envoyés par email, statuts jamais à jour"},
+                  {i:"😤",t:"Le client vous relance pour avoir des nouvelles — 30 min perdues à répondre"},
+                ].map((item,i) => (
                   <div key={i} className="lp-ba-item">
-                    <span className="lp-ba-icon">{item.icon}</span>
-                    {item.text}
+                    <span className="lp-ba-ico">{item.i}</span>{item.t}
                   </div>
                 ))}
               </div>
               <div className="lp-ba-arrow">→</div>
               <div className="lp-ba-card lp-ba-after lp-fade-up">
-                <div className="lp-ba-title">✨ Avec {APP_CONFIG.name}</div>
+                <div className="lp-ba-head">✨ Avec {APP_CONFIG.name}</div>
                 {[
-                  { icon: "✅", text: "Formulaire d'onboarding sur mesure envoyé en 2 clics — tout est centralisé automatiquement" },
-                  { icon: "📋", text: "Kanban projet en temps réel, visible par le client dans son portail dédié" },
-                  { icon: "🗂️", text: "Tous les fichiers au même endroit : upload, download, ZIP groupé" },
-                  { icon: "📆", text: "Réservation de créneau intégrée, Google Meet créé automatiquement (v3)" },
-                  { icon: "📑", text: "Espace devis & factures dans le portail client — statuts mis à jour en temps réel (v2)" },
-                  { icon: "👤", text: "Le client voit l'avancement en direct, valide les étapes — zéro email de relance" },
-                ].map((item, i) => (
+                  {i:"✅",t:"Formulaire d'onboarding sur mesure envoyé en 2 clics — tout centralisé automatiquement"},
+                  {i:"📍",t:"Timeline de jalons en temps réel, visible par le client dans son portail dédié"},
+                  {i:"🗂️",t:"Tous les fichiers au même endroit : upload, download, ZIP groupé"},
+                  {i:"📆",t:"Réservation de créneau intégrée, Google Meet créé automatiquement (v3)"},
+                  {i:"📑",t:"Espace devis & factures dans le portail client — statuts en temps réel (v2)"},
+                  {i:"👤",t:"Le client voit l'avancement en direct, valide les étapes — zéro email de relance"},
+                ].map((item,i) => (
                   <div key={i} className="lp-ba-item">
-                    <span className="lp-ba-icon">{item.icon}</span>
-                    {item.text}
+                    <span className="lp-ba-ico">{item.i}</span>{item.t}
                   </div>
                 ))}
               </div>
@@ -502,330 +796,266 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* FEATURES */}
+        {/* ── TIMELINE SECTION ──────────────────────────────── */}
+        <section className="lp-timeline-section">
+          <div className="lp-container">
+            <div className="lp-timeline-inner">
+
+              {/* Texte */}
+              <div className="lp-fade-up">
+                <div className="lp-section-label">Timeline de jalons</div>
+                <div className="lp-section-title">Votre projet, étape par étape</div>
+                <p className="lp-section-sub">
+                  Créez une timeline visuelle pour chaque projet. Vos clients voient la progression en temps réel et valident chaque étape directement depuis leur portail.
+                </p>
+                <ul className="lp-tl-points">
+                  {[
+                    "Jalons avec priorités, dates, responsable (freelance ou client)",
+                    "Sous-tâches intégrées à chaque étape",
+                    "6 templates prêts à l'emploi (site web, app, CM, design…)",
+                    "Import de template en un clic sur n'importe quel projet",
+                    "Notifications email automatiques à la complétion",
+                    "Visible ou masqué côté client selon l'étape",
+                  ].map((p) => (
+                    <li key={p}><span className="arrow">→</span>{p}</li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Demo visuelle */}
+              <div className="lp-tl-demo lp-fade-up">
+                <div className="lp-tl-demo-title">📍 Timeline projet</div>
+                <div className="lp-tl-steps">
+                  {[
+                    { n:"1", cls:"lp-tl-node-done",   name:"Brief & onboarding",      tag:"Terminé",    tc:"lp-tl-tag-done",   sub:"Validé le 10 avr.", resp:"👤 Client" },
+                    { n:"2", cls:"lp-tl-node-done",   name:"Maquettes wireframes",    tag:"Terminé",    tc:"lp-tl-tag-done",   sub:"Validé le 16 avr.", resp:"🎨 Freelance" },
+                    { n:"3", cls:"lp-tl-node-active", name:"Design UI — écrans clés", tag:"En cours",   tc:"lp-tl-tag-active", sub:"Deadline : 28 avr.", resp:"🎨 Freelance" },
+                    { n:"4", cls:"lp-tl-node-wait",   name:"Intégration & développement", tag:"À venir", tc:"lp-tl-tag-wait", sub:"Priorité haute",   resp:"🎨 Freelance" },
+                    { n:"5", cls:"lp-tl-node-wait",   name:"Validation client finale",tag:"À venir",    tc:"lp-tl-tag-wait",   sub:"Priorité urgente", resp:"👤 Client" },
+                    { n:"6", cls:"lp-tl-node-wait",   name:"Mise en ligne",           tag:"À venir",    tc:"lp-tl-tag-wait",   sub:"Milestone final",  resp:"🎨 Freelance" },
+                  ].map((s) => (
+                    <div key={s.n} className="lp-tl-step">
+                      <div className={`lp-tl-node ${s.cls}`}>{s.n}</div>
+                      <div className="lp-tl-step-content">
+                        <div className="lp-tl-step-top">
+                          <span className="lp-tl-step-name">{s.name}</span>
+                          <span className={`lp-tl-step-tag ${s.tc}`}>{s.tag}</span>
+                        </div>
+                        <div className="lp-tl-step-sub">
+                          <span>{s.resp}</span>{s.sub}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </section>
+
+        {/* ── FEATURES GRID ─────────────────────────────────── */}
         <section className="lp-features">
           <div className="lp-container">
             <div className="lp-features-header">
               <div className="lp-section-label">Fonctionnalités</div>
               <div className="lp-section-title">Tout ce dont vous avez besoin</div>
-              <p className="lp-section-subtitle">De l'onboarding à la livraison, chaque étape du projet est couverte.</p>
+              <p className="lp-section-sub" style={{margin:"0 auto"}}>
+                De l'onboarding à la livraison, chaque étape du projet est couverte.
+              </p>
             </div>
-            <div className="lp-features-megagrid">
-              <div className="lp-feature-row">
-                <div className="lp-feature-card highlight lp-fade-up">
-                  <div className="lp-feature-icon-row"><span className="lp-feature-emoji">🎯</span></div>
-                  <h3>Onboarding client automatisé</h3>
-                  <p>Créez des formulaires d'onboarding sur mesure avec 9 types de champs. Envoyez un lien — votre client remplit tout sans compte.</p>
-                  <ul className="lp-feature-bullets">
-                    <li>Sections et champs réorganisables</li>
-                    <li>Sauvegarde auto de la progression</li>
-                    <li>Notification email dès la soumission</li>
-                  </ul>
-                </div>
-                <div className="lp-feature-card lp-fade-up">
-                  <div className="lp-feature-icon-row"><span className="lp-feature-emoji">🗂️</span></div>
-                  <h3>Kanban de suivi de projet</h3>
-                  <p>Un tableau kanban personnalisable pour chaque projet. Colonnes sur mesure, drag & drop, filtres, et vue liste alternative.</p>
-                  <ul className="lp-feature-bullets">
-                    <li>Tâches visibles ou masquées côté client</li>
-                    <li>Priorités, deadlines, assignation</li>
-                    <li>Colonnes personnalisables</li>
-                  </ul>
-                </div>
-                <div className="lp-feature-card lp-fade-up">
-                  <div className="lp-feature-icon-row"><span className="lp-feature-emoji">👤</span></div>
-                  <h3>Portail client dédié</h3>
-                  <p>Chaque client dispose d'un espace personnel pour suivre ses projets, voir les étapes, et télécharger ses fichiers.</p>
-                  <ul className="lp-feature-bullets">
-                    <li>Branding personnalisé (v2)</li>
-                    <li>Avancement en temps réel</li>
-                    <li>Notifications automatiques</li>
-                  </ul>
-                </div>
+            <div className="lp-feat-grid">
+              <div className="lp-feat-card star lp-fade-up">
+                <span className="lp-feat-emoji">🎯</span>
+                <h3>Onboarding client automatisé</h3>
+                <p>Formulaires sur mesure avec 9 types de champs. Envoyez un lien — votre client remplit sans créer de compte.</p>
+                <ul className="lp-feat-list">
+                  <li>Sections et champs réorganisables</li>
+                  <li>Sauvegarde auto de la progression</li>
+                  <li>Notification email dès la soumission</li>
+                </ul>
               </div>
-              <div className="lp-feature-row">
-                <div className="lp-feature-card lp-fade-up">
-                  <div className="lp-feature-icon-row"><span className="lp-feature-emoji">✅</span></div>
-                  <h3>Validation d'étapes (v2)</h3>
-                  <p>Soumettez des livrables à la validation client directement dans le portail. Commentaires, approbation ou demande de modification.</p>
-                  <ul className="lp-feature-bullets">
-                    <li>Workflow de validation intégré</li>
-                    <li>Historique des révisions</li>
-                    <li>Notification email au client</li>
-                  </ul>
-                </div>
-                <div className="lp-feature-card lp-fade-up">
-                  <div className="lp-feature-icon-row"><span className="lp-feature-emoji">💬</span></div>
-                  <h3>Messagerie projet (v2)</h3>
-                  <p>Un chat dédié par projet, avec distinction messages internes et messages client. Plus d'emails perdus.</p>
-                  <ul className="lp-feature-bullets">
-                    <li>Messages internes vs client</li>
-                    <li>Notifications en temps réel</li>
-                    <li>Historique complet</li>
-                  </ul>
-                </div>
-                <div className="lp-feature-card lp-fade-up">
-                  <div className="lp-feature-icon-row"><span className="lp-feature-emoji">📑</span></div>
-                  <h3>Espace devis et factures (v2)</h3>
-                  <p>Stockez et partagez vos devis et factures PDF dans un espace dédié. Le client les retrouve dans son portail avec les statuts à jour.</p>
-                  <ul className="lp-feature-bullets">
-                    <li>Upload PDF sécurisé</li>
-                    <li>Statuts (en attente, signé, payé)</li>
-                    <li>Visible dans le portail client</li>
-                  </ul>
-                </div>
+              <div className="lp-feat-card star lp-fade-up">
+                <span className="lp-feat-emoji">📍</span>
+                <h3>Timeline de jalons</h3>
+                <p>Une timeline visuelle par projet avec drag & drop. Chaque étape a ses priorités, dates, responsable et sous-tâches.</p>
+                <ul className="lp-feat-list">
+                  <li>6 templates métier prêts à l'emploi</li>
+                  <li>Import de template en 1 clic</li>
+                  <li>Visible ou masqué côté client</li>
+                </ul>
               </div>
-              <div className="lp-feature-row">
-                <div className="lp-feature-card lp-fade-up">
-                  <div className="lp-feature-icon-row"><span className="lp-feature-emoji">📅</span></div>
-                  <h3>Google Calendar & Meet (v3)</h3>
-                  <p>Connectez votre agenda Google pour proposer des créneaux de réunion. Les liens Meet sont générés automatiquement.</p>
-                  <ul className="lp-feature-bullets">
-                    <li>Réservation de créneaux côté client</li>
-                    <li>Google Meet auto-créé</li>
-                    <li>Comptes rendus et points d'action</li>
-                  </ul>
-                </div>
-                <div className="lp-feature-card lp-fade-up">
-                  <div className="lp-feature-icon-row"><span className="lp-feature-emoji">📋</span></div>
-                  <h3>Templates métier</h3>
-                  <p>Démarrez vite avec des templates pré-configurés pour les projets web, design, marketing et conseil. Personnalisables à volonté.</p>
-                  <ul className="lp-feature-bullets">
-                    <li>Formulaire + kanban pré-remplis</li>
-                    <li>Sauvegardez vos propres templates</li>
-                    <li>Réutilisez sur tous vos projets</li>
-                  </ul>
-                </div>
-                <div className="lp-feature-card lp-fade-up">
-                  <div className="lp-feature-icon-row"><span className="lp-feature-emoji">📁</span></div>
-                  <h3>Gestion de fichiers centralisée</h3>
-                  <p>Tous les documents du projet au même endroit : fichiers de l'onboarding, livrables, factures. Upload, téléchargement, ZIP groupé.</p>
-                  <ul className="lp-feature-bullets">
-                    <li>Stockage sécurisé en France (RGPD)</li>
-                    <li>Jusqu'à 200 Mo par fichier</li>
-                    <li>Téléchargement groupé en ZIP</li>
-                  </ul>
-                </div>
+              <div className="lp-feat-card lp-fade-up">
+                <span className="lp-feat-emoji">👤</span>
+                <h3>Portail client dédié</h3>
+                <p>Chaque client dispose d'un espace personnel pour suivre ses projets, voir les jalons et télécharger ses fichiers.</p>
+                <ul className="lp-feat-list">
+                  <li>Branding personnalisé (v2)</li>
+                  <li>Avancement en temps réel</li>
+                  <li>Notifications automatiques</li>
+                </ul>
               </div>
-            </div>
-          </div>
-        </section>
-
-        {/* ROADMAP */}
-        <section className="lp-journey" id="roadmap">
-          <div className="lp-container">
-            <div style={{ textAlign: "center", marginBottom: 16 }}>
-              <div className="lp-section-label">Roadmap</div>
-              <div className="lp-section-title" style={{ color: "white" }}>Construit en public,<br />étape par étape</div>
-              <p className="lp-section-subtitle" style={{ margin: "0 auto" }}>On ne vous promet pas tout d'un coup. On construit feature par feature, guidé par vos retours.</p>
-            </div>
-            <div className="lp-journey-timeline">
-              {[
-                {
-                  version: "V1", label: "Lancement — Été 2026", title: "Les fondations", active: true,
-                  desc: "L'essentiel pour remplacer votre chaos d'outils : collectez les infos client, suivez vos projets, offrez un portail professionnel à chaque client.",
-                  tags: ["Onboarding client", "Kanban projet", "Portail client", "Templates métier", "Upload fichiers", "Gestion clients"],
-                },
-                {
-                  version: "V2", label: "Automne 2026", title: "Collaboration et business", active: true,
-                  desc: "Le projet avance, le client participe. Validations, messagerie intégrée, et un espace centralisé pour vos devis et factures.",
-                  tags: ["Validation d'étapes", "Espace devis / factures", "Messagerie projet", "Suivi statuts documents"],
-                },
-                {
-                  version: "V3", label: "Hiver 2026/2027", title: "Google Workspace et réunions", active: false,
-                  desc: "Connectez votre Google Calendar, proposez des créneaux, générez des liens Meet automatiquement, et publiez vos comptes rendus en un clic.",
-                  tags: ["Google Calendar sync", "Google Meet auto", "Prise de RDV", "Comptes rendus", "Calendrier intégré"],
-                },
-                {
-                  version: "V4", label: "2027", title: "Scale et intégrations", active: false,
-                  desc: "Pour les agences qui grandissent : marque blanche, multi-utilisateurs, paiement en ligne, intégrations Zapier/Make, et API publique.",
-                  tags: ["Marque blanche", "Multi-utilisateurs", "Paiement Stripe", "Zapier / Make", "API publique", "Relances auto"],
-                },
-              ].map((item) => (
-                <div key={item.version} className="lp-journey-item lp-fade-up">
-                  <div className={`lp-journey-dot ${item.active ? "lp-dot-active" : "lp-dot-next"}`}>{item.version}</div>
-                  <div className="lp-journey-content">
-                    <span className="lp-j-version">{item.label}</span>
-                    <h3>{item.title}</h3>
-                    <p>{item.desc}</p>
-                    <div className="lp-j-features">
-                      {item.tags.map((tag) => <span key={tag} className="lp-j-tag">{tag}</span>)}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* HOW IT WORKS */}
-        <section className="lp-how">
-          <div className="lp-container">
-            <div style={{ textAlign: "center" }}>
-              <div className="lp-section-label">En pratique</div>
-              <div className="lp-section-title">3 minutes pour onboarder un client</div>
-              <p className="lp-section-subtitle" style={{ margin: "0 auto" }}>Pas de formation, pas de config complexe. Créez, envoyez, gérez.</p>
-            </div>
-            <div className="lp-how-steps">
-              {[
-                { n: "1", title: "Créez votre projet", desc: "Nommez le projet, ajoutez votre client, choisissez un template métier ou créez votre formulaire d'onboarding sur-mesure." },
-                { n: "2", title: "Envoyez le lien", desc: "Votre client reçoit un lien vers son portail personnalisé. Il remplit le brief et uploade ses fichiers — sans créer de compte." },
-                { n: "3", title: "Le client crée son accès", desc: "À la soumission, le client est invité à créer son compte. Il accède à son espace dédié : avancement, validations, fichiers." },
-                { n: "4", title: "Gérez et livrez", desc: "Avancez sur le kanban, soumettez des étapes à validation, planifiez des réunions. Le client voit tout, valide tout." },
-              ].map((step) => (
-                <div key={step.n} className="lp-how-step lp-fade-up">
-                  <div className="lp-how-number">{step.n}</div>
-                  <h3>{step.title}</h3>
-                  <p>{step.desc}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* GAINS */}
-        <section className="lp-gains" id="gains">
-          <div className="lp-container">
-            <div style={{ textAlign: "center" }}>
-              <div className="lp-section-label">Impact</div>
-              <div className="lp-section-title">Le temps que vous allez récupérer</div>
-              <p className="lp-section-subtitle" style={{ margin: "0 auto" }}>Des heures gagnées chaque semaine, un suivi impeccable, et des clients qui vous recommandent.</p>
-            </div>
-            <div className="lp-gains-grid">
-              {[
-                { n: "5h", label: "économisées par projet sur l'onboarding" },
-                { n: "0", label: 'email \u201cvous pouvez m\u2019envoyer\u2026\u201d' },
-                { n: "100%", label: "de visibilité client sur le projet" },
-                { n: "1", label: "seul endroit pour tous les documents du projet" },
-                { n: "1 clic", label: "pour planifier un rendez-vous Meet" },
-                { n: "Pro", label: "l'image renvoyée dès le premier contact" },
-              ].map((item) => (
-                <div key={item.n} className="lp-gain-card lp-fade-up">
-                  <div className="lp-gain-number">{item.n}</div>
-                  <div className="lp-gain-label">{item.label}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* AUDIENCE */}
-        <section className="lp-audience">
-          <div className="lp-container">
-            <div style={{ textAlign: "center" }}>
-              <div className="lp-section-label">Pour qui</div>
-              <div className="lp-section-title">Pensé pour ceux qui vivent du projet client</div>
-            </div>
-            <div className="lp-audience-grid">
-              {[
-                { emoji: "💻", title: "Développeurs web freelance", desc: "Collectez les briefs, gérez les sprints, livrez proprement." },
-                { emoji: "📱", title: "Community managers", desc: "Récupérez les accès et visuels, validez les plannings éditoriaux." },
-                { emoji: "🎨", title: "Designers et graphistes", desc: "Partagez les maquettes, gérez les aller-retours de validation." },
-                { emoji: "📣", title: "Agences marketing", desc: "Multi-projets, multi-clients, facturation — tout centralisé." },
-                { emoji: "📊", title: "Consultants", desc: "Comptes rendus, validation de livrables, suivi transparent." },
-                { emoji: "🏗️", title: "Et tous les métiers de service", desc: "Si vous travaillez en mode projet pour des clients, c'est pour vous." },
-              ].map((item) => (
-                <div key={item.title} className="lp-audience-card lp-fade-up">
-                  <div className="lp-audience-emoji">{item.emoji}</div>
-                  <h3>{item.title}</h3>
-                  <p>{item.desc}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* SOVEREIGNTY */}
-        <section className="lp-sovereignty">
-          <div className="lp-container">
-            <div className="lp-sov-box lp-fade-up">
-              <div className="lp-sov-visual">
-                <div className="lp-sov-flag">🇫🇷</div>
-                <h3>Hébergé en France</h3>
-                <p>Stockage 100% français</p>
-                <p>Données chiffrées de bout en bout</p>
+              <div className="lp-feat-card lp-fade-up">
+                <span className="lp-feat-emoji">✅</span>
+                <h3>Livrables & validations</h3>
+                <p>Soumettez des livrables à la validation client. Commentaires, approbation ou demande de modification directement dans le portail.</p>
+                <ul className="lp-feat-list">
+                  <li>Workflow de validation intégré</li>
+                  <li>Historique des révisions</li>
+                  <li>Notification email au client</li>
+                </ul>
               </div>
-              <div className="lp-sov-text">
-                <div className="lp-section-label">Souveraineté numérique</div>
-                <h3>Vos données et celles de vos clients restent en France</h3>
-                <p>Dans un monde où les données traversent les océans, nous faisons un choix clair : tout est stocké en France, sur des serveurs français. Pas de transfert hors UE, pas de zone grise juridique.</p>
-                <ul className="lp-sov-points">
-                  {[
-                    "100% des fichiers stockés en France (datacenter Paris)",
-                    "Base de données hébergée en France (Paris)",
-                    "Toutes les données sont chiffrées (AES-256)",
-                    "Conformité RGPD native, intégrée dès la conception",
-                    "Aucun tracking tiers sur le portail de vos clients",
-                    "Droit de suppression total : vos données, votre contrôle",
-                  ].map((point) => (
-                    <li key={point}><span>→</span> {point}</li>
-                  ))}
+              <div className="lp-feat-card lp-fade-up">
+                <span className="lp-feat-emoji">💬</span>
+                <h3>Messagerie projet (v2)</h3>
+                <p>Un chat dédié par projet. Messages internes vs client, notifications, historique complet. Fini les emails perdus.</p>
+                <ul className="lp-feat-list">
+                  <li>Messages internes vs client</li>
+                  <li>Notifications en temps réel</li>
+                  <li>Historique complet</li>
+                </ul>
+              </div>
+              <div className="lp-feat-card lp-fade-up">
+                <span className="lp-feat-emoji">📁</span>
+                <h3>Gestion de fichiers</h3>
+                <p>Tous les documents au même endroit : onboarding, livrables, factures. Upload, download, ZIP groupé. Stockage sécurisé en France.</p>
+                <ul className="lp-feat-list">
+                  <li>Stockage RGPD (datacenter Paris)</li>
+                  <li>Jusqu'à 200 Mo par fichier</li>
+                  <li>Téléchargement groupé en ZIP</li>
                 </ul>
               </div>
             </div>
           </div>
         </section>
 
-        {/* PRICING */}
+        {/* ── PRICING ───────────────────────────────────────── */}
         <section className="lp-pricing" id="pricing">
           <div className="lp-container">
-            <div style={{ textAlign: "center" }}>
+            <div style={{textAlign:"center"}}>
               <div className="lp-section-label">Tarifs</div>
               <div className="lp-section-title">Gratuit pour démarrer.<br />Flexible pour grandir.</div>
-              <p className="lp-section-subtitle" style={{ margin: "0 auto" }}>Commencez sans sortir la carte bleue. Passez au plan payant quand vous avez besoin de plus de puissance.</p>
+              <p className="lp-section-sub" style={{margin:"0 auto"}}>
+                Commencez sans sortir la carte. Passez au plan payant quand vous avez besoin de plus de puissance.
+              </p>
             </div>
             <div className="lp-pricing-cards">
               <div className="lp-pricing-card lp-fade-up">
                 <h3>Gratuit</h3>
                 <div className="lp-pricing-price">0€</div>
-                <div className="lp-pricing-desc">Pour tester et gérer vos premiers projets</div>
+                <div className="lp-pricing-desc">Pour tester et démarrer</div>
                 <ul className="lp-pricing-list">
-                  {["3 projets actifs", "Onboarding client + formulaires", "Kanban de suivi", "Portail client basique", "500 Mo de stockage", "Templates métier inclus"].map((f) => <li key={f}>{f}</li>)}
+                  {[
+                    "1 projet actif",
+                    "Onboarding client + formulaires",
+                    "Timeline de jalons",
+                    "Portail client",
+                    "Validations d'étapes",
+                    "Espace devis et factures",
+                    "Notifications email",
+                    "1 Go de stockage",
+                    "Templates métier inclus",
+                  ].map((f) => <li key={f}>{f}</li>)}
                 </ul>
                 <Link href="/signup" className="lp-pricing-cta lp-pricing-cta-outline">Commencer gratuitement</Link>
               </div>
               <div className="lp-pricing-card featured lp-fade-up">
                 <h3>Pro</h3>
-                <div className="lp-pricing-price">
-                  14€<span>/mois</span>
-                </div>
-                <div className="lp-pricing-desc" style={{ color: "#386FA4", fontWeight: 500 }}>Tarif bêta-testeur garanti à vie</div>
+                <div className="lp-pricing-price">14€<span>/mois</span></div>
+                <div className="lp-pricing-desc">Pour les freelances qui veulent aller plus loin</div>
                 <ul className="lp-pricing-list">
-                  {["Projets illimités", "Validations d'étapes (v2)", "Messagerie projet (v2)", "Espace devis et factures (v2)", "15 Go de stockage", "Portail client complet et brandé", "Notifications email", "Suppression du branding"].map((f) => <li key={f}>{f}</li>)}
+                  {[
+                    "1 projet actif",
+                    "Onboarding client + formulaires",
+                    "Timeline de jalons",
+                    "Portail client",
+                    "Validations d'étapes",
+                    "Espace devis et factures",
+                    "Notifications email",
+                    "Templates métier inclus",
+                    "Projets illimités",
+                    "20 Go de stockage",
+                    "Synchronisation Google Calendar + Meet",
+                    "Retranscription et résumé de vos réunions (Soon)",
+                    "Marque blanche",
+                  ].map((f) => <li key={f}>{f}</li>)}
                 </ul>
                 <Link href="/signup" className="lp-pricing-cta lp-pricing-cta-primary">Démarrer l'essai gratuit</Link>
               </div>
+              <div className="lp-pricing-card lp-fade-up">
+                <h3>Agence</h3>
+                <div className="lp-pricing-price">39€<span>/mois</span></div>
+                <div className="lp-pricing-desc">Pour les agences qui grandissent</div>
+                <ul className="lp-pricing-list">
+                  {[
+                    "1 projet actif",
+                    "Onboarding client + formulaires",
+                    "Timeline de jalons",
+                    "Portail client",
+                    "Validations d'étapes",
+                    "Espace devis et factures",
+                    "Notifications email",
+                    "Templates métier inclus",
+                    "Projets illimités",
+                    "20 Go de stockage",
+                    "Synchronisation Google Calendar + Meet",
+                    "Retranscription et résumé de vos réunions (Soon)",
+                    "Multi-utilisateurs",
+                    "100 Go de stockage",
+                    "Marque blanche",
+                    "Support prioritaire",
+                  ].map((f) => <li key={f}>{f}</li>)}
+                </ul>
+                <Link href="/signup" className="lp-pricing-cta lp-pricing-cta-agency">Commencer maintenant</Link>
+              </div>
             </div>
-            <p style={{ textAlign: "center", marginTop: 24, fontSize: 13, color: "#999" }}>Le tarif bêta-testeur à 14€/mois est garanti à vie pour les premiers inscrits.</p>
           </div>
         </section>
 
-        {/* CTA */}
+
+        {/* ── CTA FINALE ────────────────────────────────────── */}
         <section className="lp-cta-section">
           <div className="lp-container">
             <div className="lp-cta-box lp-fade-up">
-              <h2>Commencez maintenant, c&apos;est gratuit.</h2>
-              <p>Créez votre premier projet en 3 minutes. Aucune carte bancaire, aucune installation — juste un compte et vous êtes prêt.</p>
-              <div className="lp-cta-buttons">
-                <Link href="/signup" className="lp-btn-cta-primary">Créer mon compte gratuitement</Link>
-                <Link href="/login" className="lp-btn-cta-outline">J&apos;ai déjà un compte</Link>
-              </div>
-              <div className="lp-cta-perks">
-                <span><span className="check">✓</span> Gratuit sans limite de durée</span>
-                <span><span className="check">✓</span> Sans carte bancaire</span>
-                <span><span className="check">✓</span> Données hébergées en France</span>
+              <div className="lp-cta-orb lp-cta-orb-1" />
+              <div className="lp-cta-orb lp-cta-orb-2" />
+              <div className="lp-cta-ring" />
+              <div className="lp-cta-ring-2" />
+              <div className="lp-cta-content">
+                <div className="lp-cta-tag">
+                  <span className="lp-badge-dot" />
+                  Bêta ouverte maintenant
+                </div>
+                <h2 className="lp-cta-h2">
+                  Lancez-vous.<br />
+                  C'est <em>gratuit</em>,<br />
+                  sans carte bancaire.
+                </h2>
+                <p className="lp-cta-sub">
+                  Créez votre premier projet en 3 minutes. Aucune installation, aucune CB. Juste un compte et vous êtes prêt à onboarder votre prochain client.
+                </p>
+                <div className="lp-cta-buttons">
+                  <Link href="/signup" className="lp-btn-cta">
+                    ✦ Créer mon compte gratuitement
+                  </Link>
+                </div>
+                <div className="lp-cta-perks">
+                  <span><span className="ck">✓</span> Gratuit sans limite de durée</span>
+                  <span><span className="ck">✓</span> Aucune carte bancaire requise</span>
+                  <span><span className="ck">✓</span> Données hébergées en France</span>
+                  <span><span className="ck">✓</span> 3 minutes pour démarrer</span>
+                </div>
               </div>
             </div>
           </div>
         </section>
 
-        {/* FOOTER */}
+        {/* ── FOOTER ────────────────────────────────────────── */}
         <footer className="lp-footer">
           <div className="lp-container">
             <div className="lp-footer-grid">
-              {/* Brand */}
               <div className="lp-footer-brand">
-                <a href="/" className="lp-logo" style={{ display: "block", marginBottom: 0 }}>{APP_CONFIG.name}</a>
+                <a href="/" className="lp-logo" style={{display:"block"}}>{APP_CONFIG.name}</a>
                 <p>La plateforme de gestion de projet client tout-en-un pour les freelances et agences. Conçue en France.</p>
                 <div className="lp-footer-badges">
                   <span className="lp-footer-badge">🇫🇷 Hébergé en France</span>
@@ -833,31 +1063,24 @@ export default function LandingPage() {
                   <span className="lp-footer-badge">🔒 Chiffré</span>
                 </div>
               </div>
-              {/* Produit */}
               <div className="lp-footer-col">
                 <h4>Produit</h4>
                 <a href="#features">Fonctionnalités</a>
                 <a href="#pricing">Tarifs</a>
-                <a href="#roadmap">Roadmap</a>
-                <a href="#gains">Avantages</a>
-                <a href="#features">Comment ça marche</a>
               </div>
-              {/* Compte */}
               <div className="lp-footer-col">
                 <h4>Compte</h4>
                 <Link href="/signup">Créer un compte</Link>
                 <Link href="/login">Se connecter</Link>
                 <Link href="/forgot-password">Mot de passe oublié</Link>
-                <Link href="/signup">Plan Gratuit</Link>
                 <Link href="/signup">Plan Pro — 14€/mois</Link>
               </div>
-              {/* Légal */}
               <div className="lp-footer-col">
                 <h4>Légal & Contact</h4>
                 <Link href="/mentions-legales">Mentions légales</Link>
-                <Link href="/confidentialite">Politique de confidentialité</Link>
-                <Link href="/confidentialite">Politique de cookies</Link>
-                <a href="mailto:hello@clientflow.fr">hello@clientflow.fr</a>
+                <Link href="/confidentialite">Confidentialité</Link>
+                <Link href="/confidentialite">Cookies</Link>
+                <a href="mailto:hello@hublio.fr">hello@hublio.fr</a>
               </div>
             </div>
             <div className="lp-footer-bottom">
@@ -870,6 +1093,7 @@ export default function LandingPage() {
             </div>
           </div>
         </footer>
+
       </div>
     </>
   )

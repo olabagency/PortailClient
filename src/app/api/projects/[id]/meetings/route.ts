@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { z } from 'zod'
 import { getValidAccessToken, createGoogleCalendarEvent } from '@/lib/google'
+import { logActivity } from '@/lib/activity'
 
 const meetingCreateSchema = z.object({
   title: z.string().min(1, 'Le titre est requis').max(200),
@@ -129,6 +130,17 @@ export async function POST(
       .single()
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    void logActivity({
+      supabase,
+      userId: user.id,
+      action: 'meeting_created',
+      projectId: id,
+      entityType: 'meeting',
+      entityId: data.id,
+      entityName: data.title,
+      metadata: { scheduled_at: data.scheduled_at, has_meet_link: !!data.meeting_link },
+    })
 
     return NextResponse.json({ data }, { status: 201 })
   } catch {
