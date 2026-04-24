@@ -10,6 +10,7 @@ const meetingCreateSchema = z.object({
   meeting_link: z.string().url('Lien invalide').optional().nullable().or(z.literal('')),
   notes: z.string().optional().nullable(),
   attendees: z.array(z.string()).optional().default([]),
+  type: z.enum(['appel', 'visio', 'presentiel', 'autre']).optional().default('visio'),
 })
 
 // GET /api/projects/[id]/meetings
@@ -89,6 +90,7 @@ export async function POST(
         meeting_link: parsed.data.meeting_link || null,
         notes: parsed.data.notes ?? null,
         attendees: parsed.data.attendees,
+        type: parsed.data.type ?? 'visio',
       })
       .select('*')
       .single()

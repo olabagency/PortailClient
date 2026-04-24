@@ -1040,6 +1040,14 @@ export default function MilestonesPage({
   const [newMeetingDate, setNewMeetingDate] = useState('')
   const [newMeetingTime, setNewMeetingTime] = useState('')
   const [newMeetingLink, setNewMeetingLink] = useState('')
+  // Champs détaillés nouvelle réunion
+  const [newMeetingDetailed, setNewMeetingDetailed] = useState(false)
+  const [newMeetingDuration, setNewMeetingDuration] = useState('60')
+  const [newMeetingType, setNewMeetingType] = useState<'appel' | 'visio' | 'presentiel' | 'autre'>('visio')
+  const [newMeetingLocation, setNewMeetingLocation] = useState('')
+  const [newMeetingNotes, setNewMeetingNotes] = useState('')
+  const [newMeetingAttendees, setNewMeetingAttendees] = useState<string[]>([])
+  const [newMeetingAttendeeInput, setNewMeetingAttendeeInput] = useState('')
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -1331,6 +1339,13 @@ export default function MilestonesPage({
     setNewMeetingDate('')
     setNewMeetingTime('')
     setNewMeetingLink('')
+    setNewMeetingDetailed(false)
+    setNewMeetingDuration('60')
+    setNewMeetingType('visio')
+    setNewMeetingLocation('')
+    setNewMeetingNotes('')
+    setNewMeetingAttendees([])
+    setNewMeetingAttendeeInput('')
   }
 
   function openAddDialog() {
@@ -1399,6 +1414,11 @@ export default function MilestonesPage({
             title: newMeetingTitle.trim(),
             scheduled_at: scheduledAt,
             meeting_link: newMeetingLink.trim() || null,
+            duration_min: parseInt(newMeetingDuration) || 60,
+            type: newMeetingDetailed ? newMeetingType : 'visio',
+            location: newMeetingLocation.trim() || null,
+            notes: newMeetingNotes.trim() || null,
+            attendees: newMeetingAttendees,
           }),
         })
         if (!meetingRes.ok) {
@@ -2158,10 +2178,25 @@ export default function MilestonesPage({
                   ) : (
                     /* Formulaire nouvelle réunion */
                     <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
-                      <p className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                        <CalendarCheck className="h-3.5 w-3.5" />
-                        Nouvelle réunion — sera créée à la sauvegarde
-                      </p>
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                          <CalendarCheck className="h-3.5 w-3.5" />
+                          Nouvelle réunion — sera créée à la sauvegarde
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setNewMeetingDetailed(d => !d)}
+                          className="text-xs text-primary hover:underline flex items-center gap-1"
+                        >
+                          {newMeetingDetailed ? (
+                            <><ChevronDown className="h-3 w-3" />Mode simple</>
+                          ) : (
+                            <><ChevronRight className="h-3 w-3" />Mode détaillé</>
+                          )}
+                        </button>
+                      </div>
+
+                      {/* Champs de base */}
                       <div className="space-y-1.5">
                         <Label htmlFor="nm-title">Titre <span className="text-destructive">*</span></Label>
                         <Input
@@ -2192,7 +2227,7 @@ export default function MilestonesPage({
                         </div>
                       </div>
                       <div className="space-y-1.5">
-                        <Label htmlFor="nm-link">Lien de la réunion (optionnel)</Label>
+                        <Label htmlFor="nm-link">Lien (optionnel)</Label>
                         <Input
                           id="nm-link"
                           type="url"
@@ -2201,6 +2236,116 @@ export default function MilestonesPage({
                           onChange={e => setNewMeetingLink(e.target.value)}
                         />
                       </div>
+
+                      {/* Champs détaillés */}
+                      {newMeetingDetailed && (
+                        <div className="space-y-3 pt-2 border-t border-border/50">
+                          {/* Type + Durée */}
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                              <Label>Type</Label>
+                              <Select value={newMeetingType} onValueChange={(v: string) => setNewMeetingType(v as 'appel' | 'visio' | 'presentiel' | 'autre')}>
+                                <SelectTrigger className="h-8 text-xs">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="visio">🖥️ Visio</SelectItem>
+                                  <SelectItem value="appel">📞 Appel</SelectItem>
+                                  <SelectItem value="presentiel">🏢 Présentiel</SelectItem>
+                                  <SelectItem value="autre">❓ Autre</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label htmlFor="nm-duration">Durée (min)</Label>
+                              <Input
+                                id="nm-duration"
+                                type="number"
+                                min="15"
+                                step="15"
+                                placeholder="60"
+                                value={newMeetingDuration}
+                                onChange={e => setNewMeetingDuration(e.target.value)}
+                                className="h-8 text-xs"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Lieu */}
+                          <div className="space-y-1.5">
+                            <Label htmlFor="nm-location">Lieu / lien de visio</Label>
+                            <Input
+                              id="nm-location"
+                              placeholder="Ex : Bureaux Paris, salle A"
+                              value={newMeetingLocation}
+                              onChange={e => setNewMeetingLocation(e.target.value)}
+                              className="h-8 text-xs"
+                            />
+                          </div>
+
+                          {/* Participants */}
+                          <div className="space-y-1.5">
+                            <Label>Participants</Label>
+                            <div className="flex gap-1.5">
+                              <Input
+                                placeholder="email@exemple.com"
+                                value={newMeetingAttendeeInput}
+                                onChange={e => setNewMeetingAttendeeInput(e.target.value)}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter' || e.key === ',') {
+                                    e.preventDefault()
+                                    const val = newMeetingAttendeeInput.trim().replace(/,$/, '')
+                                    if (val && !newMeetingAttendees.includes(val)) {
+                                      setNewMeetingAttendees(prev => [...prev, val])
+                                    }
+                                    setNewMeetingAttendeeInput('')
+                                  }
+                                }}
+                                className="h-8 text-xs"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const val = newMeetingAttendeeInput.trim()
+                                  if (val && !newMeetingAttendees.includes(val)) {
+                                    setNewMeetingAttendees(prev => [...prev, val])
+                                  }
+                                  setNewMeetingAttendeeInput('')
+                                }}
+                                className="shrink-0 rounded-md border bg-background px-2.5 text-xs hover:bg-muted transition-colors"
+                              >
+                                <Plus className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                            {newMeetingAttendees.length > 0 && (
+                              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                                {newMeetingAttendees.map(a => (
+                                  <span key={a} className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] text-primary font-medium">
+                                    {a}
+                                    <button type="button" onClick={() => setNewMeetingAttendees(prev => prev.filter(x => x !== a))}>
+                                      <X className="h-3 w-3" />
+                                    </button>
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            <p className="text-[11px] text-muted-foreground">Appuyer sur Entrée ou virgule pour ajouter</p>
+                          </div>
+
+                          {/* Notes */}
+                          <div className="space-y-1.5">
+                            <Label htmlFor="nm-notes">Notes / ordre du jour</Label>
+                            <Textarea
+                              id="nm-notes"
+                              placeholder="Points à aborder, objectifs de la réunion…"
+                              value={newMeetingNotes}
+                              onChange={e => setNewMeetingNotes(e.target.value)}
+                              rows={3}
+                              className="text-xs resize-none"
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

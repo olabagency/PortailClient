@@ -6,7 +6,7 @@ Tu es le développeur principal de cette application SaaS. Ce fichier contient T
 
 ## 1. VISION PRODUIT
 
-Plateforme de gestion de projet client tout-en-un pour freelances et agences. Le cycle complet : onboarding client → suivi de projet (kanban) → validation d'étapes → messagerie → stockage de documents (devis/factures) → rendez-vous (Google Calendar/Meet) → portail client dédié.
+Plateforme de gestion de projet client tout-en-un pour freelances et agences. Le cycle complet : onboarding client → validation d'étapes → messagerie → stockage de documents (devis/factures) → rendez-vous (Google Calendar/Meet) → portail client dédié.
 
 **Cible** : Freelances web/dev et community managers francophones.
 **Modèle** : Freemium (gratuit limité → plans payants).
@@ -150,7 +150,6 @@ Fichier : `src/app/page.tsx`
 - Pas de mock UI, pas d'images de screenshot
 - CTA principal → `/signup`, jamais de waitlist
 - Toujours mentionner "gratuit, sans carte bancaire"
-- Pro = **14€/mois** partout
 
 ---
 
@@ -217,7 +216,6 @@ Avant chaque feature :
 Phase 1 : Setup → Auth → Layout
 Phase 2 : Clients → Projets → Formulaire onboarding
 Phase 3 : Portail public → Upload → Portail client auth
-Phase 4 : Kanban → Templates → Activité
 Phase 5 : Polish → Stripe → Landing
 Phase 6 : Bêta → Lancement
 ```
@@ -235,6 +233,6 @@ Phase 6 : Bêta → Lancement
 - Fichiers stockés en France. Ne JAMAIS mentionner le fournisseur technique dans l'UI.
 - Portail onboarding = SANS compte. Portail client suivi = AVEC compte.
 - `nanoid` 12 caractères pour les `public_id` des projets.
-- Colonnes kanban par défaut créées automatiquement ("À faire", "En cours", "En revue", "Terminé").
 - Plan gratuit = **1 projet maximum**. Plan Pro = **14€/mois**.
-- Ne jamais afficher `9€` ou `19€` pour le plan Pro — le prix est **14€/mois**.
+- plan Pro — **14€/mois**.
+- plan agency : 39€/mois

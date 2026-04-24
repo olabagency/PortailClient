@@ -58,9 +58,13 @@ export async function PUT(
       .from('project_milestones')
       .select('status, title, visible_to_client')
       .eq('id', milestoneId)
+      .eq('project_id', id)
       .single()
 
-    const { data, error } = await supabase
+    if (!currentMilestone) return NextResponse.json({ error: 'Jalon introuvable' }, { status: 404 })
+
+    const adminSupabase = createAdminClient()
+    const { data, error } = await adminSupabase
       .from('project_milestones')
       .update({ ...parsed.data, updated_at: new Date().toISOString() })
       .eq('id', milestoneId)
@@ -68,7 +72,7 @@ export async function PUT(
       .select()
       .single()
 
-    if (error || !data) return NextResponse.json({ error: 'Jalon introuvable' }, { status: 404 })
+    if (error || !data) return NextResponse.json({ error: error?.message ?? 'Mise à jour échouée' }, { status: 500 })
 
     const wasCompleted = currentMilestone?.status !== 'completed' && parsed.data.status === 'completed'
     const isVisibleToClient = parsed.data.visible_to_client ?? currentMilestone?.visible_to_client ?? false
@@ -123,7 +127,8 @@ export async function DELETE(
 
     if (!project) return NextResponse.json({ error: 'Projet introuvable' }, { status: 404 })
 
-    const { error } = await supabase
+    const adminSupabase = createAdminClient()
+    const { error } = await adminSupabase
       .from('project_milestones')
       .delete()
       .eq('id', milestoneId)

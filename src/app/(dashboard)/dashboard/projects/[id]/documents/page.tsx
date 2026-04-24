@@ -23,7 +23,8 @@ import {
   FolderOpen, FolderClosed, Plus, Upload, ExternalLink,
   Eye, EyeOff, MoreHorizontal, Trash2, Pencil,
   FolderInput, Loader2, ChevronRight, Search,
-  FolderPlus, CheckCircle2,
+  FolderPlus, CheckCircle2, LayoutGrid, LayoutList,
+  X, FolderSymlink,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
@@ -58,6 +59,7 @@ interface Document {
 }
 
 type TabFilter = 'all' | 'admin' | 'client'
+type ViewMode = 'list' | 'grid'
 
 const FOLDER_COLORS = ['#6B7280', '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899']
 
@@ -70,8 +72,8 @@ function formatBytes(bytes: number | null): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`
 }
 
-function getFileIcon(doc: Document, size = 'md') {
-  const cls = size === 'lg' ? 'h-8 w-8' : 'h-4 w-4'
+function getFileIcon(doc: Document, size: 'sm' | 'md' | 'lg' = 'md') {
+  const cls = size === 'lg' ? 'h-8 w-8' : size === 'sm' ? 'h-3.5 w-3.5' : 'h-4 w-4'
   if (doc.type === 'link') return <LinkIcon className={cn(cls, 'text-blue-500')} />
   const mime = doc.mime_type ?? ''
   if (mime === 'application/pdf') return <FileText className={cn(cls, 'text-red-500')} />
@@ -96,7 +98,14 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
   // UI
   const [search, setSearch] = useState('')
   const [tabFilter, setTabFilter] = useState<TabFilter>('all')
+  const [viewMode, setViewMode] = useState<ViewMode>('list')
   const [openingDocId, setOpeningDocId] = useState<string | null>(null)
+
+  // Selection
+  const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set())
+  const [bulkMoveOpen, setBulkMoveOpen] = useState(false)
+  const [bulkMoveFolderId, setBulkMoveFolderId] = useState<string>('root')
+  const [savingBulkMove, setSavingBulkMove] = useState(false)
 
   // Loading
   const [loadingFolders, setLoadingFolders] = useState(true)
@@ -166,7 +175,10 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
   }, [id])
 
   useEffect(() => { void fetchFolders() }, [fetchFolders])
-  useEffect(() => { void fetchDocuments(currentFolderId) }, [fetchDocuments, currentFolderId])
+  useEffect(() => {
+    void fetchDocuments(currentFolderId)
+    setSelectedDocIds(new Set()) // reset selection on folder change
+  }, [fetchDocuments, currentFolderId])
 
   // ─── Computed ──────────────────────────────────────────────────────────────
 
@@ -179,11 +191,33 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
     return true
   })
 
-  const folderDocCount = (folderId: string) =>
-    // approximate from loaded docs (not perfectly accurate when viewing "all")
-    folders.find(f => f.id === folderId) ? 0 : 0 // counts not critical in new UI
+  const allSelected = filteredDocuments.length > 0 && filteredDocuments.every(d => selectedDocIds.has(d.id))
+  const someSelected = selectedDocIds.size > 0
 
-  // ─── Open file (presigned URL) ─────────────────────────────────────────────
+  // ─── Selection helpers ─────────────────────────────────────────────────────
+
+  function toggleDoc(docId: string) {
+    setSelectedDocIds(prev => {
+      const next = new Set(prev)
+      if (next.has(docId)) next.delete(docId)
+      else next.add(docId)
+      return next
+    })
+  }
+
+  function toggleAll() {
+    if (allSelected) {
+      setSelectedDocIds(new Set())
+    } else {
+      setSelectedDocIds(new Set(filteredDocuments.map(d => d.id)))
+    }
+  }
+
+  function clearSelection() {
+    setSelectedDocIds(new Set())
+  }
+
+  // ─── Open file ─────────────────────────────────────────────────────────────
 
   async function handleOpenDoc(doc: Document) {
     if (doc.type === 'link') {
@@ -318,6 +352,7 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
     const res = await fetch(`/api/projects/${id}/documents/${doc.id}`, { method: 'DELETE' })
     if (res.ok) {
       setDocuments(prev => prev.filter(d => d.id !== doc.id))
+      setSelectedDocIds(prev => { const n = new Set(prev); n.delete(doc.id); return n })
       void fetchFolders()
       toast.success('Document supprimé')
     } else toast.error('Erreur')
@@ -351,7 +386,7 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
     } finally { setSavingRenameDoc(false) }
   }
 
-  // ─── Move doc ──────────────────────────────────────────────────────────────
+  // ─── Move doc (single) ─────────────────────────────────────────────────────
 
   async function handleMoveDoc(e: React.FormEvent) {
     e.preventDefault()
@@ -370,6 +405,37 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
         toast.success('Document déplacé')
       } else toast.error('Erreur')
     } finally { setSavingMoveDoc(false) }
+  }
+
+  // ─── Bulk move ─────────────────────────────────────────────────────────────
+
+  async function handleBulkMove(e: React.FormEvent) {
+    e.preventDefault()
+    if (selectedDocIds.size === 0) return
+    setSavingBulkMove(true)
+    const folderId = bulkMoveFolderId === 'root' ? null : bulkMoveFolderId
+    try {
+      const results = await Promise.all(
+        Array.from(selectedDocIds).map(docId =>
+          fetch(`/api/projects/${id}/documents/${docId}`, {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ folder_id: folderId }),
+          })
+        )
+      )
+      const allOk = results.every(r => r.ok)
+      if (allOk) {
+        setDocuments(prev => prev.map(d =>
+          selectedDocIds.has(d.id) ? { ...d, folder_id: folderId } : d
+        ))
+        void fetchFolders()
+        setBulkMoveOpen(false)
+        clearSelection()
+        toast.success(`${selectedDocIds.size} document${selectedDocIds.size > 1 ? 's' : ''} déplacé${selectedDocIds.size > 1 ? 's' : ''}`)
+      } else {
+        toast.error('Certains déplacements ont échoué')
+      }
+    } finally { setSavingBulkMove(false) }
   }
 
   // ─── Rename folder ─────────────────────────────────────────────────────────
@@ -403,7 +469,6 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
           <p className="text-sm text-muted-foreground mt-0.5">Fichiers et liens du projet</p>
         </div>
 
-        {/* New button */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button className="gap-2" disabled={uploading}>
@@ -413,17 +478,14 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
             <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>
-              <Upload className="h-4 w-4 mr-2" />
-              Importer un fichier
+              <Upload className="h-4 w-4 mr-2" /> Importer un fichier
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => setAddLinkOpen(true)}>
-              <LinkIcon className="h-4 w-4 mr-2" />
-              Ajouter un lien
+              <LinkIcon className="h-4 w-4 mr-2" /> Ajouter un lien
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => setCreateFolderOpen(true)}>
-              <FolderPlus className="h-4 w-4 mr-2" />
-              Nouveau dossier
+              <FolderPlus className="h-4 w-4 mr-2" /> Nouveau dossier
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -431,7 +493,7 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
         <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileSelect} />
       </div>
 
-      {/* ── Toolbar : breadcrumb + search + filter ── */}
+      {/* ── Toolbar ── */}
       <div className="flex items-center gap-3 mb-4 flex-wrap">
         {/* Breadcrumb */}
         <nav className="flex items-center gap-1 text-sm flex-1 min-w-0">
@@ -454,10 +516,7 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
                 className="flex items-center gap-1.5 px-2 py-1 rounded-md font-medium"
                 style={{ color: currentFolder.color }}
               >
-                <span
-                  className="h-2.5 w-2.5 rounded-full shrink-0"
-                  style={{ backgroundColor: currentFolder.color }}
-                />
+                <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: currentFolder.color }} />
                 {currentFolder.name}
               </span>
             </>
@@ -492,9 +551,33 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
             </button>
           ))}
         </div>
+
+        {/* View mode toggle */}
+        <div className="flex items-center gap-0.5 border rounded-lg p-0.5 shrink-0">
+          <button
+            onClick={() => setViewMode('list')}
+            className={cn(
+              'h-7 w-7 flex items-center justify-center rounded-md transition-colors',
+              viewMode === 'list' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+            )}
+            title="Vue liste"
+          >
+            <LayoutList className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={() => setViewMode('grid')}
+            className={cn(
+              'h-7 w-7 flex items-center justify-center rounded-md transition-colors',
+              viewMode === 'grid' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+            )}
+            title="Vue grille"
+          >
+            <LayoutGrid className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
 
-      {/* ── Folders grid (only on root level) ── */}
+      {/* ── Folders grid (root only) ── */}
       {currentFolderId === null && (
         <div className="mb-6">
           {loadingFolders ? (
@@ -526,7 +609,7 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
         </div>
       )}
 
-      {/* ── Documents list ── */}
+      {/* ── Documents ── */}
       <div className="flex-1 min-h-0">
         {loadingDocs ? (
           <div className="space-y-2">
@@ -554,23 +637,32 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
               </div>
             )}
           </div>
-        ) : (
+        ) : viewMode === 'list' ? (
+          /* ── LIST VIEW ── */
           <div className="rounded-xl border overflow-hidden">
-            {/* Table header */}
-            <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-3 items-center px-4 py-2 bg-muted/40 border-b text-xs font-medium text-muted-foreground">
+            <div className="grid grid-cols-[auto_1fr_auto_auto_auto_auto] gap-3 items-center px-4 py-2 bg-muted/40 border-b text-xs font-medium text-muted-foreground">
+              {/* Select all checkbox */}
+              <label className="flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={toggleAll}
+                  className="h-3.5 w-3.5 rounded border-border accent-primary cursor-pointer"
+                />
+              </label>
               <span>Nom</span>
               <span className="w-24 text-center">Visibilité</span>
               <span className="w-16 text-right">Taille</span>
               <span className="w-20 text-right">Ajouté</span>
               <span className="w-8" />
             </div>
-
-            {/* Rows */}
             <div className="divide-y">
               {filteredDocuments.map(doc => (
                 <DocRow
                   key={doc.id}
                   doc={doc}
+                  selected={selectedDocIds.has(doc.id)}
+                  onToggleSelect={() => toggleDoc(doc.id)}
                   opening={openingDocId === doc.id}
                   onOpen={() => handleOpenDoc(doc)}
                   onToggleVisibility={() => handleToggleVisibility(doc)}
@@ -582,8 +674,50 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
               ))}
             </div>
           </div>
+        ) : (
+          /* ── GRID VIEW ── */
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+            {filteredDocuments.map(doc => (
+              <DocCard
+                key={doc.id}
+                doc={doc}
+                selected={selectedDocIds.has(doc.id)}
+                onToggleSelect={() => toggleDoc(doc.id)}
+                opening={openingDocId === doc.id}
+                onOpen={() => handleOpenDoc(doc)}
+                onToggleVisibility={() => handleToggleVisibility(doc)}
+                onAcknowledge={() => handleAcknowledge(doc)}
+                onRename={() => { setSelectedDoc(doc); setRenameDocName(doc.name); setRenameDocOpen(true) }}
+                onMove={() => { setSelectedDoc(doc); setMoveDocFolderId(doc.folder_id ?? 'root'); setMoveFolderOpen(true) }}
+                onDelete={() => handleDeleteDocument(doc)}
+              />
+            ))}
+          </div>
         )}
       </div>
+
+      {/* ── Bulk action bar ── */}
+      {someSelected && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-foreground text-background rounded-2xl shadow-2xl px-5 py-3 animate-in slide-in-from-bottom-4">
+          <span className="text-sm font-medium">
+            {selectedDocIds.size} sélectionné{selectedDocIds.size > 1 ? 's' : ''}
+          </span>
+          <div className="w-px h-4 bg-background/20" />
+          <button
+            onClick={() => { setBulkMoveFolderId('root'); setBulkMoveOpen(true) }}
+            className="flex items-center gap-1.5 text-sm font-medium hover:text-primary transition-colors"
+          >
+            <FolderSymlink className="h-4 w-4" />
+            Déplacer
+          </button>
+          <button
+            onClick={clearSelection}
+            className="flex items-center justify-center h-6 w-6 rounded-full bg-background/10 hover:bg-background/20 transition-colors ml-1"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* ── Dialogs ── */}
 
@@ -614,8 +748,7 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
             <DialogFooter>
               <Button type="button" variant="ghost" onClick={() => setCreateFolderOpen(false)}>Annuler</Button>
               <Button type="submit" disabled={savingFolder || !newFolderName.trim()}>
-                {savingFolder && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                Créer
+                {savingFolder && <Loader2 className="h-4 w-4 animate-spin mr-2" />}Créer
               </Button>
             </DialogFooter>
           </form>
@@ -640,7 +773,7 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
             </div>
             <div className="space-y-2">
               <Label>Dossier</Label>
-              <Select value={linkFolderId} onValueChange={v => setLinkFolderId(v ?? 'root')}>
+              <Select value={linkFolderId} onValueChange={(v: string) => setLinkFolderId(v ?? 'root')}>
                 <SelectTrigger><SelectValue placeholder="Choisir un dossier" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="root">Racine</SelectItem>
@@ -657,8 +790,7 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
                 Annuler
               </Button>
               <Button type="submit" disabled={savingLink || !linkUrl.trim()}>
-                {savingLink && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                Ajouter
+                {savingLink && <Loader2 className="h-4 w-4 animate-spin mr-2" />}Ajouter
               </Button>
             </DialogFooter>
           </form>
@@ -680,15 +812,14 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
             <DialogFooter>
               <Button type="button" variant="ghost" onClick={() => setRenameDocOpen(false)}>Annuler</Button>
               <Button type="submit" disabled={savingRenameDoc || !renameDocName.trim()}>
-                {savingRenameDoc && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                Enregistrer
+                {savingRenameDoc && <Loader2 className="h-4 w-4 animate-spin mr-2" />}Enregistrer
               </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
-      {/* Move document */}
+      {/* Move document (single) */}
       <Dialog open={moveFolderOpen} onOpenChange={setMoveFolderOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
@@ -698,7 +829,7 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
           <form onSubmit={handleMoveDoc} className="space-y-4">
             <div className="space-y-2">
               <Label>Dossier</Label>
-              <Select value={moveDocFolderId} onValueChange={v => setMoveDocFolderId(v ?? 'root')}>
+              <Select value={moveDocFolderId} onValueChange={(v: string) => setMoveDocFolderId(v ?? 'root')}>
                 <SelectTrigger><SelectValue placeholder="Choisir un dossier" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="root">Racine</SelectItem>
@@ -709,8 +840,35 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
             <DialogFooter>
               <Button type="button" variant="ghost" onClick={() => setMoveFolderOpen(false)}>Annuler</Button>
               <Button type="submit" disabled={savingMoveDoc}>
-                {savingMoveDoc && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                Déplacer
+                {savingMoveDoc && <Loader2 className="h-4 w-4 animate-spin mr-2" />}Déplacer
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk move */}
+      <Dialog open={bulkMoveOpen} onOpenChange={setBulkMoveOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Déplacer {selectedDocIds.size} document{selectedDocIds.size > 1 ? 's' : ''}…</DialogTitle>
+            <DialogDescription>Choisissez le dossier de destination.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleBulkMove} className="space-y-4">
+            <div className="space-y-2">
+              <Label>Dossier de destination</Label>
+              <Select value={bulkMoveFolderId} onValueChange={(v: string) => setBulkMoveFolderId(v ?? 'root')}>
+                <SelectTrigger><SelectValue placeholder="Choisir un dossier" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="root">Racine</SelectItem>
+                  {folders.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="ghost" onClick={() => setBulkMoveOpen(false)}>Annuler</Button>
+              <Button type="submit" disabled={savingBulkMove}>
+                {savingBulkMove && <Loader2 className="h-4 w-4 animate-spin mr-2" />}Déplacer
               </Button>
             </DialogFooter>
           </form>
@@ -732,8 +890,7 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
             <DialogFooter>
               <Button type="button" variant="ghost" onClick={() => setRenameFolderOpen(false)}>Annuler</Button>
               <Button type="submit" disabled={savingRenameFolder || !renameFolderName.trim()}>
-                {savingRenameFolder && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                Enregistrer
+                {savingRenameFolder && <Loader2 className="h-4 w-4 animate-spin mr-2" />}Enregistrer
               </Button>
             </DialogFooter>
           </form>
@@ -759,11 +916,7 @@ function FolderCard({ folder, onClick, onRename, onDelete }: {
         onClick={onClick}
         className="flex flex-col items-start gap-2 w-full rounded-xl border bg-card p-3.5 text-left hover:border-border/80 hover:shadow-sm transition-all"
       >
-        {/* Folder icon with color */}
-        <div
-          className="flex h-10 w-10 items-center justify-center rounded-lg"
-          style={{ backgroundColor: `${folder.color}20` }}
-        >
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg" style={{ backgroundColor: `${folder.color}20` }}>
           <FolderClosed className="h-5 w-5" style={{ color: folder.color }} />
         </div>
         <div className="w-full min-w-0 pr-4">
@@ -775,8 +928,6 @@ function FolderCard({ folder, onClick, onRename, onDelete }: {
           )}
         </div>
       </button>
-
-      {/* Context menu */}
       <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
         <DropdownMenuTrigger
           className={cn(
@@ -800,10 +951,12 @@ function FolderCard({ folder, onClick, onRename, onDelete }: {
   )
 }
 
-// ─── DocRow ───────────────────────────────────────────────────────────────────
+// ─── DocRow (list view) ───────────────────────────────────────────────────────
 
-function DocRow({ doc, opening, onOpen, onToggleVisibility, onAcknowledge, onRename, onMove, onDelete }: {
+function DocRow({ doc, selected, onToggleSelect, opening, onOpen, onToggleVisibility, onAcknowledge, onRename, onMove, onDelete }: {
   doc: Document
+  selected: boolean
+  onToggleSelect: () => void
   opening: boolean
   onOpen: () => void
   onToggleVisibility: () => void
@@ -816,9 +969,20 @@ function DocRow({ doc, opening, onOpen, onToggleVisibility, onAcknowledge, onRen
 
   return (
     <div className={cn(
-      'grid grid-cols-[1fr_auto_auto_auto_auto] gap-3 items-center px-4 py-2.5 hover:bg-muted/30 transition-colors group',
-      isClientPending && 'bg-amber-50/50 hover:bg-amber-50/70',
+      'grid grid-cols-[auto_1fr_auto_auto_auto_auto] gap-3 items-center px-4 py-2.5 hover:bg-muted/30 transition-colors group',
+      selected && 'bg-primary/5 hover:bg-primary/8',
+      isClientPending && !selected && 'bg-amber-50/50 hover:bg-amber-50/70',
     )}>
+      {/* Checkbox */}
+      <label className="flex items-center cursor-pointer">
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={onToggleSelect}
+          className="h-3.5 w-3.5 rounded border-border accent-primary cursor-pointer"
+        />
+      </label>
+
       {/* Name + icon */}
       <button
         onClick={onOpen}
@@ -841,16 +1005,11 @@ function DocRow({ doc, opening, onOpen, onToggleVisibility, onAcknowledge, onRen
       {/* Visibility */}
       <div className="w-24 flex items-center justify-center gap-1.5">
         {isClientPending ? (
-          <button
-            onClick={onAcknowledge}
-            className="text-[11px] font-medium text-emerald-700 border border-emerald-200 rounded-md px-2 py-0.5 hover:bg-emerald-50 transition-colors flex items-center gap-1"
-          >
+          <button onClick={onAcknowledge} className="text-[11px] font-medium text-emerald-700 border border-emerald-200 rounded-md px-2 py-0.5 hover:bg-emerald-50 transition-colors flex items-center gap-1">
             <CheckCircle2 className="h-3 w-3" /> Valider
           </button>
         ) : doc.source === 'client' ? (
-          <Badge className="text-[10px] h-5 px-1.5 bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-50">
-            Reçu
-          </Badge>
+          <Badge className="text-[10px] h-5 px-1.5 bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-50">Reçu</Badge>
         ) : (
           <button
             onClick={onToggleVisibility}
@@ -861,18 +1020,13 @@ function DocRow({ doc, opening, onOpen, onToggleVisibility, onAcknowledge, onRen
                 : 'bg-muted text-muted-foreground border-border hover:bg-muted/80'
             )}
           >
-            {doc.visible_to_client
-              ? <><Eye className="h-3 w-3" /> Client</>
-              : <><EyeOff className="h-3 w-3" /> Admin</>
-            }
+            {doc.visible_to_client ? <><Eye className="h-3 w-3" /> Client</> : <><EyeOff className="h-3 w-3" /> Admin</>}
           </button>
         )}
       </div>
 
       {/* Size */}
-      <span className="w-16 text-right text-xs text-muted-foreground tabular-nums">
-        {formatBytes(doc.size_bytes)}
-      </span>
+      <span className="w-16 text-right text-xs text-muted-foreground tabular-nums">{formatBytes(doc.size_bytes)}</span>
 
       {/* Date */}
       <span className="w-20 text-right text-xs text-muted-foreground">
@@ -886,20 +1040,11 @@ function DocRow({ doc, opening, onOpen, onToggleVisibility, onAcknowledge, onRen
             <MoreHorizontal className="h-4 w-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem onClick={onOpen}>
-              <ExternalLink className="h-3.5 w-3.5 mr-2" /> Ouvrir
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={onRename}>
-              <Pencil className="h-3.5 w-3.5 mr-2" /> Renommer
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={onMove}>
-              <FolderInput className="h-3.5 w-3.5 mr-2" /> Changer de dossier
-            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onOpen}><ExternalLink className="h-3.5 w-3.5 mr-2" /> Ouvrir</DropdownMenuItem>
+            <DropdownMenuItem onClick={onRename}><Pencil className="h-3.5 w-3.5 mr-2" /> Renommer</DropdownMenuItem>
+            <DropdownMenuItem onClick={onMove}><FolderInput className="h-3.5 w-3.5 mr-2" /> Changer de dossier</DropdownMenuItem>
             <DropdownMenuItem onClick={onToggleVisibility}>
-              {doc.visible_to_client
-                ? <><EyeOff className="h-3.5 w-3.5 mr-2" /> Masquer aux clients</>
-                : <><Eye className="h-3.5 w-3.5 mr-2" /> Rendre visible aux clients</>
-              }
+              {doc.visible_to_client ? <><EyeOff className="h-3.5 w-3.5 mr-2" /> Masquer aux clients</> : <><Eye className="h-3.5 w-3.5 mr-2" /> Rendre visible aux clients</>}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive">
@@ -907,6 +1052,105 @@ function DocRow({ doc, opening, onOpen, onToggleVisibility, onAcknowledge, onRen
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+      </div>
+    </div>
+  )
+}
+
+// ─── DocCard (grid view) ──────────────────────────────────────────────────────
+
+function DocCard({ doc, selected, onToggleSelect, opening, onOpen, onToggleVisibility, onAcknowledge, onRename, onMove, onDelete }: {
+  doc: Document
+  selected: boolean
+  onToggleSelect: () => void
+  opening: boolean
+  onOpen: () => void
+  onToggleVisibility: () => void
+  onAcknowledge: () => void
+  onRename: () => void
+  onMove: () => void
+  onDelete: () => void
+}) {
+  const isClientPending = doc.source === 'client' && doc.client_doc_status === 'pending_review'
+  const [menuOpen, setMenuOpen] = useState(false)
+
+  return (
+    <div className={cn(
+      'relative group rounded-xl border bg-card transition-all hover:shadow-sm',
+      selected ? 'border-primary ring-1 ring-primary/30 bg-primary/5' : 'hover:border-border/80',
+      isClientPending && !selected && 'border-amber-200 bg-amber-50/30',
+    )}>
+      {/* Checkbox overlay */}
+      <label className={cn(
+        'absolute top-2.5 left-2.5 z-10 flex items-center justify-center cursor-pointer transition-opacity',
+        selected || menuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+      )}>
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={onToggleSelect}
+          className="h-4 w-4 rounded border-2 border-white shadow accent-primary cursor-pointer bg-white"
+        />
+      </label>
+
+      {/* Context menu */}
+      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+        <DropdownMenuTrigger
+          className={cn(
+            'absolute top-2.5 right-2.5 z-10 h-6 w-6 inline-flex items-center justify-center rounded-md bg-background/80 hover:bg-background border shadow-sm transition-opacity',
+            menuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+          )}
+          onClick={e => e.stopPropagation()}
+        >
+          <MoreHorizontal className="h-3.5 w-3.5" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-48">
+          <DropdownMenuItem onClick={onOpen}><ExternalLink className="h-3.5 w-3.5 mr-2" /> Ouvrir</DropdownMenuItem>
+          <DropdownMenuItem onClick={onRename}><Pencil className="h-3.5 w-3.5 mr-2" /> Renommer</DropdownMenuItem>
+          <DropdownMenuItem onClick={onMove}><FolderInput className="h-3.5 w-3.5 mr-2" /> Changer de dossier</DropdownMenuItem>
+          <DropdownMenuItem onClick={onToggleVisibility}>
+            {doc.visible_to_client ? <><EyeOff className="h-3.5 w-3.5 mr-2" /> Masquer</> : <><Eye className="h-3.5 w-3.5 mr-2" /> Rendre visible</>}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive">
+            <Trash2 className="h-3.5 w-3.5 mr-2" /> Supprimer
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      {/* Icon area */}
+      <button
+        onClick={onOpen}
+        disabled={opening}
+        className="flex items-center justify-center w-full pt-8 pb-4 disabled:opacity-70"
+      >
+        {opening
+          ? <Loader2 className="h-10 w-10 animate-spin text-muted-foreground" />
+          : getFileIcon(doc, 'lg')
+        }
+      </button>
+
+      {/* Info */}
+      <div className="px-3 pb-3 space-y-1.5">
+        <p className="text-xs font-medium truncate leading-tight" title={doc.name}>{doc.name}</p>
+        <div className="flex items-center justify-between gap-1">
+          <span className="text-[10px] text-muted-foreground tabular-nums">{formatBytes(doc.size_bytes)}</span>
+          {isClientPending ? (
+            <button onClick={onAcknowledge} className="text-[10px] font-medium text-emerald-700 border border-emerald-200 rounded px-1.5 py-0.5 hover:bg-emerald-50 transition-colors flex items-center gap-1">
+              <CheckCircle2 className="h-2.5 w-2.5" /> Valider
+            </button>
+          ) : (
+            <span className={cn(
+              'inline-flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded border',
+              doc.visible_to_client
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                : 'bg-muted text-muted-foreground border-border'
+            )}>
+              {doc.visible_to_client ? <Eye className="h-2.5 w-2.5" /> : <EyeOff className="h-2.5 w-2.5" />}
+              {doc.visible_to_client ? 'Client' : 'Admin'}
+            </span>
+          )}
+        </div>
       </div>
     </div>
   )
