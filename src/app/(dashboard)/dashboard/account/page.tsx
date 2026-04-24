@@ -30,6 +30,10 @@ import {
   Zap,
   Crown,
   ExternalLink,
+  Calendar,
+  Link2,
+  Unlink,
+  Lock,
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -162,6 +166,11 @@ function AccountPageInner() {
   const [uploadingLogo, setUploadingLogo] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // --- Section Google Integration
+  const [googleConnected, setGoogleConnected] = useState(false)
+  const [googleEmail, setGoogleEmail] = useState<string | null>(null)
+  const [disconnectingGoogle, setDisconnectingGoogle] = useState(false)
+
   // --- Section 2: Entreprise
   const [companyName, setCompanyName] = useState('')
   const [companyType, setCompanyType] = useState<CompanyType | ''>('')
@@ -198,7 +207,34 @@ function AccountPageInner() {
         setCompanyCity(data.company_city ?? '')
       })
       .finally(() => setLoading(false))
+    fetch('/api/integrations/google/status')
+      .then((r) => r.json())
+      .then(({ connected, email }: { connected: boolean; email: string | null }) => {
+        setGoogleConnected(connected)
+        setGoogleEmail(email)
+      })
+      .catch(() => {})
   }, [user])
+
+  useEffect(() => {
+    const googleParam = searchParams.get('google')
+    if (googleParam === 'connected') toast.success('Google Calendar connecté avec succès.')
+    if (googleParam === 'error') toast.error('Impossible de connecter Google Calendar.')
+  }, [searchParams])
+
+  async function handleGoogleDisconnect() {
+    setDisconnectingGoogle(true)
+    try {
+      await fetch('/api/integrations/google/disconnect', { method: 'DELETE' })
+      setGoogleConnected(false)
+      setGoogleEmail(null)
+      toast.success('Google Calendar déconnecté.')
+    } catch {
+      toast.error('Erreur lors de la déconnexion.')
+    } finally {
+      setDisconnectingGoogle(false)
+    }
+  }
 
   // ---------------------------------------------------------------------------
   // Compression image (Canvas → JPEG max 512px)
@@ -425,6 +461,10 @@ function AccountPageInner() {
           <TabsTrigger value="forfaits" onClick={() => router.push('/dashboard/settings/billing')}>
             <CreditCard className="h-4 w-4 mr-2" />
             Forfait
+          </TabsTrigger>
+          <TabsTrigger value="integrations">
+            <Calendar className="h-4 w-4 mr-2" />
+            Intégrations
           </TabsTrigger>
         </TabsList>
 
@@ -811,6 +851,83 @@ function AccountPageInner() {
               )
             })}
           </div>
+        </TabsContent>
+
+        {/* ================================================================ */}
+        {/* Tab 4 — Intégrations                                             */}
+        {/* ================================================================ */}
+        <TabsContent value="integrations" className="space-y-6">
+          <Card className="bg-white">
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-base">Google Calendar &amp; Meet</CardTitle>
+              </div>
+              <CardDescription>
+                Synchronisez vos réunions avec Google Calendar et générez automatiquement des liens Google Meet.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {currentPlan === 'free' ? (
+                <div className="flex flex-col items-center gap-3 py-6 text-center">
+                  <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
+                    <Lock className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                  <p className="font-medium text-sm">Fonctionnalité réservée aux plans Pro et Agence</p>
+                  <p className="text-sm text-muted-foreground max-w-xs">
+                    Passez au plan Pro pour synchroniser vos réunions avec Google Calendar et créer des liens Meet automatiquement.
+                  </p>
+                  <Link href="/dashboard/settings/billing">
+                    <Button size="sm" className="mt-1">
+                      <Crown className="mr-2 h-3.5 w-3.5" />
+                      Passer au Plan Pro — 14€ / mois
+                    </Button>
+                  </Link>
+                </div>
+              ) : googleConnected ? (
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center shrink-0">
+                      <Check className="h-5 w-5 text-green-600" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-sm">Compte Google connecté</p>
+                      <p className="text-xs text-muted-foreground">{googleEmail}</p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleGoogleDisconnect}
+                    disabled={disconnectingGoogle}
+                    className="text-red-600 border-red-200 hover:bg-red-50"
+                  >
+                    {disconnectingGoogle ? (
+                      <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Unlink className="mr-2 h-3.5 w-3.5" />
+                    )}
+                    Déconnecter
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <p className="font-medium text-sm">Google Calendar non connecté</p>
+                    <p className="text-xs text-muted-foreground">
+                      Connectez votre compte Google pour synchroniser vos réunions et créer des liens Meet.
+                    </p>
+                  </div>
+                  <a href="/api/integrations/google/connect">
+                    <Button size="sm" className="shrink-0 bg-[#386FA4] hover:bg-[#133C55]">
+                      <Link2 className="mr-2 h-3.5 w-3.5" />
+                      Connecter Google
+                    </Button>
+                  </a>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>
