@@ -136,16 +136,77 @@ const QUICK_DOC_PRESETS = [
 ]
 
 const QUICK_ACCESS_PRESETS = [
-  { label: 'WordPress Admin', type: 'password', description: 'URL + identifiant + mot de passe admin', category: 'CMS' },
-  { label: 'FTP / SFTP', type: 'password', description: 'Accès au serveur de fichiers', category: 'Hébergement' },
-  { label: 'Hébergeur (cPanel)', type: 'password', description: 'Accès panneau de contrôle hébergement', category: 'Hébergement' },
-  { label: 'Google Analytics', type: 'url', description: 'Lien vers le compte Google Analytics', category: 'Marketing' },
-  { label: 'Gestionnaire Facebook', type: 'url', description: 'Lien vers le Business Manager Facebook', category: 'Social' },
-  { label: 'Instagram', type: 'password', description: 'Identifiants du compte Instagram', category: 'Social' },
-  { label: 'Nom de domaine', type: 'url', description: 'Accès au registrar (OVH, Ionos...)', category: 'Hébergement' },
-  { label: 'Shopify', type: 'url', description: 'URL de l\'admin Shopify', category: 'E-commerce' },
-  { label: 'API Key / Token', type: 'password', description: 'Clé API ou token d\'accès', category: 'Dev' },
-  { label: 'Gmail / G Suite', type: 'password', description: 'Accès boîte email Google', category: 'Email' },
+  {
+    label: 'WordPress Admin', category: 'CMS', description: 'URL + identifiant + mot de passe admin WordPress',
+    fields: [
+      { label: 'URL WordPress Admin', type: 'url' as const, sensitive: false, placeholder: 'https://monsite.com/wp-admin' },
+      { label: 'Identifiant WordPress', type: 'text' as const, sensitive: false, placeholder: '' },
+      { label: 'Mot de passe WordPress', type: 'text' as const, sensitive: true, placeholder: '' },
+    ],
+  },
+  {
+    label: 'cPanel', category: 'Hébergement', description: 'URL, identifiant et mot de passe cPanel',
+    fields: [
+      { label: 'URL cPanel', type: 'url' as const, sensitive: false, placeholder: 'https://...:2083' },
+      { label: 'Identifiant cPanel', type: 'text' as const, sensitive: false, placeholder: '' },
+      { label: 'Mot de passe cPanel', type: 'text' as const, sensitive: true, placeholder: '' },
+    ],
+  },
+  {
+    label: 'Accès Hébergeur', category: 'Hébergement', description: 'Hostinger, OVH, Ionos, etc.',
+    fields: [
+      { label: 'Email du compte hébergeur', type: 'text' as const, sensitive: false, placeholder: '' },
+      { label: 'Mot de passe hébergeur', type: 'text' as const, sensitive: true, placeholder: '' },
+    ],
+  },
+  {
+    label: 'FTP / SFTP', category: 'Hébergement', description: 'Accès au serveur de fichiers',
+    fields: [
+      { label: 'Hôte FTP', type: 'text' as const, sensitive: false, placeholder: 'ftp.monsite.com' },
+      { label: 'Identifiant FTP', type: 'text' as const, sensitive: false, placeholder: '' },
+      { label: 'Mot de passe FTP', type: 'text' as const, sensitive: true, placeholder: '' },
+    ],
+  },
+  {
+    label: 'Gmail / G Suite', category: 'Email', description: 'Accès boîte email Google',
+    fields: [
+      { label: 'Email Gmail', type: 'text' as const, sensitive: false, placeholder: '' },
+      { label: 'Mot de passe Gmail', type: 'text' as const, sensitive: true, placeholder: '' },
+    ],
+  },
+  {
+    label: 'Shopify / WooCommerce', category: 'E-commerce', description: 'URL admin, utilisateur et mot de passe',
+    fields: [
+      { label: 'URL admin boutique', type: 'url' as const, sensitive: false, placeholder: 'https://monsite.myshopify.com/admin' },
+      { label: 'Utilisateur', type: 'text' as const, sensitive: false, placeholder: '' },
+      { label: 'Mot de passe', type: 'text' as const, sensitive: true, placeholder: '' },
+    ],
+  },
+  {
+    label: 'Gestionnaire Facebook', category: 'Social', description: 'Email du compte Facebook associé à la page',
+    fields: [
+      { label: 'Email Facebook', type: 'text' as const, sensitive: false, placeholder: '' },
+    ],
+  },
+  {
+    label: 'Instagram', category: 'Social', description: 'Pseudo et mot de passe du compte Instagram',
+    fields: [
+      { label: 'Pseudo Instagram', type: 'text' as const, sensitive: false, placeholder: '@moncompte' },
+      { label: 'Mot de passe Instagram', type: 'text' as const, sensitive: true, placeholder: '' },
+    ],
+  },
+  {
+    label: 'Google Analytics', category: 'Marketing', description: 'Lien vers le compte Google Analytics',
+    fields: [
+      { label: 'URL Google Analytics', type: 'url' as const, sensitive: false, placeholder: 'https://analytics.google.com/...' },
+    ],
+  },
+  {
+    label: 'API Key / Token', category: 'Dev', description: 'Clé API ou token d\'accès',
+    fields: [
+      { label: 'Clé API / Token', type: 'text' as const, sensitive: true, placeholder: '' },
+    ],
+  },
 ]
 
 // ─── Default factories ────────────────────────────────────────────────────────
@@ -1219,16 +1280,33 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
 
   async function handleQuickAddAccess(preset: typeof QUICK_ACCESS_PRESETS[number]) {
     try {
-      const isPassword = preset.type === 'password'
       const sectionId = await getOrCreateAccessSection()
-      const res = await fetch(`/api/projects/${id}/fields`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: isPassword ? 'text' : preset.type, label: preset.label, description: preset.description, placeholder: '', required: false, options: null, section_id: sectionId, sensitive: isPassword, order_index: accessFields.length }),
-      })
-      const json = await res.json()
-      if (res.ok) { setFields(prev => [...prev, json.data]); toast.success(`"${preset.label}" ajouté`) }
-      else toast.error(json.error ?? 'Erreur')
+      const created: FormField[] = []
+      for (let i = 0; i < preset.fields.length; i++) {
+        const f = preset.fields[i]
+        const res = await fetch(`/api/projects/${id}/fields`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: f.type,
+            label: f.label,
+            description: '',
+            placeholder: f.placeholder ?? '',
+            required: false,
+            options: null,
+            section_id: sectionId,
+            sensitive: f.sensitive,
+            order_index: accessFields.length + i,
+          }),
+        })
+        const json = await res.json()
+        if (res.ok) created.push(json.data as FormField)
+        else toast.error(json.error ?? 'Erreur lors de la création')
+      }
+      if (created.length > 0) {
+        setFields(prev => [...prev, ...created])
+        toast.success(`"${preset.label}" ajouté (${created.length} champ${created.length > 1 ? 's' : ''})`)
+      }
     } catch (err) { toast.error(err instanceof Error ? err.message : 'Erreur') }
   }
 
@@ -1286,12 +1364,10 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
         <div className="flex items-center gap-2 self-start">
           {/* Actions secondaires groupées */}
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                <Settings className="h-4 w-4 mr-2" />
-                Options
-                <ChevronDown className="h-3.5 w-3.5 ml-1.5 text-muted-foreground" />
-              </Button>
+            <DropdownMenuTrigger className="inline-flex items-center justify-center gap-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm font-medium shadow-sm hover:bg-accent hover:text-accent-foreground transition-colors h-8">
+              <Settings className="h-4 w-4 mr-1" />
+              Options
+              <ChevronDown className="h-3.5 w-3.5 ml-1 text-muted-foreground" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-52">
               <DropdownMenuItem onClick={openLoadTemplateDialog}>
@@ -1946,7 +2022,7 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="field-type">Type de champ</Label>
-                <Select value={newField.type as string} onValueChange={v => setNewField(p => ({ ...p, type: v as FormFieldType, options: null }))}>
+                <Select value={newField.type as string} onValueChange={(v: string) => setNewField(p => ({ ...p, type: v as FormFieldType, options: null }))}>
                   <SelectTrigger id="field-type"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {APP_CONFIG.formFieldTypes.map(t => (
@@ -1961,7 +2037,7 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
                 <Label htmlFor="field-section">Section</Label>
                 <Select
                   value={newField.section_id ?? '__none__'}
-                  onValueChange={v => setNewField(p => ({ ...p, section_id: v === '__none__' ? null : v }))}
+                  onValueChange={(v: string) => setNewField(p => ({ ...p, section_id: v === '__none__' ? null : v }))}
                 >
                   <SelectTrigger id="field-section"><SelectValue placeholder="Sans section" /></SelectTrigger>
                   <SelectContent>
@@ -2068,7 +2144,7 @@ export default function OnboardingEditorPage({ params }: { params: Promise<{ id:
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="access-type">Type d&apos;information</Label>
-              <Select value={newAccessField.accessType} onValueChange={v => setNewAccessField(p => ({ ...p, accessType: v ?? 'text' }))}>
+              <Select value={newAccessField.accessType} onValueChange={(v: string) => setNewAccessField(p => ({ ...p, accessType: v || 'text' }))}>
                 <SelectTrigger id="access-type"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {ACCESS_TYPES.map(t => (
