@@ -718,9 +718,9 @@ function MeetingsPageInner({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(basePayload),
         })
-        if (!res.ok) throw new Error()
-        const json = (await res.json()) as { data: Meeting }
-        setMeetings(prev => prev.map(m => (m.id === editingMeeting.id ? json.data : m)))
+        const jsonUp = await res.json() as { data?: Meeting; error?: string }
+        if (!res.ok) throw new Error(jsonUp.error ?? 'Erreur')
+        setMeetings(prev => prev.map(m => (m.id === editingMeeting.id ? jsonUp.data! : m)))
         toast.success('Réunion mise à jour')
       } else {
         const res = await fetch(`/api/projects/${projectId}/meetings`, {
@@ -728,15 +728,16 @@ function MeetingsPageInner({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ...basePayload, sync_google: syncGoogle }),
         })
-        if (!res.ok) throw new Error()
-        const json = (await res.json()) as { data: Meeting }
-        setMeetings(prev => [...prev, json.data])
-        toast.success(syncGoogle ? 'Réunion créée et ajoutée à Google Calendar' : 'Réunion créée')
+        const jsonNew = await res.json() as { data?: Meeting; error?: string }
+        if (!res.ok) throw new Error(jsonNew.error ?? 'Erreur')
+        setMeetings(prev => [...prev, jsonNew.data!])
+        const hasMeet = syncGoogle && !!jsonNew.data?.meeting_link
+        toast.success(hasMeet ? 'Réunion créée avec lien Google Meet ✓' : syncGoogle ? 'Réunion créée (sync Google en attente)' : 'Réunion créée')
       }
 
       closeDialog()
-    } catch {
-      toast.error('Erreur lors de la sauvegarde')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erreur lors de la sauvegarde')
     } finally {
       setSaving(false)
     }
@@ -1143,13 +1144,22 @@ function MeetingsPageInner({
             {/* Lien de réunion */}
             <div className="space-y-1.5">
               <Label htmlFor="meeting-link">Lien de réunion</Label>
-              <Input
-                id="meeting-link"
-                type="url"
-                placeholder="https://meet.google.com/..."
-                value={form.meeting_link}
-                onChange={e => setForm(f => ({ ...f, meeting_link: e.target.value }))}
-              />
+              {syncGoogle && !editingMeeting ? (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-md border bg-muted/50 text-sm text-muted-foreground">
+                  <svg className="h-4 w-4 shrink-0 text-[#386FA4]" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19.35 10.04A7.49 7.49 0 0 0 12 4C9.11 4 6.6 5.64 5.35 8.04A5.994 5.994 0 0 0 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4 0-2.05 1.53-3.76 3.56-3.97l1.07-.11.5-.95A5.469 5.469 0 0 1 12 6c2.62 0 4.88 1.86 5.39 4.43l.3 1.5 1.53.11A2.978 2.978 0 0 1 22 15c0 1.65-1.35 3-3 3z"/>
+                  </svg>
+                  Lien Google Meet généré automatiquement à la création
+                </div>
+              ) : (
+                <Input
+                  id="meeting-link"
+                  type="url"
+                  placeholder="https://meet.google.com/..."
+                  value={form.meeting_link}
+                  onChange={e => setForm(f => ({ ...f, meeting_link: e.target.value }))}
+                />
+              )}
             </div>
 
             {/* Lieu */}

@@ -84,18 +84,18 @@ export async function POST(
     let finalMeetingLink = parsed.data.meeting_link || null
 
     if (parsed.data.sync_google) {
-      const { data: integration } = await supabase
-        .from('google_integrations')
-        .select('access_token, refresh_token, expires_at')
-        .eq('user_id', user.id)
-        .single()
+      try {
+        const { data: integration } = await supabase
+          .from('google_integrations')
+          .select('access_token, refresh_token, expires_at')
+          .eq('user_id', user.id)
+          .single()
 
-      if (integration) {
-        try {
+        if (integration) {
           const accessToken = await getValidAccessToken(
-            integration.access_token,
-            integration.refresh_token,
-            integration.expires_at,
+            integration.access_token as string,
+            integration.refresh_token as string,
+            integration.expires_at as string,
           )
           const result = await createGoogleCalendarEvent(accessToken, {
             title: parsed.data.title,
@@ -105,12 +105,12 @@ export async function POST(
             attendeeEmails: parsed.data.attendees,
           })
           googleEventId = result.eventId
-          if (result.meetLink && !finalMeetingLink) {
+          if (result.meetLink) {
             finalMeetingLink = result.meetLink
           }
-        } catch (err) {
-          console.error('[meetings/post] Google Calendar sync error:', err)
         }
+      } catch (err) {
+        console.error('[meetings/post] Google Calendar sync error:', err)
       }
     }
 

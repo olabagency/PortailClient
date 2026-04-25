@@ -36,6 +36,12 @@ export async function POST(req: NextRequest) {
 
     const userId = authData.user.id
 
+    // Marquer le profil comme compte client
+    await admin
+      .from('profiles')
+      .update({ account_type: 'client' })
+      .eq('id', userId)
+
     // Lier le user_id à la fiche client existante (par email, case-insensitive)
     await admin
       .from('clients')

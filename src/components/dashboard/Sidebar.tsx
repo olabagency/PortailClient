@@ -21,6 +21,7 @@ import {
   UserCircle2,
   KeyRound,
   History,
+  ShieldCheck,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { APP_CONFIG } from '@/config/app.config'
@@ -94,12 +95,16 @@ function SidebarContent() {
   const pathname = usePathname()
   const { user, logout } = useAuth()
   const [plan, setPlan] = useState<string>('free')
+  const [isAdmin, setIsAdmin] = useState(false)
 
   useEffect(() => {
     if (user) {
       const supabase = createClient()
-      supabase.from('profiles').select('plan').eq('id', user.id).single()
-        .then(({ data }) => { if (data?.plan) setPlan(data.plan) })
+      supabase.from('profiles').select('plan, admin').eq('id', user.id).single()
+        .then(({ data }) => {
+          if (data?.plan) setPlan(data.plan)
+          if (data?.admin) setIsAdmin(true)
+        })
     }
   }, [user])
 
@@ -151,6 +156,14 @@ function SidebarContent() {
 
       {/* Navigation bas */}
       <div className="px-3 py-3 border-t space-y-1">
+        {isAdmin && (
+          <NavLink
+            href="/dashboard/admin"
+            label="Administration"
+            icon={ShieldCheck}
+            exact={false}
+          />
+        )}
         {/* User account */}
         <DropdownMenu>
           <DropdownMenuTrigger className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors mt-1">

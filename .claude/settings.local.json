@@ -166,7 +166,8 @@
       "mcp__71fcdac2-d126-40b4-9fbc-7791fd95c031__get_logs",
       "Bash(grep -r \"Select.Value\\\\|SelectValue\\\\|getLabel\\\\|label\" node_modules/@base-ui/react/dist/select/select-value*)",
       "Bash(grep -v \"^$\")",
-      "Bash(git fetch *)"
+      "Bash(git fetch *)",
+      "Bash(git pull *)"
     ]
   }
 }

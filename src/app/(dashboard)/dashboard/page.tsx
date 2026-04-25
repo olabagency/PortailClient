@@ -2,6 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { APP_CONFIG } from '@/config/app.config'
 import Link from 'next/link'
+import { format } from 'date-fns'
+import { fr } from 'date-fns/locale'
 import { Card, CardContent } from '@/components/ui/card'
 import {
   FolderKanban, Users, Clock, CheckCircle2, Zap, Plus, ArrowRight,
@@ -25,7 +27,7 @@ export default async function DashboardPage() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('full_name, plan')
+    .select('full_name, plan, trial_ends_at')
     .eq('id', user.id)
     .single()
 
@@ -123,6 +125,8 @@ export default async function DashboardPage() {
   const plan = (profile?.plan ?? 'free') as keyof typeof APP_CONFIG.plans
   const maxProjects = APP_CONFIG.plans[plan].maxProjects
   const showUpgradeBanner = plan === 'free' && (totalProjects ?? 0) >= maxProjects - 1
+  const trialEndsAt = profile?.trial_ends_at ? new Date(profile.trial_ends_at as string) : null
+  const showTrialBanner = trialEndsAt !== null && trialEndsAt > new Date()
 
   // Actions à traiter
   const actions = [
@@ -187,6 +191,23 @@ export default async function DashboardPage() {
           Nouveau projet
         </Link>
       </div>
+
+      {/* ── Bannière période d'essai ── */}
+      {showTrialBanner && (
+        <div className="flex items-center justify-between gap-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
+          <div className="flex items-center gap-3">
+            <Zap className="h-4 w-4 text-blue-600 shrink-0" />
+            <p className="text-sm text-blue-800">
+              <span className="font-semibold">Période d&apos;essai</span>{' '}
+              — votre accès {APP_CONFIG.plans[plan]?.name ?? 'Pro'} expire le{' '}
+              <span className="font-semibold">{format(trialEndsAt!, 'd MMMM yyyy', { locale: fr })}</span>.
+            </p>
+          </div>
+          <Link href="/dashboard/account?tab=forfaits" className="shrink-0 text-xs font-semibold text-blue-700 hover:text-blue-900 flex items-center gap-1 whitespace-nowrap">
+            Mon abonnement <ArrowRight className="h-3 w-3" />
+          </Link>
+        </div>
+      )}
 
       {/* ── Bannière upgrade ── */}
       {showUpgradeBanner && (

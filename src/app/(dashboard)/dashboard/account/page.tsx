@@ -771,9 +771,9 @@ function AccountPageInner() {
                                 </span>
                               </p>
                             )}
-                            {billingProfile?.trial_ends_at && subscriptionStatus === 'trialing' && (
+                            {billingProfile?.trial_ends_at && (
                               <p className="text-sm text-blue-600">
-                                Essai jusqu&apos;au{' '}
+                                Période d&apos;essai jusqu&apos;au{' '}
                                 <span className="font-semibold">
                                   {format(new Date(billingProfile.trial_ends_at), 'd MMMM yyyy', { locale: fr })}
                                 </span>
