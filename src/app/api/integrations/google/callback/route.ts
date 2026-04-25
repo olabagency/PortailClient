@@ -27,9 +27,7 @@ export async function GET(request: NextRequest) {
 
     const googleEmail = await getGoogleUserEmail(tokens.access_token)
 
-    const expiresAt = tokens.expiry_date
-      ? new Date(tokens.expiry_date).toISOString()
-      : new Date(Date.now() + 3600 * 1000).toISOString()
+    const expiresAt = new Date(Date.now() + (tokens.expires_in ?? 3600) * 1000).toISOString()
 
     await supabase
       .from('google_integrations')

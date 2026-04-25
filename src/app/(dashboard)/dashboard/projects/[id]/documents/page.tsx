@@ -583,11 +583,12 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
         </div>
 
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button className="gap-2" disabled={uploading || storagePercent >= 100}>
-              {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-              Nouveau
-            </Button>
+          <DropdownMenuTrigger
+            disabled={uploading || storagePercent >= 100}
+            className="inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2 disabled:opacity-50 disabled:pointer-events-none"
+          >
+            {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+            Nouveau
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
             <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>
@@ -606,258 +607,262 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
         <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileSelect} />
       </div>
 
-      {/* ── Storage bar ── */}
-      {storageInfo && (
-        <div className="mb-4 px-3 py-2.5 rounded-xl border bg-muted/20">
-          <div className="flex items-center justify-between gap-2 mb-2">
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <HardDrive className="h-3.5 w-3.5" />
-              <span>Stockage</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground tabular-nums">
-                {formatBytes(storageInfo.used_bytes)} / {storageInfo.max_storage_gb} Go
-              </span>
-              <span className={cn(
-                'text-[10px] font-medium px-1.5 py-0.5 rounded border',
-                storagePercent >= 90 ? 'bg-red-50 text-red-600 border-red-200' :
-                storagePercent >= 70 ? 'bg-amber-50 text-amber-600 border-amber-200' :
-                'bg-muted text-muted-foreground border-border'
-              )}>
-                {storagePercent}%
-              </span>
-              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded border bg-muted text-muted-foreground border-border">
-                Plan {storageInfo.plan_name}
-              </span>
-            </div>
-          </div>
-          <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-            <div
-              className={cn(
-                'h-full rounded-full transition-all duration-500',
-                storagePercent >= 90 ? 'bg-red-500' :
-                storagePercent >= 70 ? 'bg-amber-500' :
-                'bg-[#386FA4]'
-              )}
-              style={{ width: `${storagePercent}%` }}
-            />
-          </div>
-          {storagePercent >= 100 && (
-            <p className="text-xs text-red-600 mt-1.5 font-medium">
-              Quota atteint. Passez à un plan supérieur pour continuer à importer des fichiers.
-            </p>
-          )}
-        </div>
-      )}
-
-      {/* ── Toolbar ── */}
-      <div className="flex items-center gap-3 mb-4 flex-wrap">
-        {/* Breadcrumb */}
-        <nav className="flex items-center gap-1 text-sm flex-1 min-w-0">
-          <DroppableRoot isActive={currentFolderId !== null}>
-            <button
-              onClick={() => setCurrentFolderId(null)}
-              className={cn(
-                'flex items-center gap-1.5 px-2 py-1 rounded-md transition-colors',
-                currentFolderId === null
-                  ? 'text-foreground font-medium'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-              )}
-            >
-              <FolderOpen className="h-4 w-4" />
-              Mes documents
-            </button>
-          </DroppableRoot>
-          {currentFolder && (
-            <>
-              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-              <span
-                className="flex items-center gap-1.5 px-2 py-1 rounded-md font-medium"
-                style={{ color: currentFolder.color }}
-              >
-                <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: currentFolder.color }} />
-                {currentFolder.name}
-              </span>
-            </>
-          )}
-        </nav>
-
-        {/* Search */}
-        <div className="relative w-52 shrink-0">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-          <Input
-            className="pl-8 h-8 text-sm"
-            placeholder="Rechercher…"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
-        </div>
-
-        {/* Filter tabs */}
-        <div className="flex items-center gap-0.5 border rounded-lg p-0.5 shrink-0">
-          {(['all', 'admin', 'client'] as TabFilter[]).map(tab => (
-            <button
-              key={tab}
-              onClick={() => setTabFilter(tab)}
-              className={cn(
-                'px-3 py-1 text-xs rounded-md transition-colors',
-                tabFilter === tab
-                  ? 'bg-primary text-primary-foreground font-medium shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              )}
-            >
-              {tab === 'all' ? 'Tous' : tab === 'admin' ? 'Admin' : 'Client'}
-            </button>
-          ))}
-        </div>
-
-        {/* View mode toggle */}
-        <div className="flex items-center gap-0.5 border rounded-lg p-0.5 shrink-0">
-          <button
-            onClick={() => setViewMode('list')}
-            className={cn(
-              'h-7 w-7 flex items-center justify-center rounded-md transition-colors',
-              viewMode === 'list' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-            )}
-            title="Vue liste"
-          >
-            <LayoutList className="h-3.5 w-3.5" />
-          </button>
-          <button
-            onClick={() => setViewMode('grid')}
-            className={cn(
-              'h-7 w-7 flex items-center justify-center rounded-md transition-colors',
-              viewMode === 'grid' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-            )}
-            title="Vue grille"
-          >
-            <LayoutGrid className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      </div>
-
-      {/* ── DnD Context wraps folders + documents ── */}
+      {/* ── Main layout : sidebar + contenu ── */}
       <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+        <div className="flex flex-1 gap-5 min-h-0 overflow-hidden">
 
-        {/* ── Folders grid (root only) ── */}
-        {currentFolderId === null && (
-          <div className="mb-6">
-            {loadingFolders ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                {[1, 2, 3].map(i => <Skeleton key={i} className="h-24 rounded-xl" />)}
-              </div>
-            ) : folders.length > 0 ? (
-              <>
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-                  Dossiers · {folders.length}
-                  {activeDocId && <span className="ml-2 text-[#386FA4]">— Déposez sur un dossier pour déplacer</span>}
-                </p>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                  {folders.map(folder => (
-                    <FolderCard
-                      key={folder.id}
-                      folder={folder}
-                      isDragActive={!!activeDocId}
-                      onClick={() => { if (!activeDocId) setCurrentFolderId(folder.id) }}
-                      onRename={() => {
-                        setSelectedFolder(folder)
-                        setRenameFolderName(folder.name)
-                        setRenameFolderOpen(true)
-                      }}
-                      onDelete={() => handleDeleteFolder(folder)}
-                    />
-                  ))}
-                </div>
-              </>
-            ) : null}
-          </div>
-        )}
+          {/* ── Sidebar dossiers ── */}
+          <aside className="w-52 shrink-0 flex flex-col border-r pr-4 overflow-y-auto">
 
-        {/* ── Documents ── */}
-        <div className="flex-1 min-h-0">
-          {loadingDocs ? (
-            <div className="space-y-2">
-              {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-12 rounded-lg" />)}
-            </div>
-          ) : filteredDocuments.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-center gap-3">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted">
-                <FolderOpen className="h-7 w-7 text-muted-foreground" />
-              </div>
-              <div>
-                <p className="font-medium">Aucun document</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  {search ? 'Aucun résultat pour cette recherche.' : 'Importez un fichier ou ajoutez un lien.'}
-                </p>
-              </div>
-              {!search && (
-                <div className="flex gap-2 mt-1">
-                  <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setAddLinkOpen(true)}>
-                    <LinkIcon className="h-3.5 w-3.5" /> Ajouter un lien
-                  </Button>
-                  <Button size="sm" className="gap-1.5" onClick={() => fileInputRef.current?.click()} disabled={uploading || storagePercent >= 100}>
-                    <Upload className="h-3.5 w-3.5" /> Importer un fichier
-                  </Button>
+            {/* Stockage compact */}
+            {storageInfo && (
+              <div className="mb-5 p-3 rounded-xl border bg-muted/20">
+                <div className="flex items-center justify-between text-xs text-muted-foreground mb-1.5">
+                  <span className="flex items-center gap-1 font-medium">
+                    <HardDrive className="h-3 w-3" />
+                    Stockage
+                  </span>
+                  <span className={cn(
+                    'text-[10px] font-medium px-1.5 py-0.5 rounded border',
+                    storagePercent >= 90 ? 'bg-red-50 text-red-600 border-red-200' :
+                    storagePercent >= 70 ? 'bg-amber-50 text-amber-600 border-amber-200' :
+                    'bg-muted text-muted-foreground border-border'
+                  )}>
+                    {storagePercent}%
+                  </span>
                 </div>
-              )}
-            </div>
-          ) : viewMode === 'list' ? (
-            /* ── LIST VIEW ── */
-            <div className="rounded-xl border overflow-hidden">
-              <div className="grid grid-cols-[auto_auto_1fr_auto_auto_auto_auto] gap-3 items-center px-4 py-2 bg-muted/40 border-b text-xs font-medium text-muted-foreground">
-                <span className="w-4" />
-                <label className="flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={allSelected}
-                    onChange={toggleAll}
-                    className="h-3.5 w-3.5 rounded border-border accent-primary cursor-pointer"
+                <div className="h-1.5 rounded-full bg-muted overflow-hidden mb-1">
+                  <div
+                    className={cn('h-full rounded-full transition-all duration-500',
+                      storagePercent >= 90 ? 'bg-red-500' :
+                      storagePercent >= 70 ? 'bg-amber-500' : 'bg-[#386FA4]'
+                    )}
+                    style={{ width: `${storagePercent}%` }}
                   />
-                </label>
-                <span>Nom</span>
-                <span className="w-24 text-center">Visibilité</span>
-                <span className="w-16 text-right">Taille</span>
-                <span className="w-20 text-right">Ajouté</span>
-                <span className="w-8" />
+                </div>
+                <p className="text-[10px] text-muted-foreground tabular-nums">
+                  {formatBytes(storageInfo.used_bytes)} / {storageInfo.max_storage_gb} Go · {storageInfo.plan_name}
+                </p>
+                {storagePercent >= 100 && (
+                  <p className="text-[10px] text-red-600 mt-1 font-medium">Quota atteint.</p>
+                )}
               </div>
-              <div className="divide-y">
-                {filteredDocuments.map(doc => (
-                  <DocRow
-                    key={doc.id}
-                    doc={doc}
-                    selected={selectedDocIds.has(doc.id)}
-                    onToggleSelect={() => toggleDoc(doc.id)}
-                    opening={openingDocId === doc.id}
-                    onOpen={() => handleOpenDoc(doc)}
-                    onToggleVisibility={() => handleToggleVisibility(doc)}
-                    onAcknowledge={() => handleAcknowledge(doc)}
-                    onRename={() => { setSelectedDoc(doc); setRenameDocName(doc.name); setRenameDocOpen(true) }}
-                    onMove={() => { setSelectedDoc(doc); setMoveDocFolderId(doc.folder_id ?? 'root'); setMoveFolderOpen(true) }}
-                    onDelete={() => handleDeleteDocument(doc)}
-                  />
-                ))}
-              </div>
-            </div>
-          ) : (
-            /* ── GRID VIEW ── */
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-              {filteredDocuments.map(doc => (
-                <DocCard
-                  key={doc.id}
-                  doc={doc}
-                  selected={selectedDocIds.has(doc.id)}
-                  onToggleSelect={() => toggleDoc(doc.id)}
-                  opening={openingDocId === doc.id}
-                  onOpen={() => handleOpenDoc(doc)}
-                  onToggleVisibility={() => handleToggleVisibility(doc)}
-                  onAcknowledge={() => handleAcknowledge(doc)}
-                  onRename={() => { setSelectedDoc(doc); setRenameDocName(doc.name); setRenameDocOpen(true) }}
-                  onMove={() => { setSelectedDoc(doc); setMoveDocFolderId(doc.folder_id ?? 'root'); setMoveFolderOpen(true) }}
-                  onDelete={() => handleDeleteDocument(doc)}
+            )}
+
+            {/* Nav dossiers */}
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2 px-1">
+              Dossiers
+            </p>
+
+            <DroppableRoot isActive={currentFolderId !== null}>
+              <button
+                onClick={() => setCurrentFolderId(null)}
+                className={cn(
+                  'flex items-center gap-2 w-full px-2.5 py-1.5 rounded-lg text-sm transition-colors',
+                  currentFolderId === null
+                    ? 'bg-[#133C55]/8 text-[#133C55] font-medium'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                )}
+              >
+                <FolderOpen className="h-4 w-4 shrink-0" />
+                <span className="flex-1 text-left truncate text-sm">Racine</span>
+              </button>
+            </DroppableRoot>
+
+            <div className="space-y-0.5 mt-1 flex-1">
+              {loadingFolders ? (
+                <div className="space-y-1 px-1">
+                  {[1, 2, 3].map(i => <Skeleton key={i} className="h-8 rounded-lg" />)}
+                </div>
+              ) : folders.map(folder => (
+                <SidebarFolder
+                  key={folder.id}
+                  folder={folder}
+                  isActive={currentFolderId === folder.id}
+                  isDragActive={!!activeDocId}
+                  onClick={() => { if (!activeDocId) setCurrentFolderId(folder.id) }}
+                  onRename={() => { setSelectedFolder(folder); setRenameFolderName(folder.name); setRenameFolderOpen(true) }}
+                  onDelete={() => handleDeleteFolder(folder)}
                 />
               ))}
             </div>
-          )}
+
+            <button
+              onClick={() => setCreateFolderOpen(true)}
+              className="flex items-center gap-2 mt-3 px-2.5 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            >
+              <FolderPlus className="h-3.5 w-3.5" />
+              Nouveau dossier
+            </button>
+          </aside>
+
+          {/* ── Contenu principal ── */}
+          <div className="flex-1 flex flex-col min-w-0">
+
+            {/* ── Toolbar ── */}
+            <div className="flex items-center gap-3 mb-4 flex-wrap">
+              {/* Breadcrumb */}
+              <nav className="flex items-center gap-1 text-sm flex-1 min-w-0">
+                <button
+                  onClick={() => setCurrentFolderId(null)}
+                  className={cn(
+                    'flex items-center gap-1.5 px-2 py-1 rounded-md transition-colors text-xs',
+                    currentFolderId === null
+                      ? 'text-foreground font-medium'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                  )}
+                >
+                  Mes documents
+                </button>
+                {currentFolder && (
+                  <>
+                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    <span
+                      className="flex items-center gap-1.5 px-2 py-1 rounded-md font-medium text-xs"
+                      style={{ color: currentFolder.color }}
+                    >
+                      <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: currentFolder.color }} />
+                      {currentFolder.name}
+                    </span>
+                  </>
+                )}
+              </nav>
+
+              {/* Search */}
+              <div className="relative w-48 shrink-0">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                <Input
+                  className="pl-8 h-8 text-sm"
+                  placeholder="Rechercher…"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                />
+              </div>
+
+              {/* Filter tabs */}
+              <div className="flex items-center gap-0.5 border rounded-lg p-0.5 shrink-0">
+                {(['all', 'admin', 'client'] as TabFilter[]).map(tab => (
+                  <button
+                    key={tab}
+                    onClick={() => setTabFilter(tab)}
+                    className={cn(
+                      'px-3 py-1 text-xs rounded-md transition-colors',
+                      tabFilter === tab
+                        ? 'bg-primary text-primary-foreground font-medium shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    {tab === 'all' ? 'Tous' : tab === 'admin' ? 'Admin' : 'Client'}
+                  </button>
+                ))}
+              </div>
+
+              {/* View mode toggle */}
+              <div className="flex items-center gap-0.5 border rounded-lg p-0.5 shrink-0">
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={cn('h-7 w-7 flex items-center justify-center rounded-md transition-colors', viewMode === 'list' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}
+                  title="Vue liste"
+                >
+                  <LayoutList className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  onClick={() => setViewMode('grid')}
+                  className={cn('h-7 w-7 flex items-center justify-center rounded-md transition-colors', viewMode === 'grid' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}
+                  title="Vue grille"
+                >
+                  <LayoutGrid className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+
+            {/* ── Documents ── */}
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              {loadingDocs ? (
+                <div className="space-y-2">
+                  {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-12 rounded-lg" />)}
+                </div>
+              ) : filteredDocuments.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 text-center gap-3">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted">
+                    <FolderOpen className="h-7 w-7 text-muted-foreground" />
+                  </div>
+                  <div>
+                    <p className="font-medium">Aucun document</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {search ? 'Aucun résultat pour cette recherche.' : 'Importez un fichier ou ajoutez un lien.'}
+                    </p>
+                  </div>
+                  {!search && (
+                    <div className="flex gap-2 mt-1">
+                      <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setAddLinkOpen(true)}>
+                        <LinkIcon className="h-3.5 w-3.5" /> Ajouter un lien
+                      </Button>
+                      <Button size="sm" className="gap-1.5" onClick={() => fileInputRef.current?.click()} disabled={uploading || storagePercent >= 100}>
+                        <Upload className="h-3.5 w-3.5" /> Importer un fichier
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              ) : viewMode === 'list' ? (
+                /* ── LIST VIEW ── */
+                <div className="rounded-xl border overflow-hidden">
+                  <div className="grid grid-cols-[auto_auto_1fr_auto_auto_auto_auto] gap-3 items-center px-4 py-2 bg-muted/40 border-b text-xs font-medium text-muted-foreground">
+                    <span className="w-4" />
+                    <label className="flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={allSelected}
+                        onChange={toggleAll}
+                        className="h-3.5 w-3.5 rounded border-border accent-primary cursor-pointer"
+                      />
+                    </label>
+                    <span>Nom</span>
+                    <span className="w-24 text-center">Visibilité</span>
+                    <span className="w-16 text-right">Taille</span>
+                    <span className="w-20 text-right">Ajouté</span>
+                    <span className="w-8" />
+                  </div>
+                  <div className="divide-y">
+                    {filteredDocuments.map(doc => (
+                      <DocRow
+                        key={doc.id}
+                        doc={doc}
+                        selected={selectedDocIds.has(doc.id)}
+                        onToggleSelect={() => toggleDoc(doc.id)}
+                        opening={openingDocId === doc.id}
+                        onOpen={() => handleOpenDoc(doc)}
+                        onToggleVisibility={() => handleToggleVisibility(doc)}
+                        onAcknowledge={() => handleAcknowledge(doc)}
+                        onRename={() => { setSelectedDoc(doc); setRenameDocName(doc.name); setRenameDocOpen(true) }}
+                        onMove={() => { setSelectedDoc(doc); setMoveDocFolderId(doc.folder_id ?? 'root'); setMoveFolderOpen(true) }}
+                        onDelete={() => handleDeleteDocument(doc)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                /* ── GRID VIEW ── */
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                  {filteredDocuments.map(doc => (
+                    <DocCard
+                      key={doc.id}
+                      doc={doc}
+                      selected={selectedDocIds.has(doc.id)}
+                      onToggleSelect={() => toggleDoc(doc.id)}
+                      opening={openingDocId === doc.id}
+                      onOpen={() => handleOpenDoc(doc)}
+                      onToggleVisibility={() => handleToggleVisibility(doc)}
+                      onAcknowledge={() => handleAcknowledge(doc)}
+                      onRename={() => { setSelectedDoc(doc); setRenameDocName(doc.name); setRenameDocOpen(true) }}
+                      onMove={() => { setSelectedDoc(doc); setMoveDocFolderId(doc.folder_id ?? 'root'); setMoveFolderOpen(true) }}
+                      onDelete={() => handleDeleteDocument(doc)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* ── DragOverlay ── */}
@@ -1104,6 +1109,73 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
           </form>
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
+
+// ─── SidebarFolder ───────────────────────────────────────────────────────────
+
+function SidebarFolder({ folder, isActive, isDragActive, onClick, onRename, onDelete }: {
+  folder: Folder
+  isActive: boolean
+  isDragActive: boolean
+  onClick: () => void
+  onRename: () => void
+  onDelete: () => void
+}) {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const { setNodeRef, isOver } = useDroppable({ id: folder.id })
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        'relative group rounded-lg transition-all',
+        isOver && isDragActive && 'ring-1 ring-[#59A5D8]/60 bg-[#91E5F6]/20'
+      )}
+    >
+      <button
+        onClick={onClick}
+        className={cn(
+          'flex items-center gap-2 w-full px-2.5 py-1.5 rounded-lg text-sm transition-colors text-left',
+          isActive
+            ? 'font-medium'
+            : 'text-muted-foreground hover:text-foreground hover:bg-muted',
+          isOver && isDragActive && 'bg-[#91E5F6]/30'
+        )}
+      >
+        <span
+          className="h-2.5 w-2.5 rounded-full shrink-0"
+          style={{ backgroundColor: folder.color }}
+        />
+        <span className="flex-1 truncate" style={isActive ? { color: folder.color } : undefined}>
+          {folder.name}
+        </span>
+        {(folder.doc_count ?? 0) > 0 && (
+          <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
+            {folder.doc_count}
+          </span>
+        )}
+      </button>
+      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+        <DropdownMenuTrigger
+          className={cn(
+            'absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 inline-flex items-center justify-center rounded-md hover:bg-muted transition-opacity',
+            menuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+          )}
+          onClick={e => e.stopPropagation()}
+        >
+          <MoreHorizontal className="h-3.5 w-3.5" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-40">
+          <DropdownMenuItem onClick={onRename}>
+            <Pencil className="h-3.5 w-3.5 mr-2" /> Renommer
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive">
+            <Trash2 className="h-3.5 w-3.5 mr-2" /> Supprimer
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   )
 }

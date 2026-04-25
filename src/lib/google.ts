@@ -1,31 +1,43 @@
-import { google } from 'googleapis'
-
 const SCOPES = [
   'https://www.googleapis.com/auth/calendar.events',
   'https://www.googleapis.com/auth/userinfo.email',
 ]
 
-export function getOAuthClient() {
-  return new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID!,
-    process.env.GOOGLE_CLIENT_SECRET!,
-    process.env.GOOGLE_REDIRECT_URI!,
-  )
-}
+const TOKEN_URL = 'https://oauth2.googleapis.com/token'
+const CALENDAR_BASE = 'https://www.googleapis.com/calendar/v3'
+const USERINFO_URL = 'https://www.googleapis.com/oauth2/v2/userinfo'
 
 export function getGoogleOAuthUrl(): string {
-  const oauth2 = getOAuthClient()
-  return oauth2.generateAuthUrl({
+  const params = new URLSearchParams({
+    client_id: process.env.GOOGLE_CLIENT_ID!,
+    redirect_uri: process.env.GOOGLE_REDIRECT_URI!,
+    response_type: 'code',
+    scope: SCOPES.join(' '),
     access_type: 'offline',
-    scope: SCOPES,
     prompt: 'consent',
   })
+  return `https://accounts.google.com/o/oauth2/v2/auth?${params}`
 }
 
 export async function exchangeCodeForTokens(code: string) {
-  const oauth2 = getOAuthClient()
-  const { tokens } = await oauth2.getToken(code)
-  return tokens
+  const res = await fetch(TOKEN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      code,
+      client_id: process.env.GOOGLE_CLIENT_ID!,
+      client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+      redirect_uri: process.env.GOOGLE_REDIRECT_URI!,
+      grant_type: 'authorization_code',
+    }),
+  })
+  if (!res.ok) throw new Error(`Token exchange failed: ${await res.text()}`)
+  return res.json() as Promise<{
+    access_token: string
+    refresh_token?: string
+    expires_in: number
+    token_type: string
+  }>
 }
 
 export async function getValidAccessToken(
@@ -33,17 +45,22 @@ export async function getValidAccessToken(
   refreshToken: string,
   expiresAt: string,
 ): Promise<string> {
-  const now = new Date()
   const expiry = new Date(expiresAt)
+  if (expiry > new Date(Date.now() + 60_000)) return accessToken
 
-  if (expiry > new Date(now.getTime() + 60_000)) {
-    return accessToken
-  }
-
-  const oauth2 = getOAuthClient()
-  oauth2.setCredentials({ refresh_token: refreshToken })
-  const { credentials } = await oauth2.refreshAccessToken()
-  return credentials.access_token!
+  const res = await fetch(TOKEN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: process.env.GOOGLE_CLIENT_ID!,
+      client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+      refresh_token: refreshToken,
+      grant_type: 'refresh_token',
+    }),
+  })
+  if (!res.ok) throw new Error(`Token refresh failed: ${await res.text()}`)
+  const data = await res.json() as { access_token: string }
+  return data.access_token
 }
 
 export interface GoogleMeetingPayload {
@@ -58,42 +75,45 @@ export async function createGoogleCalendarEvent(
   accessToken: string,
   payload: GoogleMeetingPayload,
 ): Promise<{ eventId: string; meetLink: string | null }> {
-  const oauth2 = getOAuthClient()
-  oauth2.setCredentials({ access_token: accessToken })
-
-  const calendar = google.calendar({ version: 'v3', auth: oauth2 })
-
   const startTime = new Date(payload.startAt)
   const endTime = new Date(startTime.getTime() + payload.durationMin * 60_000)
 
-  const attendees = (payload.attendeeEmails ?? [])
-    .filter(Boolean)
-    .map((email) => ({ email }))
-
-  const event = await calendar.events.insert({
-    calendarId: 'primary',
-    conferenceDataVersion: 1,
-    requestBody: {
-      summary: payload.title,
-      description: payload.description ?? undefined,
-      start: { dateTime: startTime.toISOString(), timeZone: 'Europe/Paris' },
-      end: { dateTime: endTime.toISOString(), timeZone: 'Europe/Paris' },
-      attendees,
-      conferenceData: {
-        createRequest: {
-          requestId: `hublio-${Date.now()}`,
-          conferenceSolutionKey: { type: 'hangoutsMeet' },
-        },
+  const body = {
+    summary: payload.title,
+    description: payload.description ?? undefined,
+    start: { dateTime: startTime.toISOString(), timeZone: 'Europe/Paris' },
+    end: { dateTime: endTime.toISOString(), timeZone: 'Europe/Paris' },
+    attendees: (payload.attendeeEmails ?? []).filter(Boolean).map((email) => ({ email })),
+    conferenceData: {
+      createRequest: {
+        requestId: `hublio-${Date.now()}`,
+        conferenceSolutionKey: { type: 'hangoutsMeet' },
       },
     },
-  })
+  }
 
-  const eventId = event.data.id!
-  const meetLink = event.data.conferenceData?.entryPoints?.find(
+  const res = await fetch(
+    `${CALENDAR_BASE}/calendars/primary/events?conferenceDataVersion=1`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    },
+  )
+  if (!res.ok) throw new Error(`Calendar insert failed: ${await res.text()}`)
+  const data = await res.json() as {
+    id: string
+    conferenceData?: { entryPoints?: Array<{ entryPointType: string; uri: string }> }
+  }
+
+  const meetLink = data.conferenceData?.entryPoints?.find(
     (ep) => ep.entryPointType === 'video',
   )?.uri ?? null
 
-  return { eventId, meetLink }
+  return { eventId: data.id, meetLink }
 }
 
 export async function updateGoogleCalendarEvent(
@@ -101,11 +121,6 @@ export async function updateGoogleCalendarEvent(
   eventId: string,
   payload: Partial<GoogleMeetingPayload>,
 ): Promise<void> {
-  const oauth2 = getOAuthClient()
-  oauth2.setCredentials({ access_token: accessToken })
-
-  const calendar = google.calendar({ version: 'v3', auth: oauth2 })
-
   const patch: Record<string, unknown> = {}
   if (payload.title) patch.summary = payload.title
   if (payload.description !== undefined) patch.description = payload.description
@@ -116,29 +131,33 @@ export async function updateGoogleCalendarEvent(
     patch.end = { dateTime: endTime.toISOString(), timeZone: 'Europe/Paris' }
   }
 
-  await calendar.events.patch({
-    calendarId: 'primary',
-    eventId,
-    requestBody: patch,
+  const res = await fetch(`${CALENDAR_BASE}/calendars/primary/events/${eventId}`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(patch),
   })
+  if (!res.ok) throw new Error(`Calendar patch failed: ${await res.text()}`)
 }
 
 export async function deleteGoogleCalendarEvent(
   accessToken: string,
   eventId: string,
 ): Promise<void> {
-  const oauth2 = getOAuthClient()
-  oauth2.setCredentials({ access_token: accessToken })
-
-  const calendar = google.calendar({ version: 'v3', auth: oauth2 })
-  await calendar.events.delete({ calendarId: 'primary', eventId })
+  const res = await fetch(`${CALENDAR_BASE}/calendars/primary/events/${eventId}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  if (!res.ok && res.status !== 410) throw new Error(`Calendar delete failed: ${await res.text()}`)
 }
 
 export async function getGoogleUserEmail(accessToken: string): Promise<string> {
-  const oauth2 = getOAuthClient()
-  oauth2.setCredentials({ access_token: accessToken })
-
-  const oauth2Api = google.oauth2({ version: 'v2', auth: oauth2 })
-  const { data } = await oauth2Api.userinfo.get()
-  return data.email!
+  const res = await fetch(USERINFO_URL, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  if (!res.ok) throw new Error(`Userinfo failed: ${await res.text()}`)
+  const data = await res.json() as { email: string }
+  return data.email
 }

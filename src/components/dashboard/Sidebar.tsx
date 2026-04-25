@@ -188,7 +188,7 @@ function SidebarContent() {
               </Link>
             </DropdownMenuItem>
             <DropdownMenuItem className="p-0 cursor-pointer">
-              <Link href="/dashboard/settings/billing" className="flex items-center w-full px-1.5 py-1 gap-1.5">
+              <Link href="/dashboard/account?tab=forfaits" className="flex items-center w-full px-1.5 py-1 gap-1.5">
                 <Crown className="h-4 w-4" />
                 Abonnement
               </Link>
