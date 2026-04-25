@@ -96,6 +96,8 @@ Hublio est conçu pour :
 - API publique
 - Automatisations
 
+- Palette de couleurs : https://coolors.co/palette/133c55-386fa4-59a5d8-84d2f6-91e5f6
+
 ---
 
 ## ⚡ Installation
@@ -105,3 +107,6 @@ git clone https://github.com/olabagency/PortailClient.git
 cd PortailClient
 npm install
 npm run dev
+
+
+
